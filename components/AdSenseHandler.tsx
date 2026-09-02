@@ -18,15 +18,7 @@ interface AdSenseRouteHandlerProps {
 export const AdSenseRouteHandler: React.FC<AdSenseRouteHandlerProps> = ({
     enableAds = true,
     excludedRoutes = [
-        '/merge',
-        '/split',
-        '/compress',
-        '/ocr-pdf',
-        '/summarizer-qa',
-        '/ai-pdf-to-mcq',
-        '/pdf-editor',
-        '/ai-edit-pdf',
-        '/ai-interview-generator',
+        '/admin',
     ],
 }) => {
     const location = useLocation();

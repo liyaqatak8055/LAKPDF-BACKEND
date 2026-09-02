@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="90" y="70" width="1020" height="535" rx="20" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="230" y="180" width="740" height="310" rx="22" fill="#f0f9ff" stroke="#7dd3fc" stroke-dasharray="12 10"/>
+  <path d="M600 250l-65 70h42v78h46v-78h42z" fill="#0ea5e9"/>
+  <text x="600" y="440" text-anchor="middle" font-family="Arial" font-size="34" fill="#0369a1">Drop files here or click to upload</text>
+  <text x="600" y="120" text-anchor="middle" font-family="Arial" font-size="42" fill="#0f172a">Step 2: Upload your PDF</text>
+  <text x="600" y="160" text-anchor="middle" font-family="Arial" font-size="24" fill="#475569">Upload section screenshot placeholder</text>
+</svg>

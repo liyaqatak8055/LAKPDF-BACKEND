@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="100" y="70" width="1000" height="535" rx="20" fill="#ffffff" stroke="#cbd5e1"/>
+  <circle cx="600" cy="250" r="72" fill="#dcfce7"/>
+  <path d="M565 250l24 24 47-47" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="600" y="360" text-anchor="middle" font-family="Arial" font-size="40" fill="#0f172a">Step 4: Download File</text>
+  <rect x="470" y="410" width="260" height="64" rx="12" fill="#2563eb"/>
+  <text x="600" y="450" text-anchor="middle" font-family="Arial" font-size="24" fill="#ffffff">Download</text>
+  <text x="600" y="505" text-anchor="middle" font-family="Arial" font-size="22" fill="#64748b">Result page screenshot placeholder</text>
+</svg>

@@ -1,0 +1,22 @@
+{
+  "name": "LAK PDF",
+  "short_name": "LAK PDF",
+  "description": "Free online PDF tools to merge, compress, convert and edit PDFs.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#ff4d4f",
+  "icons": [
+    {
+      "src": "/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

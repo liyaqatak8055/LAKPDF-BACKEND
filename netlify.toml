@@ -1,0 +1,99 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# ====== Cache-Control Headers ======
+# Hashed JS/CSS chunks — cache forever (Vite content-hashes guarantee freshness)
+[[headers]]
+  for = "/assets/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Fonts — 1 year
+[[headers]]
+  for = "/assets/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Images — 30 days
+[[headers]]
+  for = "/assets/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+# SW — always revalidate so updates propagate instantly
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# PDF worker — 30 days
+[[headers]]
+  for = "/pdf.worker.min.js"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+# HTML — always revalidate
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-DNS-Prefetch-Control = "on"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://lakpdf-backend-1.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Keyword alias 301 redirects
+[[redirects]]
+  from = "/pdf-to-jpg"
+  to = "/pdf-to-img"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/jpg-to-pdf"
+  to = "/img-to-pdf"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/merge-pdf"
+  to = "/merge"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/split-pdf"
+  to = "/split"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/scan-to-pdf"
+  to = "/scan-pdf"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/add-page-numbers-to-pdf"
+  to = "/page-number"
+  status = 301
+  force = true
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+

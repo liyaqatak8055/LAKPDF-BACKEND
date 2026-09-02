@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="120" y="90" width="960" height="495" rx="20" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="600" y="180" text-anchor="middle" font-family="Arial" font-size="42" fill="#0f172a">Step 3: Processing</text>
+  <rect x="250" y="270" width="700" height="36" rx="12" fill="#e2e8f0"/>
+  <rect x="250" y="270" width="430" height="36" rx="12" fill="#22c55e"/>
+  <text x="600" y="350" text-anchor="middle" font-family="Arial" font-size="30" fill="#334155">Processing your file...</text>
+  <text x="600" y="390" text-anchor="middle" font-family="Arial" font-size="22" fill="#64748b">Action button and progress area placeholder</text>
+</svg>

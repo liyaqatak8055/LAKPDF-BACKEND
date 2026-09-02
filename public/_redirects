@@ -1,0 +1,12 @@
+/api/*                      https://lakpdf-backend-1.onrender.com/api/:splat  200
+
+# Keyword alias 301 redirects (canonical SEO URLs → real tool slugs)
+/pdf-to-jpg                 /pdf-to-img         301!
+/jpg-to-pdf                 /img-to-pdf         301!
+/merge-pdf                  /merge              301!
+/split-pdf                  /split              301!
+/scan-to-pdf                /scan-pdf           301!
+/add-page-numbers-to-pdf    /page-number        301!
+
+# SPA fallback
+/*                          /index.html         200

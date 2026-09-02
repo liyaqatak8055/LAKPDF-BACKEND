@@ -19,7 +19,7 @@ import {
   ShieldCheck,
   FileText,
 } from 'lucide-react';
-import type { Benefit, FAQ, ToolSEO } from '../config/toolSEOData';
+import toolSEOData, { type Benefit, type FAQ, type ToolSEOData } from '../config/toolSEOData';
 
 /* ── Icon map ─────────────────────────────────────────────────────────── */
 const iconMap: Record<Benefit['icon'], React.ReactNode> = {
@@ -75,17 +75,8 @@ interface ToolSEOContentProps {
 const SITE_URL = 'https://lakpdf.com';
 
 export const ToolSEOContent: React.FC<ToolSEOContentProps> = ({ toolKey }) => {
-  const [data, setData] = useState<ToolSEO | null>(null);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
-
-  useEffect(() => {
-    import('../config/toolSEOData').then((module) => {
-      const toolData = module.default[toolKey];
-      if (toolData) {
-        setData(toolData);
-      }
-    });
-  }, [toolKey]);
+  const data = toolSEOData[toolKey] || null;
 
   if (!data) return null;
 

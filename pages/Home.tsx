@@ -112,7 +112,7 @@ const LazySection: React.FC<{ children: React.ReactNode; className?: string; roo
 
 const Home: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [recentTools, setRecentTools] = useState<RecentTool[]>([]);
+  const [recentTools, setRecentTools] = useState<RecentTool[]>(() => getRecentTools());
   const searchTrackTimerRef = useRef<number | null>(null);
 
   const allTools = [
@@ -663,6 +663,7 @@ const Home: React.FC = () => {
           <AdUnit
             slotId="9704679803624436"
             format="rectangle"
+            layout="card"
             className="my-8"
             lazy={true}
           />

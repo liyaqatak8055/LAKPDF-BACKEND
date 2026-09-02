@@ -3,7 +3,12 @@
   publish = "dist"
 
 # ====== Cache-Control Headers ======
-# Hashed JS/CSS chunks — cache forever (Vite content-hashes guarantee freshness)
+# Hashed JS/CSS chunks & assets — cache forever (Vite content-hashes guarantee freshness)
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 [[headers]]
   for = "/assets/js/*"
   [headers.values]
@@ -14,15 +19,30 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Fonts — 1 year
+# Fonts — 1 year immutable
 [[headers]]
   for = "/assets/fonts/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Images — 30 days
+# Images & Favicons — 30 days
 [[headers]]
   for = "/assets/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+[[headers]]
+  for = "/favicon*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+[[headers]]
+  for = "/icon*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+[[headers]]
+  for = "/og-image*"
   [headers.values]
     Cache-Control = "public, max-age=2592000"
 

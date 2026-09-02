@@ -299,11 +299,12 @@ export default defineConfig(({ mode }) => {
         output: {
           // ── Manual chunk splitting ─────────────────────────────
           manualChunks: (id) => {
-            // ── React core — load first, cache forever ──────────
+            // ── React core + runtime helpers — load first, cache forever ──────────
             if (id.includes('node_modules/react/') ||
                 id.includes('node_modules/react-dom/') ||
                 id.includes('node_modules/react-router-dom/') ||
-                id.includes('node_modules/scheduler/')) {
+                id.includes('node_modules/scheduler/') ||
+                id.includes('node_modules/tslib/')) {
               return 'vendor-react';
             }
 
@@ -312,8 +313,8 @@ export default defineConfig(({ mode }) => {
               return 'vendor-pdfjs';
             }
 
-            // ── pdf-lib + pako + tslib — unified to prevent missing helper functions ──────────
-            if (id.includes('pdf-lib') || id.includes('@pdf-lib') || id.includes('node_modules/pako') || id.includes('node_modules/tslib')) {
+            // ── pdf-lib + pako — only on PDF manipulation routes ──────────
+            if (id.includes('pdf-lib') || id.includes('@pdf-lib') || id.includes('node_modules/pako')) {
               return 'vendor-pdf-lib';
             }
 

@@ -14,7 +14,8 @@ import { safeImport } from "./utils/safeImport";
 import { initPerformanceMonitoring } from "./utils/performance";
 import { trackDropOffStepForPath, trackPageView } from "./utils/analytics";
 import { isToolRoute, recordToolOpen } from "./utils/toolUsage";
-import Home from "./pages/Home";
+
+const Home = lazy(() => safeImport(() => import("./pages/Home"), "Home"));
 
 type RouteSeo = {
   title: string;

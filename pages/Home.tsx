@@ -541,28 +541,6 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {recentTools.length > 0 && (
-        <section className="py-4 px-4 md:px-8 max-w-7xl mx-auto">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
-              <DynamicIcon iconName="CalendarDays" className="w-5 h-5" />
-            </div>
-            <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-dark-text-primary">Continue Where You Left Off</h2>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {recentTools.map((tool) => (
-              <Link
-                key={tool.path}
-                to={tool.path}
-                className="px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-primary-300 hover:text-primary-500 transition-colors"
-              >
-                {tool.title}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
       {!query && (
         <section id="popular-tools" className="py-8 px-4 md:px-8 max-w-7xl mx-auto">
           <div className="flex items-center gap-3 mb-6">
@@ -581,6 +559,28 @@ const Home: React.FC = () => {
                 popular
                 icon={<DynamicIcon iconName={tool.iconName} className="h-5 w-5 sm:h-6 sm:w-6" />}
               />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {recentTools.length > 0 && (
+        <section className="py-4 px-4 md:px-8 max-w-7xl mx-auto">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
+              <DynamicIcon iconName="CalendarDays" className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-dark-text-primary">Continue Where You Left Off</h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {recentTools.map((tool) => (
+              <Link
+                key={tool.path}
+                to={tool.path}
+                className="px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-primary-300 hover:text-primary-500 transition-colors"
+              >
+                {tool.title}
+              </Link>
             ))}
           </div>
         </section>

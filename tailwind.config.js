@@ -7,7 +7,26 @@ export default {
     "./components/**/*.{js,ts,jsx,tsx}",
     "./pages/**/*.{js,ts,jsx,tsx}",
     "./utils/**/*.{js,ts,jsx,tsx}",
+    "./hooks/**/*.{js,ts,jsx,tsx}",
+    "./lib/**/*.{js,ts,jsx,tsx}",
+    "./services/**/*.{js,ts,jsx,tsx}",
+    "./store/**/*.{js,ts,jsx,tsx}",
+    "./workers/**/*.{js,ts,jsx,tsx}",
     "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  // Safelist dynamic class patterns that are constructed at runtime via template literals
+  // Without this, Tailwind purges them even though they're used
+  safelist: [
+    { pattern: /^bg-primary-\d+$/ },
+    { pattern: /^text-primary-\d+$/ },
+    { pattern: /^border-primary-\d+$/ },
+    { pattern: /^bg-rose-\d+$/ },
+    { pattern: /^text-rose-\d+$/ },
+    { pattern: /^bg-slate-\d+$/ },
+    { pattern: /^text-slate-\d+$/ },
+    { pattern: /^bg-emerald-\d+$/ },
+    { pattern: /^text-emerald-\d+$/ },
+    { pattern: /^animate-/ },
   ],
   darkMode: 'class', // Enable dark mode with class strategy
   theme: {

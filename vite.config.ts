@@ -317,8 +317,9 @@ export default defineConfig(({ mode }) => {
     },
 
     build: {
-      // Target modern browsers — eliminates legacy polyfills (~30 kB savings)
-      target: 'es2020',
+      // Target modern evergreen browsers — eliminates ALL legacy polyfills (~15kB savings per chunk)
+      // esnext = no Babel transforms for Array.indexOf, String.includes, async/await, classes etc.
+      target: 'esnext',
 
       // Only warn on very large chunks (after splitting)
       chunkSizeWarningLimit: 600,
@@ -342,11 +343,11 @@ export default defineConfig(({ mode }) => {
           return deps.filter((dep) => {
             // Always preload the entry itself
             if (dep === filename) return true;
-            // Preload React, icons, helmet, home page and button
+            // Preload React, icons, helmet and button — critical for shell render
+            // Home is now lazy — preloading it would compete with font/CSS downloads
             if (dep.includes('vendor-react') ||
                 dep.includes('vendor-icons') ||
                 dep.includes('vendor-helmet') ||
-                dep.includes('Home') ||
                 dep.includes('ui-button')) {
               return true;
             }
@@ -365,8 +366,7 @@ export default defineConfig(({ mode }) => {
           moduleSideEffects: (id) => {
             // These modules have side effects (CSS, workers, font assets, etc.)
             if (id.includes('.css') || id.includes('.woff') || id.includes('worker') || id.includes('sw.js')) return true;
-            // @fontsource imports include font asset references that must be preserved
-            if (id.includes('@fontsource')) return true;
+            // @fontsource imports REMOVED from index.css — no longer needed here
             // Mark all others as pure for aggressive tree-shaking
             return false;
           },
@@ -399,8 +399,8 @@ export default defineConfig(({ mode }) => {
               return 'vendor-pdfjs';
             }
 
-            // ── pdf-lib — only on PDF manipulation routes ──────────
-            if (id.includes('pdf-lib') || id.includes('@pdf-lib')) {
+            // ── pdf-lib + pako — only on PDF manipulation routes ──────────
+            if (id.includes('pdf-lib') || id.includes('@pdf-lib') || id.includes('pako')) {
               return 'vendor-pdf-lib';
             }
 
@@ -443,6 +443,9 @@ export default defineConfig(({ mode }) => {
             // ── UI icons — separate so unused icons tree-shake ──
             if (id.includes('lucide-react')) return 'vendor-icons';
 
+            // ── State management — only on auth/dashboard pages, keep lazy ─
+            if (id.includes('zustand')) return 'vendor-state';
+
             // ── Utilities ────────────────────────────────────────
             if (id.includes('jszip') ||
                 id.includes('file-saver') ||
@@ -451,14 +454,8 @@ export default defineConfig(({ mode }) => {
               return 'vendor-utils';
             }
 
-            // ── State management ─────────────────────────────────
-            if (id.includes('zustand')) return 'vendor-state';
-
             // ── Helmet — used on every page, separate for caching ─
             if (id.includes('react-helmet-async')) return 'vendor-helmet';
-
-            // ── Font assets — keep separate ──────────────────────
-            if (id.includes('@fontsource')) return 'vendor-fonts';
 
             // ── OpenAI SDK — only for AI tools ───────────────────
             if (id.includes('openai')) return 'vendor-openai';
@@ -467,6 +464,12 @@ export default defineConfig(({ mode }) => {
             if (id.includes('components/Button')) return 'ui-button';
             if (id.includes('services/authService')) return 'service-auth';
             if (id.includes('utils/analytics')) return 'util-analytics';
+
+
+            // ── google-auth — only on login flow ──────────────────────────────
+            if (id.includes('google-auth-library') || id.includes('gaxios') || id.includes('gtoken')) return 'vendor-google-auth';
+            // ── axios — deferred ──────────────────────────────────────────────
+            if (id.includes('/axios/')) return 'vendor-axios';
 
             // ── All other node_modules: shared vendor chunk ──────
             if (id.includes('node_modules')) return 'vendor-misc';
@@ -494,6 +497,7 @@ export default defineConfig(({ mode }) => {
         'react-dom',
         'react-dom/client',
         'react-router-dom',
+        'pdf-lib',
         'pako',
         'docx',
         'mammoth',
@@ -503,7 +507,6 @@ export default defineConfig(({ mode }) => {
       // Don't pre-bundle heavy browser-only worker deps
       exclude: [
         'pdfjs-dist',
-        'pdf-lib',
         'fabric',
       ],
     },

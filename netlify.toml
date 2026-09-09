@@ -2,7 +2,16 @@
   command = "npm run build"
   publish = "dist"
 
-# ====== Cache-Control Headers ======
+# ====== Early Hints (HTTP 103) — push critical assets before HTML ======
+# Netlify CDN edge sends these hints before the full HTML response arrives
+# This closes the TTFB→FCP gap by starting font+script downloads immediately
+[[headers]]
+  for = "/"
+  [headers.values]
+    Link = """</assets/fonts/inter-latin-400-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin,\
+</assets/fonts/inter-latin-700-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin"""
+
+
 # Hashed JS/CSS chunks & assets — cache forever (Vite content-hashes guarantee freshness)
 [[headers]]
   for = "/assets/*"

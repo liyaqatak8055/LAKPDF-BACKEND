@@ -1,7 +1,8 @@
-@import '@fontsource/inter/latin-400.css';
-@import '@fontsource/inter/latin-500.css';
-@import '@fontsource/inter/latin-600.css';
-@import '@fontsource/inter/latin-700.css';
+/* @fontsource/inter imports REMOVED — fonts are served via:
+   1. Inline @font-face in index.html <style> block (critical CSS, zero extra request)
+   2. <link rel="preload"> hints injected by injectFontPreloads() Vite plugin
+   Keeping these imports created a redundant 156kB JS chunk (index.es-*.js) that
+   was blocking FCP at 3404ms. */
 
 /* Base Styles */
 @tailwind base;

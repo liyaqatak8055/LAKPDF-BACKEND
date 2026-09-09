@@ -58,9 +58,31 @@ export const TrustLayer: React.FC<TrustLayerProps> = ({ toolCount }) => {
       setServiceStatus(status);
     };
 
-    load();
+    let timer: number;
+    const trigger = () => {
+      window.removeEventListener('scroll', trigger);
+      window.removeEventListener('pointerdown', trigger);
+      window.clearTimeout(timer);
+      if (!cancelled) {
+        if ('requestIdleCallback' in window) {
+          (window as Window & typeof globalThis).requestIdleCallback(() => {
+            if (!cancelled) load();
+          }, { timeout: 4000 });
+        } else {
+          load();
+        }
+      }
+    };
+
+    window.addEventListener('scroll', trigger, { passive: true, once: true });
+    window.addEventListener('pointerdown', trigger, { passive: true, once: true });
+    timer = window.setTimeout(trigger, 6000);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('scroll', trigger);
+      window.removeEventListener('pointerdown', trigger);
+      window.clearTimeout(timer);
     };
   }, []);
 

@@ -215,14 +215,6 @@ export interface AdminUsersResponse {
   };
 }
 
-export interface AdminToolItem {
-  id: string;
-  name: string;
-  route: string;
-  category: string;
-  status: string;
-  usageCount: number;
-}
 
 export interface AdminAnalyticsResponse {
   date: string;

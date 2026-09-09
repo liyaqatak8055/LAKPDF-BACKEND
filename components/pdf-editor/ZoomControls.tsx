@@ -1,7 +1,7 @@
 // Zoom Controls Component - Zoom and fit controls
 import React from 'react';
 import { ZoomIn, ZoomOut, Maximize, RotateCcw } from 'lucide-react';
-import type { PdfFitMode } from '../../types/pdfEditor';
+import { PdfFitMode } from '../../types/pdfEditor';
 
 interface ZoomControlsProps {
   zoom: number;
@@ -59,9 +59,9 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
       </button>
 
       <button
-        onClick={() => onFitModeChange('fit-width')}
+        onClick={() => onFitModeChange(PdfFitMode.PAGE_WIDTH)}
         className={`p-2 hover:bg-slate-100 rounded ${
-          fitMode === 'fit-width' ? 'bg-blue-100 text-blue-600' : ''
+          fitMode === PdfFitMode.PAGE_WIDTH || (fitMode as any) === 'fit-width' ? 'bg-blue-100 text-blue-600' : ''
         }`}
         title="Fit Width"
       >

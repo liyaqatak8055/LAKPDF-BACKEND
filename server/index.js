@@ -103,7 +103,11 @@ app.use((req, res, next) => {
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: blob: data:; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
   );
   if (IS_PRODUCTION) {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim().toLowerCase();
+    if (!req.secure && forwardedProto && forwardedProto !== "https") {
+      return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    }
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
   // X-Request-Id for tracing
   const requestId = req.headers["x-request-id"] || randomBytes(8).toString("hex");

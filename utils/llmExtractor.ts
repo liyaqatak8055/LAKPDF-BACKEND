@@ -325,7 +325,7 @@ const cleanDocumentTextForLLM = (text: string, maxChars = 30000): string => {
     const sentenceSeen = new Set<string>();
     const sentenceMatches = cleaned.match(/[^.!?\n]+[.!?]?/g) || [];
     const dedupedSentences: string[] = [];
-    sentenceMatches.forEach((sentence) => {
+    sentenceMatches.forEach((sentence: string) => {
         const normalizedSentence = normalizeDedupKey(sentence);
         if (!normalizedSentence || normalizedSentence.length < 14) {
             if (sentence.trim()) dedupedSentences.push(sentence.trim());

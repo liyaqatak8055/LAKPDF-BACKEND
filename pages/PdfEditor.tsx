@@ -117,8 +117,8 @@ const PdfEditor: React.FC = () => {
   const replacePdfRef = useRef<HTMLInputElement | null>(null);
 
   const busy = isLoading || isPreparing;
-  const selectedTextAnnotation =
-    selectedAnnotation && selectedAnnotation.type === PdfAnnotationType.TEXT ? selectedAnnotation : null;
+  const selectedTextAnnotation: PdfAnnotation | null =
+    selectedAnnotation && selectedAnnotation.type === PdfAnnotationType.TEXT ? (selectedAnnotation as PdfAnnotation) : null;
 
   const updateSelectedTextStyle = (updates: Record<string, any>) => {
     if (!selectedTextAnnotation) return;
@@ -235,10 +235,20 @@ const PdfEditor: React.FC = () => {
       const preserved = options?.preserveAnnotations && document ? document.annotations : restoredAnnotations;
       setDocument({
         id: `pdf-${Date.now()}`,
+        fileName: file.name,
+        fileSize: file.size,
         file,
         totalPages: pdf.numPages,
         currentPage: Math.max(1, Math.min(pdf.numPages, options?.preserveAnnotations && document ? document.currentPage : restoredPage)),
         zoom: 1,
+        viewMode: 'single' as any,
+        showGrid: false,
+        showRulers: false,
+        snapToGrid: false,
+        gridSize: 20,
+        isLoading: false,
+        loadingProgress: 100,
+        error: null,
         rotation: 0,
         viewport: {
           width: 0,
@@ -246,7 +256,7 @@ const PdfEditor: React.FC = () => {
           scale: 1,
           offsetX: 0,
           offsetY: 0,
-        },
+        } as any,
         annotations: preserved.filter((a) => a.pageNumber <= pdf.numPages),
         isDirty: false,
         lastModified: new Date(),
@@ -314,48 +324,56 @@ const PdfEditor: React.FC = () => {
     }
     try {
       setIsPreparing(true);
+      if (!document.file) {
+        alert("Please select a PDF first.");
+        setIsPreparing(false);
+        return;
+      }
       const sourceBytes = await document.file.arrayBuffer();
       const pdfDoc = await PDFDocument.load(sourceBytes);
       const pages = pdfDoc.getPages();
       const embeddedFonts = new Map<string, any>();
 
-      for (const annotation of document.annotations) {
+      for (const rawAnnotation of document.annotations) {
+        const annotation = rawAnnotation as PdfAnnotation;
         const pageIndex = Math.max(0, annotation.pageNumber - 1);
         const page = pages[pageIndex];
         if (!page) continue;
         const pageHeight = page.getHeight();
-        const x = annotation.bounds.x;
-        const width = Math.max(1, annotation.bounds.width);
-        const height = Math.max(1, annotation.bounds.height);
-        const y = pageHeight - annotation.bounds.y - height;
+        const bounds = annotation.bounds || { x: 0, y: 0, width: 100, height: 40 };
+        const x = bounds.x;
+        const width = Math.max(1, bounds.width);
+        const height = Math.max(1, bounds.height);
+        const y = pageHeight - bounds.y - height;
+        const style = annotation.style || {};
 
         if (annotation.type === PdfAnnotationType.TEXT) {
           const text = String(annotation.data?.text || "");
           if (!text) continue;
 
           // Draw solid whiteout background behind text to cover underlying PDF text
-          const fillColor = annotation.style.fillColor;
-          if (fillColor !== "transparent") {
+          const fillColor = style.fillColor;
+          if (fillColor && fillColor !== "transparent") {
             page.drawRectangle({
               x: x - 1,
               y: y - 1,
               width: width + 2,
               height: height + 2,
               color: hexToRgb(fillColor || "#FFFFFF"),
-              opacity: annotation.style.opacity ?? 1,
+              opacity: style.opacity ?? 1,
             });
           }
 
-          const fontKey = getPdfFontByStyle(annotation.style);
+          const fontKey = getPdfFontByStyle(style);
           let font = embeddedFonts.get(fontKey);
           if (!font) {
             font = await pdfDoc.embedFont(fontKey);
             embeddedFonts.set(fontKey, font);
           }
-          const fontSize = annotation.style.fontSize || 16;
+          const fontSize = style.fontSize || 16;
           const lines = text.split("\n");
           const maxLineWidth = Math.max(...lines.map((line) => font.widthOfTextAtSize(line || " ", fontSize)));
-          const align = annotation.style.textAlign || "left";
+          const align = style.textAlign || "left";
           const drawX =
             align === "center"
               ? x + Math.max(0, (width - maxLineWidth) / 2)
@@ -369,43 +387,43 @@ const PdfEditor: React.FC = () => {
               y: y + Math.max(2, height - lineHeight * (index + 1) + 2),
               size: fontSize,
               font,
-              color: hexToRgb(annotation.style.textColor || "#111827"),
+              color: hexToRgb(style.textColor || "#111827"),
             });
           });
           continue;
         }
 
-        if (annotation.type === PdfAnnotationType.RECTANGLE || annotation.type === PdfAnnotationType.HIGHLIGHT) {
+        if (annotation.type === PdfAnnotationType.RECTANGLE || annotation.type === PdfAnnotationType.HIGHLIGHT || (annotation.type as any) === 'shape') {
           page.drawRectangle({
             x,
             y,
             width,
             height,
-            borderColor: hexToRgb(annotation.style.strokeColor || "#2563eb"),
-            borderWidth: annotation.style.strokeWidth || 1,
+            borderColor: hexToRgb(style.strokeColor || "#2563eb"),
+            borderWidth: style.strokeWidth || 1,
             color:
               annotation.type === PdfAnnotationType.HIGHLIGHT
-                ? hexToRgb(annotation.style.fillColor || "#fde047")
+                ? hexToRgb(style.fillColor || "#fde047")
                 : undefined,
-            opacity: annotation.style.opacity ?? 1,
+            opacity: style.opacity ?? 1,
           });
           continue;
         }
 
-        if (annotation.type === PdfAnnotationType.CIRCLE) {
+        if (annotation.type === PdfAnnotationType.CIRCLE || (annotation.type as any) === 'circle') {
           page.drawEllipse({
             x: x + width / 2,
             y: y + height / 2,
             xScale: width / 2,
             yScale: height / 2,
-            borderColor: hexToRgb(annotation.style.strokeColor || "#2563eb"),
-            borderWidth: annotation.style.strokeWidth || 1,
-            opacity: annotation.style.opacity ?? 1,
+            borderColor: hexToRgb(style.strokeColor || "#2563eb"),
+            borderWidth: style.strokeWidth || 1,
+            opacity: style.opacity ?? 1,
           });
           continue;
         }
 
-        if (annotation.type === PdfAnnotationType.FREEHAND) {
+        if (annotation.type === PdfAnnotationType.FREEHAND || annotation.type === PdfAnnotationType.DRAWING || (annotation.type as any) === 'drawing') {
           const points = Array.isArray(annotation.data?.points) ? annotation.data.points : [];
           for (let i = 1; i < points.length; i += 1) {
             const p1 = points[i - 1];
@@ -413,15 +431,15 @@ const PdfEditor: React.FC = () => {
             page.drawLine({
               start: { x: p1.x, y: pageHeight - p1.y },
               end: { x: p2.x, y: pageHeight - p2.y },
-              thickness: annotation.style.strokeWidth || 2,
-              color: hexToRgb(annotation.style.strokeColor || "#1f2937"),
-              opacity: annotation.style.opacity ?? 1,
+              thickness: style.strokeWidth || 2,
+              color: hexToRgb(style.strokeColor || "#1f2937"),
+              opacity: style.opacity ?? 1,
             });
           }
           continue;
         }
 
-        if (annotation.type === PdfAnnotationType.IMAGE) {
+        if (annotation.type === PdfAnnotationType.IMAGE || (annotation.type as any) === 'image') {
           const src = String(annotation.data?.src || "");
           if (!src.startsWith("data:image/")) continue;
           const base64 = src.split(",")[1];
@@ -436,7 +454,7 @@ const PdfEditor: React.FC = () => {
 
       const outBytes = await pdfDoc.save();
       const blob = new Blob([outBytes], { type: "application/pdf" });
-      const sourceName = document.file.name.replace(/\.pdf$/i, "");
+      const sourceName = (document.file?.name || document.fileName || "edited").replace(/\.pdf$/i, "");
       const outputFilename = `${sourceName || "edited"}-edited.pdf`;
       setLatestDownload({
         filename: outputFilename,
@@ -990,7 +1008,7 @@ const PdfEditor: React.FC = () => {
                         selectedAnnotation={selectedAnnotation}
                         selectedAnnotationIds={selectedAnnotationIds}
                         zoom={zoom}
-                        fitMode={fitMode}
+                        fitMode={fitMode as PdfFitMode}
                         onAnnotationAdd={addAnnotation}
                         onAnnotationSelect={selectSingleAnnotation}
                         onAnnotationToggleSelect={toggleAnnotationSelection}

@@ -142,7 +142,7 @@ export const ToolSEOContent: React.FC<ToolSEOContentProps> = ({ toolKey }) => {
                 </span>
                 <div>
                   <p className="font-semibold text-slate-800 text-sm">{step.step}</p>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-1">{step.detail}</p>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1">{step.detail}</p>
                 </div>
               </div>
             ))}
@@ -165,7 +165,7 @@ export const ToolSEOContent: React.FC<ToolSEOContentProps> = ({ toolKey }) => {
                 </div>
                 <div>
                   <p className="font-semibold text-slate-800 text-sm">{benefit.title}</p>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-1">{benefit.description}</p>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1">{benefit.description}</p>
                 </div>
               </div>
             ))}
@@ -224,7 +224,7 @@ export const ToolSEOContent: React.FC<ToolSEOContentProps> = ({ toolKey }) => {
               <Star className="w-4 h-4 text-green-600" /> Completely free
             </span>
           </div>
-          <p className="text-center text-xs text-slate-400 mt-3">
+          <p className="text-center text-xs text-slate-500 mt-3">
             Last updated: {data.lastUpdated}
           </p>
         </div>

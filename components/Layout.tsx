@@ -17,7 +17,7 @@ import {
 import { Helmet } from 'react-helmet-async';
 import { Button } from './Button';
 import { DarkModeToggle } from './DarkModeToggle';
-import { AuthModal } from './AuthModal';
+const AuthModal = React.lazy(() => import('./AuthModal').then(m => ({ default: m.AuthModal })));
 import { authService, User } from '../services/authService';
 import { UsageCounter } from './UsageCounter';
 import { useOnlineStatus } from '../hooks/useHooks';
@@ -65,27 +65,27 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const showToolBack = isToolRoute(location.pathname);
   const toolFaqSchema = seo
     ? {
-        '@context': 'https://schema.org',
-        '@type': 'FAQPage',
-        mainEntity: [
-          {
-            '@type': 'Question',
-            name: `How do I use ${seo.title.replace(' | LAK PDF', '')}?`,
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Open the tool, upload your file, apply settings, and download the processed output.',
-            },
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: `How do I use ${seo.title.replace(' | LAK PDF', '')}?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Open the tool, upload your file, apply settings, and download the processed output.',
           },
-          {
-            '@type': 'Question',
-            name: 'Is this tool free to use?',
-            acceptedAnswer: {
-              '@type': 'Answer',
-              text: 'Yes, this tool is available on LAK PDF for online document processing workflows.',
-            },
+        },
+        {
+          '@type': 'Question',
+          name: 'Is this tool free to use?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Yes, this tool is available on LAK PDF for online document processing workflows.',
           },
-        ],
-      }
+        },
+      ],
+    }
     : null;
 
   // Auth State
@@ -200,12 +200,20 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-[#ff8a80] flex items-center justify-center text-white shadow-lg shadow-primary-400/20 transition-transform group-hover:scale-105">
-                <Heart className="w-6 h-6 fill-current" strokeWidth={2} />
-              </div>
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <picture>
+                <source srcSet="/logo-80x80.webp" type="image/webp" />
+                <img
+                  src="/logo-80x80.png"
+                  alt="LAK PDF Logo"
+                  width={40}
+                  height={40}
+                  decoding="async"
+                  className="w-10 h-10 object-contain animate-heartbeat transition-transform duration-300 group-hover:scale-110"
+                />
+              </picture>
               <span className="font-bold text-xl tracking-tight text-slate-800 dark:text-dark-text-primary">
-                LAK <span className="text-primary-400">PDF</span>
+                LAK <span className="text-primary-600 dark:text-primary-400">PDF</span>
               </span>
             </Link>
 
@@ -399,12 +407,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </header>
 
       {/* Authentication Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialMode={authMode}
-        onLoginSuccess={(u) => setUser(u)}
-      />
+      {isAuthModalOpen && (
+        <React.Suspense fallback={null}>
+          <AuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            initialMode={authMode}
+            onLoginSuccess={(u) => setUser(u)}
+          />
+        </React.Suspense>
+      )}
 
       {showToolBack && (
         <div className="w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
@@ -434,9 +446,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
             <div className="col-span-1 md:col-span-1">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-rose-600 flex items-center justify-center text-white font-bold shadow-md shadow-primary-500/20">
-                  <Heart className="w-5 h-5 fill-current" />
-                </div>
+                <picture>
+                  <source srcSet="/logo-80x80.webp" type="image/webp" />
+                  <img
+                    src="/logo-80x80.png"
+                    alt="LAK PDF Logo"
+                    width={36}
+                    height={36}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-9 h-9 object-contain animate-heartbeat transition-transform hover:scale-110"
+                  />
+                </picture>
                 <span className="font-extrabold text-lg text-white tracking-tight">LAK PDF</span>
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
@@ -495,13 +516,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
           </div>
 
-          <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
             <p>© {new Date().getFullYear()} LAK PDF. All rights reserved.</p>
             <div className="flex items-center gap-6">
-              <Link to="/privacy-policy" className="hover:text-slate-400 transition-colors">Privacy</Link>
-              <Link to="/terms-of-service" className="hover:text-slate-400 transition-colors">Terms</Link>
-              <Link to="/contact" className="hover:text-slate-400 transition-colors">Support</Link>
-              <Link to="/sitemap.xml" className="hover:text-slate-400 transition-colors">Sitemap</Link>
+              <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy</Link>
+              <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms</Link>
+              <Link to="/contact" className="hover:text-white transition-colors">Support</Link>
+              <Link to="/sitemap.xml" className="hover:text-white transition-colors">Sitemap</Link>
             </div>
           </div>
         </div>

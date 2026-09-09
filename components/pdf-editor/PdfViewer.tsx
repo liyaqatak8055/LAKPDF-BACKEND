@@ -91,6 +91,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     height: number;
     fontSize: number;
     fontFamily: string;
+    fontWeight?: string | number;
+    fontStyle?: string;
     isModified: boolean;
   }>>([]);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
@@ -706,7 +708,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       annotationId: annotation.id,
       handle,
       startPoint: point,
-      startBounds: annotation.bounds,
+      startBounds: annotation.bounds as DOMRect,
     });
     onAnnotationSelect(annotation);
   };
@@ -970,8 +972,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                               fillColor: '#FFFFFF',
                               fontSize: Math.round(item.fontSize),
                               fontFamily: item.fontFamily,
-                              fontWeight: item.fontWeight,
-                              fontStyle: item.fontStyle,
+                              fontWeight: item.fontWeight ? String(item.fontWeight) : 'normal',
+                              fontStyle: item.fontStyle ? String(item.fontStyle) : 'normal',
                             },
                             createdAt: new Date(),
                             modifiedAt: new Date(),

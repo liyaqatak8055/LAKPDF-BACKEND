@@ -189,18 +189,18 @@ export const AdUnit: React.FC<AdUnitProps> = ({
   }
 
   return (
-    <div className={`w-full flex justify-center my-4 ${className}`} role="region" aria-label="Advertising">
+    <div className={`w-full flex justify-center ${reserveSpace ? 'my-4' : 'my-1'} ${className}`} role="region" aria-label="Advertising">
       <div
         ref={adRef}
         className={`w-full ${layoutStyles[layout]} ad-container`}
-        style={{ minWidth: `${minWidth}px`, minHeight: `${minHeightByLayout[layout]}px` }}
+        style={{ minWidth: `${minWidth}px`, minHeight: reserveSpace ? `${minHeightByLayout[layout]}px` : undefined }}
       >
         <ins
           className="adsbygoogle"
           style={{
             display: "block",
             width: "100%",
-            minHeight: `${minHeightByLayout[layout]}px`,
+            minHeight: reserveSpace ? `${minHeightByLayout[layout]}px` : undefined,
           }}
           data-ad-client={AD_CONFIG.CLIENT_ID}
           data-ad-slot={slotId}

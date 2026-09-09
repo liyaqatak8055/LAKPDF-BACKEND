@@ -49,6 +49,7 @@ interface Tool {
   color: string;
   category: string;
   popular?: boolean;
+  comingSoon?: boolean;
 }
 
 const AllTools: React.FC = () => {
@@ -425,7 +426,7 @@ const AllTools: React.FC = () => {
                     description={tool.description}
                     to={tool.to}
                     popular
-                    icon={<IconComponent className="h-6 w-6 md:h-8 md:w-8" />}
+                    icon={<IconComponent className="h-5 w-5 sm:h-6 sm:w-6" />}
                   />
                 );
               })}
@@ -434,7 +435,7 @@ const AllTools: React.FC = () => {
         )}
 
         {/* All Tools Grid */}
-        <div className="mb-8">
+        <div className="mb-8 content-section-lazy">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl md:text-2xl font-bold text-slate-900">
               {selectedCategory === 'all' ? 'All Tools' : categories.find(c => c.id === selectedCategory)?.name}
@@ -463,7 +464,7 @@ const AllTools: React.FC = () => {
                     to={tool.to}
                     popular={tool.popular}
                     comingSoon={tool.comingSoon}
-                    icon={<IconComponent className="h-6 w-6 md:h-8 md:w-8" />}
+                    icon={<IconComponent className="h-5 w-5 sm:h-6 sm:w-6" />}
                   />
                 );
               })}
@@ -471,7 +472,7 @@ const AllTools: React.FC = () => {
           )}
         </div>
 
-        <section className="mt-10 bg-white rounded-lg border border-slate-200 p-6 md:p-8">
+        <section className="mt-10 bg-white rounded-lg border border-slate-200 p-6 md:p-8 content-section-lazy">
           <h2 className="text-2xl font-bold text-slate-900 mb-3">How to choose the right PDF tool</h2>
           <p className="text-slate-600 leading-relaxed mb-4">
             Pick tools based on your document goal. If you need one file from many sources, use Merge PDF. If file size is high for sharing,

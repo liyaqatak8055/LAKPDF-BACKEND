@@ -360,7 +360,7 @@ const DetectDuplicatePages: React.FC = () => {
                                                     Found {analysis.duplicates.length} Duplicate Group{analysis.duplicates.length > 1 ? 's' : ''} ({analysis.summary.duplicatePages} Repeated Pages)
                                                 </h3>
                                                 <p className="text-xs text-slate-500 mt-0.5">
-                                                    Duplicate pages will be removed, keeping the first original page intact.
+                                                    Har group mein <strong className="text-emerald-700">pehla page (Original)</strong> rakha jayega — sirf <strong className="text-red-600">extra copies</strong> delete hongi.
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2">

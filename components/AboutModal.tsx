@@ -17,7 +17,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         
         <div className="bg-slate-50 p-5 rounded-xl mb-6 border border-slate-100">
           <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-2 text-sm">
-            <Heart className="w-4 h-4 text-primary-400 fill-current" />
+            <img src="/logo-80x80.webp" alt="LAK PDF" width={20} height={20} className="w-5 h-5 object-contain animate-heartbeat inline-block" />
             With LAK PDF, you can:
           </h4>
           <ul className="space-y-2.5 text-sm text-slate-600">

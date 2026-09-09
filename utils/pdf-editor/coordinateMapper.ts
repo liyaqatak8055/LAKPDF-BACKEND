@@ -26,8 +26,8 @@ export class CoordinateMapper implements PdfCoordinateMapper {
     const screenY = this.viewport.height * this.screenScale - scaledY;
 
     // Add viewport offset
-    const finalX = scaledX + this.viewport.offsetX;
-    const finalY = screenY + this.viewport.offsetY;
+    const finalX = scaledX + (this.viewport.offsetX || 0);
+    const finalY = screenY + (this.viewport.offsetY || 0);
 
     return {
       x: Math.round(finalX * 100) / 100, // Round to 2 decimal places
@@ -40,8 +40,8 @@ export class CoordinateMapper implements PdfCoordinateMapper {
    */
   screenToPdf(screenX: number, screenY: number): { x: number; y: number } {
     // Remove viewport offset
-    const offsetX = screenX - this.viewport.offsetX;
-    const offsetY = screenY - this.viewport.offsetY;
+    const offsetX = screenX - (this.viewport.offsetX || 0);
+    const offsetY = screenY - (this.viewport.offsetY || 0);
 
     // Unflip Y coordinate (screen top-left to PDF bottom-left)
     const pdfY = this.viewport.height * this.screenScale - offsetY;
@@ -54,6 +54,14 @@ export class CoordinateMapper implements PdfCoordinateMapper {
       x: Math.round(pdfX * 100) / 100,
       y: Math.round(pdfYFinal * 100) / 100
     };
+  }
+
+  pageToCanvas(x: number, y: number): { x: number; y: number } {
+    return this.pdfToScreen(x, y);
+  }
+
+  canvasToPage(x: number, y: number): { x: number; y: number } {
+    return this.screenToPdf(x, y);
   }
 
   /**

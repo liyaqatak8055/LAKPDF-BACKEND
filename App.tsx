@@ -15,7 +15,7 @@ import { initPerformanceMonitoring } from "./utils/performance";
 import { trackDropOffStepForPath, trackPageView } from "./utils/analytics";
 import { isToolRoute, recordToolOpen } from "./utils/toolUsage";
 
-const Home = lazy(() => safeImport(() => import("./pages/Home"), "Home"));
+import Home from "./pages/Home";
 
 type RouteSeo = {
   title: string;
@@ -642,22 +642,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Prefetch top-3 tools during browser idle time so their chunks are
-  // warm in the module cache before the user clicks
-  useEffect(() => {
-    const prefetchTopTools = () => {
-      import('./pages/CompressPdf');
-      import('./pages/ImageToPdf');
-      import('./pages/MergePdf');
-    };
-    if ('requestIdleCallback' in window) {
-      const id = (window as Window & typeof globalThis).requestIdleCallback(prefetchTopTools, { timeout: 5000 });
-      return () => (window as Window & typeof globalThis).cancelIdleCallback(id);
-    } else {
-      const t = setTimeout(prefetchTopTools, 5000);
-      return () => clearTimeout(t);
-    }
-  }, []);
+
 
   return (
     <BrowserRouter>

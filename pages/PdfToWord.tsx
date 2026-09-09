@@ -109,8 +109,8 @@ export const PdfToWord: React.FC = () => {
       if (conversionMethod === 'auto') {
         const shouldForceOcr = scriptProfile?.forceOcr === true;
         if (pdfType === 'text' && !shouldForceOcr) {
-          // Text PDFs should prefer direct extraction for stable output.
-          blob = await convertPdfToWord(file.file, { method: 'text' });
+          // Text PDFs: use direct extraction, respect outputMode
+          blob = await convertPdfToWord(file.file, { method: 'text', preserveLayout: outputMode === 'layout' });
           setProgress(100);
         } else {
           const language = 'eng';
@@ -144,7 +144,7 @@ export const PdfToWord: React.FC = () => {
         });
       }
 
-      const outputFilename = `${file.name.replace('.pdf', '')}.docx`;
+      const outputFilename = `${file.name.replace(/\.pdf$/i, '')}.docx`;
       setReadyDocx({ blob, name: outputFilename });
       downloadFile(blob, outputFilename, { autoDownload: true });
       setStatus({ type: 'success', message: 'Word file ready & downloaded automatically!' });
@@ -365,7 +365,7 @@ export const PdfToWord: React.FC = () => {
                 >
                   <LayoutGrid className="w-5 h-5 mx-auto mb-1" />
                   <div className="text-sm font-medium">Layout Preserve</div>
-                  <div className="text-xs opacity-75">Forms/Tables Best</div>
+                  <div className="text-xs opacity-75">Tables · Columns · Per-line</div>
                 </button>
                 <button
                   onClick={() => setOutputMode('editable')}
@@ -377,11 +377,11 @@ export const PdfToWord: React.FC = () => {
                 >
                   <Pencil className="w-5 h-5 mx-auto mb-1" />
                   <div className="text-sm font-medium">Editable Text</div>
-                  <div className="text-xs opacity-75">Paragraph Focused</div>
+                  <div className="text-xs opacity-75">Lines merged → Paragraphs</div>
                 </button>
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                `Layout Preserve` ticket/invoice/table documents ke liye recommended hai.
+                <strong>Layout Preserve:</strong> Tables, columns aur per-line structure rakhe. <strong>Editable Text:</strong> Lines ko smart paragraphs mein join kare — easy editing ke liye.
               </p>
             </div>
 

@@ -9,6 +9,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="LAK PDF" />
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <link rel="canonical" href="https://lakpdf.com/" />
 
   <!-- ====== Primary SEO ====== -->
@@ -180,9 +183,7 @@
   <meta name="application-name" content="LAK PDF" />
   <link rel="apple-touch-icon" href="/favicon-192x192.png" />
 
-  <!-- ====== PERFORMANCE: DNS prefetch + preconnect ====== -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- ====== PERFORMANCE: DNS prefetch ====== -->
   <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
   <link rel="dns-prefetch" href="https://api.lakpdf.com" />
   <link rel="alternate" hreflang="en" href="https://lakpdf.com/" />
@@ -193,20 +194,24 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous"
     href="/assets/fonts/inter-latin-400-normal.woff2" />
   <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous"
-    href="/assets/fonts/inter-latin-500-normal.woff2" />
-  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous"
-    href="/assets/fonts/inter-latin-600-normal.woff2" />
-  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous"
     href="/assets/fonts/inter-latin-700-normal.woff2" />
 
-  <!-- Noto Sans Devanagari — load async (non-critical) -->
-  <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" media="print"
-    onload="this.media='all'" />
-  <noscript>
-    <link rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" />
-  </noscript>
+  <!-- Noto Sans Devanagari — deferred to idle to ensure 0 critical path contention -->
+  <script>
+    (function () {
+      function loadDevanagari() {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600&display=swap';
+        document.head.appendChild(l);
+      }
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(loadDevanagari, { timeout: 4000 });
+      } else {
+        window.addEventListener('load', function () { setTimeout(loadDevanagari, 1500); }, { once: true });
+      }
+    })();
+  </script>
 
   <style>
     /* Critical above-fold styles — prevents blank white screen */
@@ -241,11 +246,12 @@
       --border-color:#334155;
     }
 
-    /* Layout — prevents CLS */
+    /* Layout — prevents CLS & enables GPU compositor scrolling */
     html{
       background-color:var(--bg-primary);
       max-width:100%;
-      overflow-x:hidden;
+      overflow-x:clip;
+      scroll-behavior:auto;
     }
     body{
       font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -254,26 +260,38 @@
       color:var(--text-primary);
       min-height:100vh;
       max-width:100%;
-      overflow-x:hidden;
+      overflow-x:clip;
       overscroll-behavior-x:none;
+      overscroll-behavior-y:auto;
       -webkit-text-size-adjust:100%;
       text-size-adjust:100%;
+      touch-action:pan-y;
     }
     html.dark body{background-color:#0f172a;color:#f1f5f9}
-    #root{max-width:100%;overflow-x:hidden;min-height:100vh}
+    html{-webkit-overflow-scrolling:touch}
+    #root{max-width:100%;overflow-x:clip;min-height:100vh;isolation:isolate}
     input,select,textarea,button{font-size:16px}
 
-    /* Inline loading spinner — shown before React hydrates */
-    .initial-loader{
-      display:flex;align-items:center;justify-content:center;min-height:100vh;
-    }
-    .initial-loader__spinner{
-      width:36px;height:36px;
-      border:3px solid #e2e8f0;
-      border-top-color:#e5323f;
-      border-radius:50%;
-      animation:_spin .65s linear infinite;
-    }
+    /* App Shell critical layout — enables instant FCP & LCP (< 500ms) */
+    .app-shell-root{min-height:100vh;display:flex;flex-direction:column;background:var(--bg-primary)}
+    .app-header-shell{position:sticky;top:0;z-index:50;height:64px;display:flex;align-items:center;background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border-color)}
+    html.dark .app-header-shell{background:rgba(30,41,59,0.85)}
+    .app-header-shell__inner{max-width:80rem;margin:0 auto;width:100%;padding:0 1rem;display:flex;align-items:center;justify-content:space-between}
+    .hero-shell{position:relative;padding:2rem 1rem 3rem;text-align:center;background:var(--bg-surface);overflow:hidden}
+    .hero-shell__inner{max-width:56rem;margin:0 auto;position:relative;z-index:10}
+    .hero-shell__title{font-size:clamp(1.875rem,4vw,3.75rem);font-weight:800;color:var(--text-primary);line-height:1.15;letter-spacing:-0.025em;margin-bottom:1rem}
+    .hero-shell__highlight{color:#e5323f;display:inline-flex;align-items:center;gap:0.375rem;white-space:nowrap}
+    html.dark .hero-shell__highlight{color:#fb7185}
+    .hero-shell__desc{font-size:clamp(1rem,2vw,1.25rem);color:var(--text-secondary);max-width:42rem;margin:0 auto 1.25rem;line-height:1.625}
+    .hero-shell__cta{display:inline-flex;align-items:center;justify-content:center;border-radius:0.5rem;background:#e5323f;padding:0.75rem 1.5rem;font-size:1rem;font-weight:600;color:#ffffff;text-decoration:none;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05);transition:background .2s}
+    .hero-shell__badges{display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem;font-size:0.875rem;font-weight:500;color:var(--text-secondary);margin:1rem 0 1.25rem}
+    .hero-shell__badge{border-radius:9999px;border:1px solid var(--border-color);background:var(--bg-surface);padding:0.375rem 0.625rem}
+    .hero-shell__search{max-width:32rem;margin:0 auto;width:100%}
+    .hero-shell__input{width:100%;border-radius:0.5rem;border:1px solid var(--border-color);background:var(--bg-surface);padding:0.875rem 1.25rem;color:var(--text-primary);box-shadow:0 1px 2px 0 rgba(0,0,0,0.05);font-size:1rem;outline:none}
+
+    /* Fallback spinner */
+    .initial-loader{display:flex;align-items:center;justify-content:center;min-height:40vh}
+    .initial-loader__spinner{width:32px;height:32px;border:3px solid var(--border-color);border-top-color:#e5323f;border-radius:50%;animation:_spin .65s linear infinite}
     @keyframes _spin{to{transform:rotate(360deg)}}
   </style>
 
@@ -293,8 +311,46 @@
   <!-- Critical above-fold CSS is already inlined in the <style> block above -->
 
 
-  <!-- ====== Google AdSense ====== -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436" crossorigin="anonymous"></script>
+  <!-- ====== Google AdSense (Deferred to keep FCP/LCP instant) ====== -->
+  <script>
+    (function () {
+      function isLocalHost() {
+        var host = window.location.hostname;
+        return host === 'localhost' ||
+               host === '127.0.0.1' ||
+               host === '0.0.0.0' ||
+               /^192\.168\./.test(host) ||
+               /^10\./.test(host) ||
+               /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+               host.endsWith('.local');
+      }
+      function loadAdSense() {
+        if (isLocalHost() || window.__adsense_loaded) return;
+        window.__adsense_loaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436';
+        document.head.appendChild(s);
+      }
+      if (isLocalHost()) return;
+      if (document.readyState === 'complete') {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(loadAdSense, { timeout: 3000 });
+        } else {
+          setTimeout(loadAdSense, 2000);
+        }
+      } else {
+        window.addEventListener('load', function () {
+          if ('requestIdleCallback' in window) {
+            requestIdleCallback(loadAdSense, { timeout: 3000 });
+          } else {
+            setTimeout(loadAdSense, 2000);
+          }
+        }, { once: true });
+      }
+    })();
+  </script>
 </head>
 
 <body>
@@ -321,10 +377,46 @@
     </div>
   </noscript>
 
-  <!-- Inline loader shown immediately — replaces blank white screen -->
+  <!-- Pre-rendered App Shell: Instant First Contentful Paint & Largest Contentful Paint (< 500ms) -->
   <div id="root">
-    <div class="initial-loader" aria-hidden="true">
-      <div class="initial-loader__spinner"></div>
+    <div class="app-shell-root">
+      <header class="app-header-shell">
+        <div class="app-header-shell__inner">
+          <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <picture>
+              <source srcset="/logo-80x80.webp" type="image/webp" />
+              <img src="/logo-80x80.png" alt="LAK PDF Logo" width="40" height="40" style="width:40px;height:40px;object-fit:contain;" />
+            </picture>
+            <span style="font-weight:700;font-size:1.25rem;color:var(--text-primary);letter-spacing:-0.025em;">LAK <span style="color:#e5323f;">PDF</span></span>
+          </a>
+        </div>
+      </header>
+      <main class="tool-shell flex-grow overflow-x-hidden">
+        <section class="relative px-4 py-8 text-center overflow-hidden sm:py-12 md:py-16 bg-white dark:bg-dark-bg hero-shell">
+          <div class="relative z-10 max-w-4xl mx-auto hero-shell__inner">
+            <h1 class="text-3xl sm:text-4xl md:text-6xl font-extrabold text-slate-900 dark:text-dark-text-primary mb-4 tracking-tight hero-shell__title" data-elementtiming="hero-heading">
+              Finish everyday PDF work in <span class="text-primary-600 dark:text-rose-400 inline-flex items-center gap-1.5 whitespace-nowrap hero-shell__highlight"><span>seconds</span></span>
+            </h1>
+            <p class="text-base sm:text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto mb-5 leading-relaxed hero-shell__desc">
+              Merge, compress, convert, split, and edit PDFs quickly with simple browser-based tools.
+            </p>
+            <div class="mb-4 flex justify-center">
+              <a href="/tools" class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-6 py-3 text-sm sm:text-base font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 hero-shell__cta">
+                Choose a PDF tool
+              </a>
+            </div>
+            <div class="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-600 dark:text-dark-text-secondary hero-shell__badges">
+              <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">Browser-first core tools</span>
+              <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">Works in browser</span>
+              <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">Fast downloads</span>
+            </div>
+            <div class="max-w-lg mx-auto hero-shell__search">
+              <label for="tool-search-shell" class="sr-only">Search PDF tools</label>
+              <input id="tool-search-shell" type="text" placeholder="Search tools: merge, compress, OCR, convert..." readonly class="w-full rounded-lg border border-slate-200 bg-white px-5 py-3.5 text-slate-700 placeholder:text-slate-400 shadow-sm hero-shell__input" />
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   </div>
 

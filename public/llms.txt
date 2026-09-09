@@ -1,0 +1,22 @@
+# LAK PDF
+
+> Free, secure, browser-first PDF and document processing tools. Works client-side in the browser without registration.
+
+## Core PDF Tools
+- [All Tools](https://lakpdf.com/tools): Complete directory of free online PDF utilities.
+- [Merge PDF](https://lakpdf.com/merge): Combine multiple PDF documents into a single file.
+- [Split PDF](https://lakpdf.com/split): Split a PDF into individual pages or extract page ranges.
+- [Compress PDF](https://lakpdf.com/compress): Reduce PDF file size while preserving high visual quality.
+- [Convert PDF](https://lakpdf.com/convert): Convert PDF documents to and from images, Word, and text.
+- [PDF to Word](https://lakpdf.com/pdf-to-word): Convert PDF documents into editable DOCX files.
+- [Word to PDF](https://lakpdf.com/word-to-pdf): Convert Microsoft Word DOCX documents into PDF.
+- [Image to PDF](https://lakpdf.com/img-to-pdf): Convert JPG, PNG, and WebP images into PDF format.
+- [Rotate PDF](https://lakpdf.com/rotate): Permanently rotate PDF pages clockwise or counterclockwise.
+- [Page Numbers](https://lakpdf.com/page-number): Add customized page numbers and headers/footers to PDFs.
+- [Crop PDF](https://lakpdf.com/crop-pdf): Trim margins and resize PDF page boundaries.
+- [OCR PDF](https://lakpdf.com/ocr-pdf): Recognize text in scanned documents with optical character recognition.
+- [PDF Editor](https://lakpdf.com/pdf-editor): Draw, annotate, sign, and modify PDFs directly in the browser.
+
+## Privacy and Architecture
+- Browser-first processing: core document modifications execute locally in the client browser.
+- No mandatory sign-up or file retention.

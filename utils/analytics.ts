@@ -24,7 +24,12 @@ export interface WebVitalPayload {
 }
 
 const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
-const ANALYTICS_ENABLED = import.meta.env.PROD;
+const isLocalEnv = () => {
+    if (typeof window === 'undefined') return true;
+    const h = window.location.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || /^192\.168\./.test(h) || /^10\./.test(h) || h.endsWith('.local');
+};
+const ANALYTICS_ENABLED = import.meta.env.PROD && !isLocalEnv();
 const METRIC_ACTIONS = new Set(['tool_open', 'file_upload', 'process_success', 'download_click', 'drop_off_step']);
 const FUNNEL_STATE_KEY = 'lakpdf_funnel_state_v1';
 

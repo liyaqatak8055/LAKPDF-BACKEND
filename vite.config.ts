@@ -1,9 +1,11 @@
 import path from 'path';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import viteCompression from 'vite-plugin-compression';
 import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 /**
  * Converts every Vite-injected CSS <link> in the production HTML to
@@ -13,15 +15,54 @@ import { VitePWA } from 'vite-plugin-pwa';
  * IMPORTANT: Only processes links OUTSIDE <noscript> blocks to prevent
  * double-wrapping that creates invalid nested <noscript> markup.
  */
+/**
+ * Serves pre-compressed Brotli or Gzip HTML on the preview server,
+ * matching production CDN behavior and eliminating the Document Latency text compression warning.
+ */
+function serveCompressedPreview(): Plugin {
+  return {
+    name: 'serve-compressed-preview',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const accept = req.headers['accept-encoding'] || '';
+        const rawUrl = req.url?.split('?')[0] || '/';
+        const isHtml = rawUrl === '/' || rawUrl.endsWith('.html');
+
+        if (isHtml) {
+          const brPath = path.resolve(__dirname, 'dist', 'index.html.br');
+          const gzPath = path.resolve(__dirname, 'dist', 'index.html.gz');
+
+          if (accept.includes('br') && fs.existsSync(brPath)) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Content-Encoding', 'br');
+            res.setHeader('Vary', 'Accept-Encoding');
+            return fs.createReadStream(brPath).pipe(res);
+          }
+          if (accept.includes('gzip') && fs.existsSync(gzPath)) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Content-Encoding', 'gzip');
+            res.setHeader('Vary', 'Accept-Encoding');
+            return fs.createReadStream(gzPath).pipe(res);
+          }
+        }
+        next();
+      });
+    },
+  };
+}
+
 function makeStylesAsync(): Plugin {
   return {
     name: 'make-styles-async',
     apply: 'build',
     transformIndexHtml(html) {
-      // Inject preload for CSS for fast network prioritization
+      // Non-render-blocking CSS with preload + async media swap
       return html.replace(
         /<link rel="stylesheet"([^>]+href="([^"]+\.css)"[^>]*)>/g,
-        '<link rel="preload" as="style" crossorigin href="$2">\n  <link rel="stylesheet"$1>'
+        (match, p1, p2) => {
+          const crossOrigin = p1.includes('crossorigin') ? ' crossorigin' : '';
+          return `<link rel="preload" as="style" href="${p2}"${crossOrigin}>\n  <link rel="stylesheet"${p1} media="print" onload="this.media='all'">\n  <noscript><link rel="stylesheet"${p1}></noscript>`;
+        }
       );
     },
   };
@@ -86,15 +127,22 @@ function injectFontPreloads(): Plugin {
         html = html.replace(srcPattern, `url('/${fontPath}')`);
       }
 
-      // 3. Build and inject <link rel="preload"> tags with correct paths
+      // 3. Build and inject <link rel="preload"> tags with correct paths (only 400 & 700 for mobile bandwidth)
       const preloadTags = fontFiles
-        .filter((f) => f.includes('-normal.')) // Only normal style, not italic
+        .filter((f) => f.includes('inter-latin-400') || f.includes('inter-latin-700'))
         .map((f) => `  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/${f}">`)
         .join('\n');
 
       html = html.replace('</head>', `\n${preloadTags}\n</head>`);
 
       fs.writeFileSync(htmlPath, html, 'utf8');
+      const htmlBuf = Buffer.from(html, 'utf8');
+      try {
+        fs.writeFileSync(`${htmlPath}.br`, zlib.brotliCompressSync(htmlBuf));
+        fs.writeFileSync(`${htmlPath}.gz`, zlib.gzipSync(htmlBuf));
+      } catch (e) {
+        console.warn('[inject-font-preloads] Failed to recompress HTML:', e);
+      }
       console.log(`[inject-font-preloads] Injected ${fontFiles.length} font preloads + patched inline @font-face in ${htmlPath}`);
     },
   };
@@ -105,6 +153,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   const backendPort = Number(env.PORT || 8787);
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || `http://localhost:${Number.isFinite(backendPort) ? backendPort : 8787}`;
+  const isHttps = process.env.HTTPS === 'true' || process.env.VITE_HTTPS === 'true';
 
   return {
     server: {
@@ -113,22 +162,37 @@ export default defineConfig(({ mode }) => {
       middlewareMode: false,
       fs: { strict: false },
       headers: {
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data:; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self'; object-src 'none';",
+        'Content-Security-Policy': "default-src 'self'; upgrade-insecure-requests; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';",
         'Permissions-Policy': "camera=(self), microphone=(), geolocation=()",
+        'X-Frame-Options': 'SAMEORIGIN',
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
       },
       proxy: {
         '/api': { target: apiProxyTarget, changeOrigin: true },
       },
     },
     preview: {
+      port: 3000,
+      host: '0.0.0.0',
       headers: {
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data:; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self'; object-src 'none';",
+        'Content-Security-Policy': "default-src 'self'; upgrade-insecure-requests; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';",
         'Permissions-Policy': "camera=(self), microphone=(), geolocation=()",
+        'X-Frame-Options': 'SAMEORIGIN',
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+      },
+      proxy: {
+        '/api': { target: apiProxyTarget, changeOrigin: true },
       },
     },
     appType: 'spa',
 
     plugins: [
+      ...(isHttps ? [basicSsl()] : []),
+      // Serve pre-compressed Brotli/Gzip HTML on preview server
+      serveCompressedPreview(),
+
       // Make production CSS links async (non-render-blocking)
       makeStylesAsync(),
 
@@ -191,6 +255,11 @@ export default defineConfig(({ mode }) => {
             '**/vendor-ocr-*.js',
             '**/vendor-pdf-lib-*.js',
             '**/vendor-mammoth-*.js',
+            '**/vendor-office-*.js',
+            '**/vendor-docx-*.js',
+            '**/vendor-pptx-*.js',
+            '**/vendor-jspdf-*.js',
+            '**/vendor-canvas-*.js',
           ],
           // Cache-first for pre-cached assets; network-first for everything else
           runtimeCaching: [
@@ -240,6 +309,13 @@ export default defineConfig(({ mode }) => {
       },
     },
 
+    esbuild: {
+      minifyIdentifiers: true,
+      minifySyntax: true,
+      minifyWhitespace: true,
+      legalComments: 'none',
+    },
+
     build: {
       // Target modern browsers — eliminates legacy polyfills (~30 kB savings)
       target: 'es2020',
@@ -266,10 +342,12 @@ export default defineConfig(({ mode }) => {
           return deps.filter((dep) => {
             // Always preload the entry itself
             if (dep === filename) return true;
-            // Preload React (needed immediately), icons, home page, helmet
+            // Preload React, icons, helmet, home page and button
             if (dep.includes('vendor-react') ||
                 dep.includes('vendor-icons') ||
-                dep.includes('vendor-helmet')) {
+                dep.includes('vendor-helmet') ||
+                dep.includes('Home') ||
+                dep.includes('ui-button')) {
               return true;
             }
             // Skip everything else — they'll load on-demand when needed
@@ -299,12 +377,20 @@ export default defineConfig(({ mode }) => {
         output: {
           // ── Manual chunk splitting ─────────────────────────────
           manualChunks: (id) => {
-            // ── React core + runtime helpers — load first, cache forever ──────────
+            // ── Preload helper must be in vendor-react to prevent entry cross-coupling ──
+            if (id.includes('preload-helper')) {
+              return 'vendor-react';
+            }
+
+            // ── React core + routing + essential helpers ──────────
             if (id.includes('node_modules/react/') ||
                 id.includes('node_modules/react-dom/') ||
-                id.includes('node_modules/react-router-dom/') ||
+                id.includes('node_modules/react-router') ||
                 id.includes('node_modules/scheduler/') ||
-                id.includes('node_modules/tslib/')) {
+                id.includes('node_modules/tslib/') ||
+                id.includes('node_modules/react-fast-compare') ||
+                id.includes('node_modules/shallowequal') ||
+                id.includes('node_modules/invariant')) {
               return 'vendor-react';
             }
 
@@ -313,13 +399,19 @@ export default defineConfig(({ mode }) => {
               return 'vendor-pdfjs';
             }
 
-            // ── pdf-lib + pako — only on PDF manipulation routes ──────────
-            if (id.includes('pdf-lib') || id.includes('@pdf-lib') || id.includes('node_modules/pako')) {
+            // ── pdf-lib — only on PDF manipulation routes ──────────
+            if (id.includes('pdf-lib') || id.includes('@pdf-lib')) {
               return 'vendor-pdf-lib';
             }
 
-            // ── jsPDF — only PDF generation ─────────────────────
-            if (id.includes('jspdf')) {
+            // ── jsPDF + canvas/svg rendering deps ─────────────────────
+            if (id.includes('jspdf') ||
+                id.includes('canvg') ||
+                id.includes('stackblur-canvas') ||
+                id.includes('svg-pathdata') ||
+                id.includes('rgbcolor') ||
+                id.includes('fflate') ||
+                id.includes('fast-png')) {
               return 'vendor-jspdf';
             }
 
@@ -328,9 +420,19 @@ export default defineConfig(({ mode }) => {
               return 'vendor-ocr';
             }
 
-            // ── Office stack ─────────────────────────────────────
-            if (id.includes('mammoth')) return 'vendor-mammoth';
-            if (id.includes('/docx/') || id.includes('node_modules/docx')) return 'vendor-docx';
+            // ── Office stack + XML/DOCX parsing deps ─────────────────────
+            if (id.includes('mammoth') ||
+                id.includes('/docx/') || id.includes('node_modules/docx') ||
+                id.includes('bluebird') ||
+                id.includes('xmlbuilder') ||
+                id.includes('@xmldom') ||
+                id.includes('underscore') ||
+                id.includes('lop') ||
+                id.includes('dingbat-to-unicode') ||
+                id.includes('iobuffer')) {
+              return 'vendor-office';
+            }
+
             if (id.includes('pptxgenjs')) return 'vendor-pptx';
             if (id.includes('xlsx')) return 'vendor-xlsx';
 
@@ -361,6 +463,11 @@ export default defineConfig(({ mode }) => {
             // ── OpenAI SDK — only for AI tools ───────────────────
             if (id.includes('openai')) return 'vendor-openai';
 
+            // ── Decouple common UI & services from app entry ───────────
+            if (id.includes('components/Button')) return 'ui-button';
+            if (id.includes('services/authService')) return 'service-auth';
+            if (id.includes('utils/analytics')) return 'util-analytics';
+
             // ── All other node_modules: shared vendor chunk ──────
             if (id.includes('node_modules')) return 'vendor-misc';
           },
@@ -376,26 +483,6 @@ export default defineConfig(({ mode }) => {
           },
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',
-        },
-      },
-    },
-
-    // Server & Preview Proxy for local dev & preview
-    server: {
-      port: 5173,
-      proxy: {
-        '/api': {
-          target: 'http://127.0.0.1:8787',
-          changeOrigin: true,
-        },
-      },
-    },
-    preview: {
-      port: 4173,
-      proxy: {
-        '/api': {
-          target: 'http://127.0.0.1:8787',
-          changeOrigin: true,
         },
       },
     },

@@ -1,21 +1,89 @@
-import { pdfjs } from './pdfService';
 import { sanitizeHtml } from './htmlSanitizer';
-// @ts-ignore
-import * as docxModule from 'docx';
-const docx: any = (docxModule as any).default || docxModule;
-const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell } = docx;
-// @ts-ignore
-import PptxGenJS from 'pptxgenjs';
-// @ts-ignore
-import mammoth from 'mammoth';
-// @ts-ignore
-import { jsPDF } from 'jspdf';
-// @ts-ignore
-import html2canvas from 'html2canvas';
-// @ts-ignore
-import * as TesseractModule from 'tesseract.js';
-const Tesseract: any = (TesseractModule as any).default || TesseractModule;
-import JSZip from 'jszip';
+type DocxElement = any;
+
+// ─── Lazy library singletons ────────────────────────────────────────────────
+// Heavy libraries load ONLY when their first function is called.
+// This removes ~2.4 MB from the initial bundle and all intermediate route loads.
+
+// --- pdfjs (via pdfService, lazy) ---
+let _pdfjs: any = null;
+const ensurePdfjs = async () => {
+  if (_pdfjs) return _pdfjs;
+  const { pdfjs } = await import('./pdfService');
+  _pdfjs = pdfjs;
+  return _pdfjs;
+};
+
+// --- docx ---
+let Document: any, Packer: any, Paragraph: any, TextRun: any,
+    Table: any, TableRow: any, TableCell: any;
+const ensureDocx = async () => {
+  if (Document) return;
+  // @ts-ignore
+  const m = await import('docx');
+  const docx: any = (m as any).default || m;
+  ({ Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell } = docx);
+};
+
+// --- pptxgenjs ---
+let _PptxGenJS: any = null;
+const ensurePptx = async () => {
+  if (_PptxGenJS) return _PptxGenJS;
+  // @ts-ignore
+  const m = await import('pptxgenjs');
+  _PptxGenJS = (m as any).default || m;
+  return _PptxGenJS;
+};
+
+// --- mammoth ---
+let _mammoth: any = null;
+const ensureMammoth = async () => {
+  if (_mammoth) return _mammoth;
+  // @ts-ignore
+  const m = await import('mammoth');
+  _mammoth = (m as any).default || m;
+  return _mammoth;
+};
+
+// --- jspdf ---
+let _jsPDF: any = null;
+const ensureJsPdf = async () => {
+  if (_jsPDF) return _jsPDF;
+  // @ts-ignore
+  const m = await import('jspdf');
+  _jsPDF = (m as any).jsPDF || (m as any).default?.jsPDF || (m as any).default;
+  return _jsPDF;
+};
+
+// --- html2canvas ---
+let _html2canvas: any = null;
+const ensureHtml2canvas = async () => {
+  if (_html2canvas) return _html2canvas;
+  // @ts-ignore
+  const m = await import('html2canvas');
+  _html2canvas = (m as any).default || m;
+  return _html2canvas;
+};
+
+// --- tesseract.js ---
+let _Tesseract: any = null;
+const ensureTesseract = async () => {
+  if (_Tesseract) return _Tesseract;
+  // @ts-ignore
+  const m = await import('tesseract.js');
+  _Tesseract = (m as any).default || m;
+  return _Tesseract;
+};
+
+// --- jszip ---
+let _JSZip: any = null;
+const ensureJsZip = async () => {
+  if (_JSZip) return _JSZip;
+  const m = await import('jszip');
+  _JSZip = (m as any).default || m;
+  return _JSZip;
+};
+
 
 // Utility function to convert RGB to hex color
 function rgbToHex(r: number, g: number, b: number): string {
@@ -239,6 +307,7 @@ function calculateHindiReadabilityScore(text: string): number {
 // --- PDF Type Detection ---
 
 export const detectPdfType = async (file: File): Promise<'text' | 'scanned'> => {
+  const pdfjs = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
@@ -266,6 +335,7 @@ export const detectPdfType = async (file: File): Promise<'text' | 'scanned'> => 
 };
 
 export const detectPdfScriptProfile = async (file: File): Promise<PdfScriptProfile> => {
+  const pdfjs = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   const pagesToCheck = Math.min(3, pdf.numPages);
@@ -339,11 +409,15 @@ export const convertPdfToWord = async (
   options: {
     method: 'auto' | 'text' | 'ocr';
     ocrLanguage?: 'eng' | 'hin' | 'eng+hin';
+    preserveLayout?: boolean;
   } = { method: 'auto' }
 ): Promise<Blob> => {
+  await ensureDocx();
+  const pdfjs = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-  const documentChildren: (Paragraph | Table)[] = [];
+  const documentChildren: DocxElement[] = [];
+  const preserveLayout = options.preserveLayout !== false; // default true
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
@@ -352,57 +426,102 @@ export const convertPdfToWord = async (
 
     if (items.length > 0) {
       const structuredLines = buildStructuredLinesFromTextItems(items);
-      let tableBuffer: string[][] = [];
 
-      const flushTableBuffer = () => {
-        if (tableBuffer.length >= 2) {
-          const normalized = normalizeTableRows(tableBuffer);
-          if (normalized.length >= 2) {
-            documentChildren.push(createProfessionalTable(normalized));
-          } else {
-            tableBuffer.forEach((row) => {
-              documentChildren.push(createBodyParagraph(row.join(' | '), 'normalPara'));
-            });
+      if (preserveLayout) {
+        // ── LAYOUT PRESERVE: maintain tables, columns, per-line structure ──
+        let tableBuffer: string[][] = [];
+
+        const flushTableBuffer = () => {
+          if (tableBuffer.length >= 2) {
+            const normalized = normalizeTableRows(tableBuffer);
+            if (normalized.length >= 2) {
+              documentChildren.push(createProfessionalTable(normalized));
+            } else {
+              tableBuffer.forEach((row) => {
+                documentChildren.push(createBodyParagraph(row.join('  |  '), 'normalPara'));
+              });
+            }
+          } else if (tableBuffer.length === 1) {
+            documentChildren.push(createBodyParagraph(tableBuffer[0].join('  |  '), 'normalPara'));
           }
-        } else if (tableBuffer.length === 1) {
-          documentChildren.push(createBodyParagraph(tableBuffer[0].join(' | '), 'normalPara'));
-        }
-        tableBuffer = [];
-      };
+          tableBuffer = [];
+        };
 
-      structuredLines.forEach((line, lineIndex) => {
-        const isTableLine = shouldTreatAsTableLine(line.cells);
-        if (isTableLine) {
-          tableBuffer.push(line.cells);
-          return;
-        }
+        structuredLines.forEach((line, lineIndex) => {
+          const isTableLine = shouldTreatAsTableLine(line.cells);
+          if (isTableLine) {
+            tableBuffer.push(line.cells);
+            return;
+          }
 
-        flushTableBuffer();
+          flushTableBuffer();
 
-        const isHeading = line.isBold || line.fontSize > 14 || detectHeadingFromText(line.lineText);
-        const headingLevel = isHeading ? (line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3) : 0;
+          const isHeading = line.isBold || line.fontSize > 14 || detectHeadingFromText(line.lineText);
+          const headingLevel = isHeading ? (line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3) : 0;
 
-        if (headingLevel === 1 || headingLevel === 2 || headingLevel === 3) {
-          documentChildren.push(createProfessionalHeading(line.lineText, headingLevel));
-        } else {
-          documentChildren.push(new Paragraph({
-            children: [
-              new TextRun({
+          if (headingLevel === 1 || headingLevel === 2 || headingLevel === 3) {
+            documentChildren.push(createProfessionalHeading(line.lineText, headingLevel as 1|2|3));
+          } else {
+            documentChildren.push(new Paragraph({
+              children: [new TextRun({
                 text: line.lineText,
                 size: safeInt(Math.max(16, line.fontSize * 2), 24),
                 bold: Boolean(line.isBold),
                 color: '000000',
-              })
-            ],
-            spacing: {
-              after: lineIndex === structuredLines.length - 1 ? 240 : 120,
-              line: 276,
-            },
-          }));
-        }
-      });
+                font: 'Calibri',
+              })],
+              spacing: {
+                after: lineIndex === structuredLines.length - 1 ? 240 : 80,
+                line: 276,
+              },
+            }));
+          }
+        });
 
-      flushTableBuffer();
+        flushTableBuffer();
+      } else {
+        // ── EDITABLE TEXT: smart-join lines into flowing paragraphs ──
+        // Headings are still detected and rendered, body lines are merged
+        const paragraphBuffer: string[] = [];
+
+        const flushParagraph = () => {
+          if (paragraphBuffer.length > 0) {
+            const merged = paragraphBuffer.join(' ').replace(/\s+/g, ' ').trim();
+            if (merged) documentChildren.push(createBodyParagraph(merged, 'normalPara'));
+            paragraphBuffer.length = 0;
+          }
+        };
+
+        structuredLines.forEach((line) => {
+          const lineText = cleanText(line.lineText);
+          if (!lineText) return;
+
+          const isHeading = line.isBold || line.fontSize > 14 || detectHeadingFromText(lineText);
+          if (isHeading) {
+            flushParagraph();
+            const level = line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3;
+            documentChildren.push(createProfessionalHeading(lineText, level as 1|2|3));
+            return;
+          }
+
+          // Short lines (likely header/footer fragments) → merge into paragraph
+          // Long lines (>= 60 chars) or ends with sentence punctuation → flush as own paragraph
+          const endsWithPunctuation = /[.!?:;]$/.test(lineText.trim());
+          const isLongLine = lineText.length >= 60;
+
+          if (isLongLine && endsWithPunctuation) {
+            paragraphBuffer.push(lineText);
+            flushParagraph();
+          } else if (endsWithPunctuation) {
+            paragraphBuffer.push(lineText);
+            flushParagraph();
+          } else {
+            paragraphBuffer.push(lineText);
+          }
+        });
+
+        flushParagraph();
+      }
     }
 
     // Add page separator if not the last page
@@ -410,19 +529,33 @@ export const convertPdfToWord = async (
       documentChildren.push(
         new Paragraph({
           children: [new TextRun({
-            text: `--- Page ${pageNum + 1} ---`,
-            size: 20,
+            text: `─── Page ${pageNum + 1} ───`,
+            size: 18,
             bold: true,
-            color: "888888"
+            color: 'AAAAAA',
+            font: 'Calibri',
           })],
-          spacing: { after: 300, before: 300 },
-          alignment: "center" as any,
+          spacing: { after: 280, before: 280 },
+          alignment: 'center' as any,
         })
       );
     }
   }
 
   const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: { font: 'Calibri', size: 24, color: '000000' },
+        },
+      },
+      paragraphStyles: [{
+        id: 'normalPara',
+        name: 'Normal Para',
+        run: { font: 'Calibri', size: 24 },
+        paragraph: { spacing: { line: 276, after: 200 } },
+      }],
+    },
     sections: [{
       properties: {
         page: {
@@ -436,13 +569,16 @@ export const convertPdfToWord = async (
       },
       children: documentChildren.length > 0 ? documentChildren : [
         new Paragraph({
-          children: [new TextRun({ text: 'No content extracted', size: 24 })]
+          children: [new TextRun({ text: 'No content extracted', size: 24, font: 'Calibri' })]
         })
       ],
     }],
   });
 
-  return await Packer.toBlob(doc);
+  const rawBlob = await Packer.toBlob(doc);
+  return new Blob([rawBlob], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
 };
 
 // Accurate PDF to Word conversion with proper text structure preservation
@@ -459,6 +595,8 @@ export const convertPdfToWordOCR = async (
     includeReviewSection?: boolean;
   } = {}
 ): Promise<Blob> => {
+  await ensureDocx();
+  const pdfjs = await ensurePdfjs();
   console.log('Starting accurate PDF to Word conversion for:', file.name);
 
   try {
@@ -466,7 +604,7 @@ export const convertPdfToWordOCR = async (
     const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
     console.log('PDF loaded, pages:', pdf.numPages);
 
-    const documentChildren: (Paragraph | Table)[] = [];
+    const documentChildren: DocxElement[] = [];
     const preserveLayout = options.preserveLayout ?? true;
     const forceOcr = options.forceOcr ?? false;
     const ocrStrength = options.ocrStrength ?? 'balanced';
@@ -567,7 +705,7 @@ export const convertPdfToWordOCR = async (
         // OCR fallback for image-based PDFs
         console.log('No text items found, using OCR for accurate extraction');
 
-        const worker = await Tesseract.createWorker(language);
+        const worker = await (await ensureTesseract()).createWorker(language);
         const scale = ocrStrength === 'fast' ? 2.2 : ocrStrength === 'accurate' ? 3.4 : 2.8;
         const isHindiMode = language === 'hin' || language === 'eng+hin';
         const preprocessConfig = ocrStrength === 'fast'
@@ -615,60 +753,100 @@ export const convertPdfToWordOCR = async (
               });
             }
             if (result.data.lines && result.data.lines.length > 0) {
-              // Process OCR lines with better accuracy
-              result.data.lines.forEach((line: any) => {
-                if (line.text && line.text.trim()) {
-                  const cleanedLine = cleanOcrTextAdvanced(line.text, preset, language);
-                  const isHeading = detectHeadingFromText(cleanedLine);
-
-                  const textRun = new TextRun({
-                    text: cleanedLine.trim(),
-                    size: safeInt(isHeading ? 28 : 24, 24),
-                    bold: Boolean(isHeading),
-                    color: '000000',
-                  });
-
-                  const paragraph = new Paragraph({
-                    children: [textRun],
-                    spacing: {
-                      after: safeInt(120, 120),
-                      line: safeInt(276, 276),
-                    },
-                  });
-
-                  documentChildren.push(paragraph);
-                }
-              });
+              if (preserveLayout) {
+                // ── LAYOUT PRESERVE: each OCR line = its own paragraph ──
+                result.data.lines.forEach((line: any) => {
+                  if (line.text && line.text.trim()) {
+                    const cleanedLine = cleanOcrTextAdvanced(line.text, preset, language);
+                    if (!cleanedLine.trim()) return;
+                    const isHeading = detectHeadingFromText(cleanedLine);
+                    if (isHeading) {
+                      documentChildren.push(createProfessionalHeading(cleanedLine.trim(), 3));
+                    } else {
+                      documentChildren.push(new Paragraph({
+                        children: [new TextRun({
+                          text: cleanedLine.trim(),
+                          size: safeInt(24, 24),
+                          color: '000000',
+                          font: 'Calibri',
+                        })],
+                        spacing: { after: safeInt(80, 80), line: safeInt(276, 276) },
+                      }));
+                    }
+                  }
+                });
+              } else {
+                // ── EDITABLE TEXT: smart-join OCR lines into flowing paragraphs ──
+                const buf: string[] = [];
+                const flushBuf = () => {
+                  if (buf.length > 0) {
+                    const merged = buf.join(' ').replace(/\s+/g, ' ').trim();
+                    if (merged) documentChildren.push(createBodyParagraph(merged, 'normalPara'));
+                    buf.length = 0;
+                  }
+                };
+                result.data.lines.forEach((line: any) => {
+                  if (!line.text || !line.text.trim()) return;
+                  const cl = cleanOcrTextAdvanced(line.text, preset, language).trim();
+                  if (!cl) return;
+                  if (detectHeadingFromText(cl)) {
+                    flushBuf();
+                    documentChildren.push(createProfessionalHeading(cl, 3));
+                    return;
+                  }
+                  const endsWithPunct = /[.!?:;]$/.test(cl);
+                  buf.push(cl);
+                  if (endsWithPunct || cl.length >= 60) flushBuf();
+                });
+                flushBuf();
+              }
             } else if (result.data.text) {
               // Fallback: process OCR text as paragraphs
               const lines = result.data.text
                 .split('\n')
-                .map((line) => cleanOcrTextAdvanced(line, preset, language))
-                .filter(line => line.trim());
+                .map((line: string) => cleanOcrTextAdvanced(line, preset, language))
+                .filter((line: string) => line.trim());
 
-              lines.forEach((line) => {
-                if (line.trim()) {
-                  const isHeading = detectHeadingFromText(line);
-
-                  const textRun = new TextRun({
-                    text: line.trim(),
-                    size: safeInt(isHeading ? 28 : 24, 24),
-                    bold: Boolean(isHeading),
-                    color: '000000',
-                  });
-
-                  const paragraph = new Paragraph({
-                    children: [textRun],
-                    spacing: {
-                      after: safeInt(120, 120),
-                      line: safeInt(276, 276),
-                    },
-                  });
-
-                  documentChildren.push(paragraph);
-                }
-              });
+              if (preserveLayout) {
+                lines.forEach((line: string) => {
+                  if (line.trim()) {
+                    const isHeading = detectHeadingFromText(line);
+                    documentChildren.push(new Paragraph({
+                      children: [new TextRun({
+                        text: line.trim(),
+                        size: safeInt(isHeading ? 28 : 24, 24),
+                        bold: Boolean(isHeading),
+                        color: '000000',
+                        font: 'Calibri',
+                      })],
+                      spacing: { after: safeInt(80, 80), line: safeInt(276, 276) },
+                    }));
+                  }
+                });
+              } else {
+                const buf2: string[] = [];
+                const flushBuf2 = () => {
+                  if (buf2.length > 0) {
+                    const merged = buf2.join(' ').replace(/\s+/g, ' ').trim();
+                    if (merged) documentChildren.push(createBodyParagraph(merged, 'normalPara'));
+                    buf2.length = 0;
+                  }
+                };
+                lines.forEach((line: string) => {
+                  if (!line.trim()) { flushBuf2(); return; }
+                  if (detectHeadingFromText(line)) {
+                    flushBuf2();
+                    documentChildren.push(createProfessionalHeading(line.trim(), 3));
+                    return;
+                  }
+                  const endsWithPunct = /[.!?:;]$/.test(line.trim());
+                  buf2.push(line.trim());
+                  if (endsWithPunct || line.length >= 60) flushBuf2();
+                });
+                flushBuf2();
+              }
             }
+
           }
         }
 
@@ -733,6 +911,27 @@ export const convertPdfToWordOCR = async (
 
     // Create accurate Word document with proper structure
     const doc = new Document({
+      styles: {
+        default: {
+          document: {
+            run: { font: 'Calibri', size: 24, color: '000000' },
+          },
+        },
+        paragraphStyles: [{
+          id: 'normalPara',
+          name: 'Normal Para',
+          run: {
+            size: safeInt(24, 24),
+            font: 'Calibri',
+          },
+          paragraph: {
+            spacing: {
+              line: safeInt(276, 276),
+              after: safeInt(200, 200),
+            },
+          },
+        }],
+      },
       sections: [{
         properties: {
           page: {
@@ -746,26 +945,13 @@ export const convertPdfToWordOCR = async (
         },
         children: documentChildren,
       }],
-      styles: {
-        paragraphStyles: [{
-          id: 'normalPara',
-          name: 'Normal Para',
-          run: {
-            size: safeInt(24, 24),
-            font: 'Arial',
-          },
-          paragraph: {
-            spacing: {
-              line: safeInt(276, 276),
-              after: safeInt(200, 200),
-            },
-          },
-        }],
-      },
     });
 
     console.log(`Document created with ${documentChildren.length} elements`);
-    const blob = await Packer.toBlob(doc);
+    const rawBlob = await Packer.toBlob(doc);
+    const blob = new Blob([rawBlob], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
     console.log('Accurate Word document created successfully');
 
     return blob;
@@ -791,7 +977,10 @@ export const convertPdfToWordOCR = async (
       }],
     });
 
-    return await Packer.toBlob(errorDoc);
+    const errRaw = await Packer.toBlob(errorDoc);
+    return new Blob([errRaw], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
   }
 };
 
@@ -954,9 +1143,9 @@ function normalizeTableRows(rows: string[][]): string[][] {
 }
 
 // Professional document reconstruction from OCR text
-function processExtractedText(rawText: string): (Paragraph | Table)[] {
+function processExtractedText(rawText: string): DocxElement[] {
   const lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-  const elements: (Paragraph | Table)[] = [];
+  const elements: DocxElement[] = [];
 
   let currentParagraph = '';
   let inTable = false;
@@ -1151,7 +1340,7 @@ function detectHeadingFromText(text: string): 1 | 2 | 3 | null {
 /**
  * Create consistent body paragraph with safe defaults
  */
-function createBodyParagraph(text: string, styleId: string = 'normalPara'): Paragraph {
+function createBodyParagraph(text: string, styleId: string = 'normalPara'): DocxElement {
   // Ensure text is valid
   const safeText = (text || '').trim();
   if (!safeText) return new Paragraph({ children: [] });
@@ -1161,6 +1350,7 @@ function createBodyParagraph(text: string, styleId: string = 'normalPara'): Para
       text: safeText,
       size: 24, // 12pt - consistent body text
       color: '000000', // Always black for body text
+      font: 'Calibri',
     })],
     style: styleId,
     spacing: {
@@ -1173,7 +1363,7 @@ function createBodyParagraph(text: string, styleId: string = 'normalPara'): Para
 /**
  * Create professional heading with predefined Word styles
  */
-function createProfessionalHeading(text: string, level: 1 | 2 | 3): Paragraph {
+function createProfessionalHeading(text: string, level: 1 | 2 | 3): DocxElement {
   const safeText = (text || '').trim();
   if (!safeText) return new Paragraph({ children: [] });
 
@@ -1191,6 +1381,7 @@ function createProfessionalHeading(text: string, level: 1 | 2 | 3): Paragraph {
       size: config.size,
       bold: true,
       color: '000000',
+      font: 'Calibri',
     })],
     style: config.style,
     spacing: {
@@ -1243,7 +1434,7 @@ function detectListFromText(text: string): { text: string, type: 'bullet' | 'num
 /**
  * Create professional list items using Word's list features (FIXED NaN ISSUE)
  */
-function createProfessionalListItem(text: string, type: 'bullet' | 'number', level: number): Paragraph {
+function createProfessionalListItem(text: string, type: 'bullet' | 'number', level: number): DocxElement {
   const safeText = (text || '').trim();
   if (!safeText) return new Paragraph({ children: [] });
 
@@ -1275,7 +1466,7 @@ function createProfessionalListItem(text: string, type: 'bullet' | 'number', lev
 /**
  * Create professional table with consistent formatting
  */
-function createProfessionalTable(data: string[][]): Table {
+function createProfessionalTable(data: string[][]): DocxElement {
   if (!Array.isArray(data) || data.length < 2) {
     return new Table({ rows: [] });
   }
@@ -1355,7 +1546,7 @@ function cleanText(text: string): string {
     .normalize('NFC');
 }
 
-function createHeading(text: string, level: 1 | 2 | 3): Paragraph {
+function createHeading(text: string, level: 1 | 2 | 3): DocxElement {
   const styleId = level === 1 ? 'heading1' : level === 2 ? 'heading2' : 'heading3';
 
   return new Paragraph({
@@ -1368,7 +1559,7 @@ function createHeading(text: string, level: 1 | 2 | 3): Paragraph {
   });
 }
 
-function createParagraph(text: string, styleId: string = 'normalPara'): Paragraph {
+function createParagraph(text: string, styleId: string = 'normalPara'): DocxElement {
   return new Paragraph({
     children: [new TextRun({
       text: cleanText(text),
@@ -1378,7 +1569,7 @@ function createParagraph(text: string, styleId: string = 'normalPara'): Paragrap
   });
 }
 
-function createListItem(text: string, type: 'bullet' | 'number', level: number): Paragraph {
+function createListItem(text: string, type: 'bullet' | 'number', level: number): DocxElement {
   // For now, create a simple paragraph with bullet/number prefix
   const prefix = type === 'bullet' ? '• ' : `${level + 1}. `;
 
@@ -1391,7 +1582,7 @@ function createListItem(text: string, type: 'bullet' | 'number', level: number):
   });
 }
 
-function createTable(data: string[][]): Table {
+function createTable(data: string[][]): DocxElement {
   if (data.length < 2) return new Table({ rows: [] });
 
   const headerRow = new TableRow({
@@ -1445,6 +1636,8 @@ export const convertPdfToPowerPoint = async (
   file: File,
   options: PdfToPowerPointOptions = {}
 ): Promise<Blob> => {
+  const PptxGenJS = await ensurePptx();
+  const pdfjs = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
@@ -1564,11 +1757,15 @@ const cleanWordHtmlAndMojibake = (html: string): string => {
  * Professional Word to PDF conversion with accurate formatting preservation
  */
 export const convertWordToPdf = async (file: File): Promise<Blob> => {
+  await ensureMammoth();
+  await ensureJsPdf();
+  await ensureHtml2canvas();
   console.log('Starting high-fidelity Word to PDF conversion for:', file.name);
 
   try {
     const arrayBuffer = await file.arrayBuffer();
 
+    const mammoth = _mammoth;
     // 1. Extract HTML structure using mammoth with image support
     const htmlResult = await mammoth.convertToHtml(
       { arrayBuffer },
@@ -1605,7 +1802,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
       renderContainer.style.lineHeight = '1.42';
       renderContainer.style.letterSpacing = 'normal';
       renderContainer.style.wordBreak = 'break-word';
-      renderContainer.style.webkitFontSmoothing = 'antialiased';
+      (renderContainer.style as any).webkitFontSmoothing = 'antialiased';
 
       // Insert styles for headings, lists, tables, and links
       renderContainer.innerHTML = `
@@ -1628,7 +1825,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
       document.body.appendChild(renderContainer);
 
       try {
-        const canvas = await html2canvas(renderContainer, {
+        const canvas = await _html2canvas(renderContainer, {
           scale: 3.0, // Ultra High-DPI 300 DPI print quality
           useCORS: true,
           logging: false,
@@ -1642,7 +1839,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
         const totalCanvasHeight = canvas.height;
         const rawPages = Math.max(1, Math.ceil(totalCanvasHeight / canvasPageHeight));
 
-        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdf = new _jsPDF('p', 'mm', 'a4');
         let addedPages = 0;
 
         for (let page = 0; page < rawPages; page++) {
@@ -1702,7 +1899,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
     }
 
     // Fallback if no DOM available
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdf = new _jsPDF('p', 'mm', 'a4');
     const lines = pdf.splitTextToSize(cleanedHtml.replace(/<[^>]*>/g, ' '), 170);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(11);
@@ -1719,7 +1916,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
 
   } catch (error) {
     console.error('Word to PDF conversion failed:', error);
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdf = new _jsPDF('p', 'mm', 'a4');
     pdf.setFontSize(14);
     pdf.text('Word to PDF Conversion Error', 20, 30);
     pdf.setFontSize(11);
@@ -1830,8 +2027,11 @@ function detectWordHeading(text: string): boolean {
 
 
 export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
+  await ensureJsPdf();
+  await ensureHtml2canvas();
   try {
     const arrayBuffer = await file.arrayBuffer();
+    const JSZip = _JSZip;
     const zip = await JSZip.loadAsync(arrayBuffer);
 
     // 1. Detect presentation slide size (Widescreen 16:9 vs Standard 4:3)
@@ -1866,7 +2066,7 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
     // Setup PDF dimensions: Widescreen (16:9) or Standard (4:3)
     const pageWidth = isWidescreen ? 842 : 792;
     const pageHeight = isWidescreen ? 474 : 595;
-    const pdf = new jsPDF({
+    const pdf = new _jsPDF({
       orientation: 'landscape',
       unit: 'pt',
       format: isWidescreen ? [pageWidth, pageHeight] : 'a4'
@@ -1879,8 +2079,10 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
     const allMediaFiles = Object.keys(zip.files)
       .filter((f) => /^ppt\/media\/.+\.(png|jpe?g|webp|gif|bmp)$/i.test(f))
       .sort((a, b) => {
-        const numA = parseInt(a.match(/\d+/) || ['0'], 10);
-        const numB = parseInt(b.match(/\d+/) || ['0'], 10);
+        const matchA = a.match(/\d+/);
+        const matchB = b.match(/\d+/);
+        const numA = parseInt(matchA ? matchA[0] : '0', 10);
+        const numB = parseInt(matchB ? matchB[0] : '0', 10);
         return numA - numB;
       });
 
@@ -2040,7 +2242,7 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
     return pdf.output('blob');
   } catch (error) {
     console.error('PowerPoint to PDF conversion error:', error);
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pdf = new _jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
     pdf.text('PowerPoint to PDF Error', 40, 50);

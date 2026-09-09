@@ -152,11 +152,15 @@ export interface PageState {
     layers: string[]; // Layer IDs on this page
     isDirty: boolean; // Has unsaved changes
     thumbnail: string | null; // Data URL for thumbnail
+    scale?: number;
+    [key: string]: any;
 }
 
 // ============ DOCUMENT STATE ============
 
 export interface DocumentState {
+    id?: string;
+    file?: File | null;
     fileName: string;
     fileSize: number;
     totalPages: number;
@@ -171,7 +175,8 @@ export interface DocumentState {
     loadingProgress: number;
     error: string | null;
     isDirty?: boolean;
-    annotations?: Layer[];
+    annotations?: any[];
+    [key: string]: any;
 }
 
 // ============ SELECTION STATE ============
@@ -371,6 +376,8 @@ export interface CanvasContext {
     width: number;
     height: number;
     scale: number;
+    offsetX?: number;
+    offsetY?: number;
 }
 
 // ============ DRAG STATE ============
@@ -409,11 +416,69 @@ export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 3.0;
 export const ZOOM_STEP = 0.1;
 
+// ============ ANNOTATION TYPES ============
+
+export interface PdfAnnotationStyle {
+  strokeColor?: string;
+  strokeWidth?: number;
+  fillColor?: string;
+  opacity?: number;
+  fontSize?: number;
+  textColor?: string;
+  fontFamily?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  fontWeight?: string;
+  fontStyle?: string;
+  textDecoration?: string;
+  [key: string]: any;
+}
+
+export interface PdfAnnotation {
+  id: string;
+  type: PdfAnnotationType | string;
+  pageNumber: number;
+  bounds: DOMRect | { x: number; y: number; width: number; height: number };
+  data?: {
+    text?: string;
+    points?: Array<{ x: number; y: number }>;
+    src?: string;
+    [key: string]: any;
+  };
+  style: PdfAnnotationStyle;
+  createdAt?: Date | number;
+  modifiedAt?: Date | number;
+  isVisible?: boolean;
+  zIndex?: number;
+  [key: string]: any;
+}
+
 // ============ TYPE ALIASES & COMPATIBILITY TYPES ============
 
-// Aliases for backward compatibility
-export type PdfEditorState = EditorState;
-export type PdfEditorAction = EditorActions;
+// Aliases and Editor state
+export interface PdfEditorAction {
+  id?: string;
+  type: PdfEditorActionType | string;
+  timestamp?: Date | number;
+  data?: any;
+  description?: string;
+  [key: string]: any;
+}
+
+export interface PdfEditorState {
+  document: PdfDocument | null;
+  currentTool: PdfEditorTool | Tool | string;
+  selectedAnnotation: PdfAnnotation | null;
+  isLoading: boolean;
+  error: string | null;
+  undoStack: PdfEditorAction[];
+  redoStack: PdfEditorAction[];
+  zoom: number;
+  fitMode: PdfFitMode;
+  showThumbnails: boolean;
+  showToolbar: boolean;
+  [key: string]: any;
+}
+
 export enum PdfEditorActionType {
   LOAD_PDF = 'LOAD_PDF',
   SET_CURRENT_PAGE = 'SET_CURRENT_PAGE',
@@ -424,7 +489,7 @@ export enum PdfEditorActionType {
   UNDO = 'UNDO',
   REDO = 'REDO'
 }
-export type PdfDocument = DocumentState & { pages?: any[] };
+export type PdfDocument = DocumentState & { id?: string; pages?: any[]; annotations: PdfAnnotation[] };
 export type PdfPage = PageState;
 export type PdfViewport = CanvasContext;
 export const PdfAnnotationType = {
@@ -443,26 +508,38 @@ export type PdfAnnotationType = (typeof PdfAnnotationType)[keyof typeof PdfAnnot
 export type PdfCoordinateMapper = {
   pageToCanvas: (x: number, y: number) => Point;
   canvasToPage: (x: number, y: number) => Point;
+  pdfToScreen?: (pdfX: number, pdfY: number) => { x: number; y: number };
+  screenToPdf?: (screenX: number, screenY: number) => { x: number; y: number };
+  [key: string]: any;
 };
 export type PdfPerformanceMetrics = {
   renderTime: number;
   memoryUsage: number;
-  fps: number;
+  fps?: number;
+  canvasCount?: number;
+  textLayerCount?: number;
+  annotationCount?: number;
+  lastGcTime?: Date;
+  [key: string]: any;
 };
 export enum PdfFitMode {
   PAGE_WIDTH = 'page-width',
   PAGE_HEIGHT = 'page-height',
   PAGE_FIT = 'page-fit',
-  ACTUAL_SIZE = 'actual-size'
+  ACTUAL_SIZE = 'actual-size',
+  FIT_WIDTH = 'fit-width'
 }
 export type PdfTextContent = {
   text: string;
   items: Array<{ str: string; x: number; y: number; width: number; height: number }>;
 };
 export type PdfEditorConfig = {
-  enableTextExtraction: boolean;
-  enableAnnotations: boolean;
-  enableDrawing: boolean;
+  enableTextExtraction?: boolean;
+  enableAnnotations?: boolean;
+  enableDrawing?: boolean;
+  maxFileSize?: number;
+  defaultZoom?: number;
+  [key: string]: any;
 };
 export enum PdfEditorTool {
   SELECT = 'select',

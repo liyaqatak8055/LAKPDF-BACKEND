@@ -66,15 +66,25 @@ class PdfRendererService {
 
       const document: PdfDocument = {
         id: `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        fileName: file.name,
+        fileSize: file.size,
         file,
         totalPages,
         currentPage: 1,
-        zoom: this.config.defaultZoom,
+        zoom: this.config.defaultZoom || 1.0,
+        viewMode: 'fit-width' as any,
+        showGrid: false,
+        showRulers: false,
+        snapToGrid: false,
+        gridSize: 20,
+        isLoading: false,
+        loadingProgress: 100,
+        error: null,
         rotation: 0,
         viewport: {
           width: viewport.width,
           height: viewport.height,
-          scale: this.config.defaultZoom,
+          scale: this.config.defaultZoom || 1.0,
           offsetX: 0,
           offsetY: 0
         },
@@ -235,7 +245,11 @@ class PdfRendererService {
       height: viewport.height,
       scale: 1.0,
       rotation: 0,
-      annotations: []
+      originalPdfData: null,
+      renderedCanvas: null,
+      layers: [],
+      isDirty: false,
+      thumbnail: null,
     };
   }
 

@@ -12,15 +12,14 @@ const pdfjsVersion = pdfjs.version || '5.4.624';
 const localWorkerSrc = pdfWorkerSrc || `${import.meta.env.BASE_URL}pdf.worker.min.mjs`;
 
 // Initialize PDF.js worker
-// Always match worker with installed pdfjs-dist version.
 if (typeof window !== 'undefined' && pdfjs) {
-  // Local worker avoids CORS/network dependency on third-party CDNs.
   pdfjs.GlobalWorkerOptions.workerSrc = localWorkerSrc;
   console.log('PDF.js worker loaded from local asset:', localWorkerSrc, `(pdfjs ${pdfjsVersion})`);
 }
 
 // Export pdfjs for use in components
 export { pdfjs };
+
 
 /**
  * Helper to safely load a PDFDocument with basic error checking.
@@ -2222,7 +2221,7 @@ export const detectDuplicatePages = async (
   file: File,
   options: {
     similarityThreshold?: number; // 0-100, default 80
-    maxPagesToAnalyze?: number; // Limit for performance, default 100
+    maxPagesToAnalyze?: number; // Limit for performance, default 150
     onProgress?: (progress: number, step: string) => void;
   } = {}
 ): Promise<{
@@ -2244,97 +2243,29 @@ export const detectDuplicatePages = async (
   };
   pageThumbnails: string[];
 }> => {
-  const { similarityThreshold = 80, maxPagesToAnalyze = 100, onProgress } = options;
+  const { similarityThreshold = 80, maxPagesToAnalyze = 150, onProgress } = options;
+  const startTime = Date.now();
 
   const arrayBuffer = await file.arrayBuffer();
-
-  const mapWorkerResult = (data: any) => {
-    const duplicates = Array.isArray(data?.duplicates) ? data.duplicates : [];
-    return {
-      duplicates: duplicates.map((group: any) => ({
-        groupId: group.groupId,
-        pages: Array.isArray(group.pages) ? group.pages.slice().sort((a: number, b: number) => a - b) : [],
-        similarity: Number(group.similarity) || 0,
-        confidence: Number(group.confidence) || 0,
-        pageType: group.pageType === 'text' || group.pageType === 'scanned' ? group.pageType : 'mixed',
-        reasoning: Array.isArray(group.reasons) && group.reasons.length > 0
-          ? group.reasons.join(', ')
-          : (group.matchType ? `Match type: ${group.matchType}` : 'Potential duplicate pages')
-      })),
-      summary: {
-        totalPages: Number(data?.summary?.totalPages) || 0,
-        uniquePages: Number(data?.summary?.uniquePages) || 0,
-        duplicatePages: Number(data?.summary?.duplicatePages) || 0,
-        totalDuplicates: Number(data?.summary?.totalDuplicates) || 0,
-        analyzedPages: Math.min(Number(data?.summary?.totalPages) || 0, maxPagesToAnalyze),
-        processingTime: Number(data?.summary?.processingTime) || 0
-      },
-      pageThumbnails: Array.isArray(data?.pageThumbnails) ? data.pageThumbnails : []
-    };
-  };
-
-  const canUseDuplicateWorker =
-    typeof Worker !== 'undefined' &&
-    typeof OffscreenCanvas !== 'undefined';
-
-  if (canUseDuplicateWorker) {
-    let worker: Worker | null = null;
-    try {
-      worker = new Worker(new URL('../workers/duplicateDetector.worker.ts', import.meta.url), { type: 'module' });
-      const workerResult = await new Promise<any>((resolve, reject) => {
-        if (!worker) {
-          reject(new Error('Duplicate detection worker unavailable'));
-          return;
-        }
-        worker.onmessage = (event: MessageEvent) => {
-          const payload = event.data;
-          if (payload?.type === 'progress') {
-            onProgress?.(Math.max(0, Math.min(100, Number(payload.progress) || 0)), payload.step || 'Analyzing...');
-            return;
-          }
-          if (payload?.type === 'complete') {
-            resolve(payload.data);
-            return;
-          }
-          if (payload?.type === 'error') {
-            reject(new Error(payload.data || 'Duplicate detection worker failed'));
-          }
-        };
-        worker.onerror = () => reject(new Error('Duplicate detection worker crashed'));
-        worker.postMessage({
-          action: 'detect',
-          buffer: arrayBuffer,
-          threshold: similarityThreshold,
-          maxPages: maxPagesToAnalyze
-        });
-      });
-      return mapWorkerResult(workerResult);
-    } catch {
-      // Worker failures are expected on some browsers/builds; fallback is stable.
-      onProgress?.(4, 'Using compatibility analyzer...');
-    } finally {
-      worker?.terminate();
-    }
-  } else {
-    onProgress?.(4, 'Using compatibility analyzer...');
-  }
-
-  // Main-thread fallback detection
-  const startTime = Date.now();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   const totalPages = pdf.numPages;
   const pagesToAnalyze = Math.min(totalPages, maxPagesToAnalyze);
 
-  const normalizeTextForDup = (text: string): string => (
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /** Normalize text for comparison: lowercase, strip punctuation, replace numbers */
+  const normalizeText = (text: string): string =>
     text
       .toLowerCase()
       .replace(/[^\w\s]/g, ' ')
       .replace(/\b(page|pg)\s*\d+\b/g, ' ')
       .replace(/\b\d+\b/g, '#')
       .replace(/\s+/g, ' ')
-      .trim()
-  );
-  const jaccardTextSimilarity = (a: string, b: string): number => {
+      .trim();
+
+  /** Jaccard similarity on word sets (words > 2 chars) */
+  const jaccardSim = (a: string, b: string): number => {
+    if (!a && !b) return 100;
     if (!a || !b) return 0;
     const s1 = new Set(a.split(/\s+/).filter(w => w.length > 2));
     const s2 = new Set(b.split(/\s+/).filter(w => w.length > 2));
@@ -2344,89 +2275,138 @@ export const detectDuplicatePages = async (
     const uni = new Set([...s1, ...s2]).size;
     return Math.round((inter / uni) * 100);
   };
+
+  /** Average Hash (aHash) at 16×16 — much more accurate than 8×8 */
   const buildAHash = (canvas: HTMLCanvasElement): string => {
+    const SIZE = 16;
     const small = document.createElement('canvas');
-    small.width = 8;
-    small.height = 8;
+    small.width = SIZE;
+    small.height = SIZE;
     const ctx = small.getContext('2d');
     if (!ctx) return '';
-    ctx.drawImage(canvas, 0, 0, 8, 8);
-    const img = ctx.getImageData(0, 0, 8, 8).data;
+    ctx.drawImage(canvas, 0, 0, SIZE, SIZE);
+    const img = ctx.getImageData(0, 0, SIZE, SIZE).data;
     const gray: number[] = [];
     for (let i = 0; i < img.length; i += 4) {
-      gray.push(Math.round((img[i] * 0.299) + (img[i + 1] * 0.587) + (img[i + 2] * 0.114)));
+      gray.push(Math.round(img[i] * 0.299 + img[i + 1] * 0.587 + img[i + 2] * 0.114));
     }
-    const avg = gray.reduce((sum, v) => sum + v, 0) / gray.length;
+    const avg = gray.reduce((s, v) => s + v, 0) / gray.length;
     return gray.map(v => (v >= avg ? '1' : '0')).join('');
   };
-  const imageSimilarityFromHashes = (h1: string, h2: string): number => {
+
+  /** Difference Hash (dHash) at 16×17 — captures structural gradients */
+  const buildDHash = (canvas: HTMLCanvasElement): string => {
+    const W = 17; const H = 16;
+    const small = document.createElement('canvas');
+    small.width = W; small.height = H;
+    const ctx = small.getContext('2d');
+    if (!ctx) return '';
+    ctx.drawImage(canvas, 0, 0, W, H);
+    const img = ctx.getImageData(0, 0, W, H).data;
+    const gray: number[] = [];
+    for (let i = 0; i < img.length; i += 4) {
+      gray.push(Math.round(img[i] * 0.299 + img[i + 1] * 0.587 + img[i + 2] * 0.114));
+    }
+    let bits = '';
+    for (let row = 0; row < H; row++) {
+      for (let col = 0; col < 16; col++) {
+        bits += gray[row * W + col] < gray[row * W + col + 1] ? '1' : '0';
+      }
+    }
+    return bits;
+  };
+
+  /** Hamming similarity between two equal-length bit strings → 0-100 */
+  const hashSim = (h1: string, h2: string): number => {
     if (!h1 || !h2 || h1.length !== h2.length) return 0;
     let diff = 0;
-    for (let i = 0; i < h1.length; i++) {
-      if (h1[i] !== h2[i]) diff++;
-    }
+    for (let i = 0; i < h1.length; i++) if (h1[i] !== h2[i]) diff++;
     return Math.round((1 - diff / h1.length) * 100);
   };
 
+  /** Combined visual similarity: average of aHash + dHash */
+  const visualSim = (a: { ah: string; dh: string }, b: { ah: string; dh: string }): number =>
+    Math.round((hashSim(a.ah, b.ah) + hashSim(a.dh, b.dh)) / 2);
+
+  // ── Extract page data ──────────────────────────────────────────────────────
+
   const pageData: Array<{
     pageNumber: number;
-    normalizedText: string;
-    textLength: number;
+    normText: string;
+    rawTextLen: number;
+    wordCount: number;
     hasImages: boolean;
     width: number;
     height: number;
     thumb: string;
-    imageHash: string;
+    ah: string;   // aHash
+    dh: string;   // dHash
   }> = [];
 
   for (let i = 1; i <= pagesToAnalyze; i++) {
-    onProgress?.(5 + Math.round((i / pagesToAnalyze) * 65), `Analyzing page ${i} of ${pagesToAnalyze}...`);
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const rawText = textContent.items.map((item: any) => item?.str || '').join(' ');
-    const normalizedText = normalizeTextForDup(rawText);
+    onProgress?.(
+      5 + Math.round((i / pagesToAnalyze) * 68),
+      `Analyzing page ${i} of ${pagesToAnalyze}...`
+    );
 
+    const page = await pdf.getPage(i);
+
+    // Text extraction
+    const textContent = await page.getTextContent();
+    const rawText = (textContent.items as any[]).map((it: any) => it?.str || '').join(' ');
+    const normText = normalizeText(rawText);
+    const wordCount = normText.split(/\s+/).filter(w => w.length > 2).length;
+
+    // Image detection
     let hasImages = false;
     try {
       const ops = await page.getOperatorList();
-      hasImages = ops.fnArray.some((fn: any) =>
-        fn === pdfjs.OPS.paintImageXObject || fn === pdfjs.OPS.paintInlineImageXObject
+      hasImages = ops.fnArray.some(
+        (fn: any) => fn === pdfjs.OPS.paintImageXObject || fn === pdfjs.OPS.paintInlineImageXObject
       );
-    } catch {
-      hasImages = false;
-    }
+    } catch { hasImages = false; }
 
-    const viewport = page.getViewport({ scale: 0.35 });
+    // Render at medium resolution for hashing
+    const viewport = page.getViewport({ scale: 0.5 });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(viewport.width));
     canvas.height = Math.max(1, Math.round(viewport.height));
-    const context = canvas.getContext('2d');
-    if (context) {
-      await page.render({ canvasContext: context, viewport }).promise;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
     }
-    const imageHash = buildAHash(canvas);
 
+    const ah = buildAHash(canvas);
+    const dh = buildDHash(canvas);
+
+    // Thumbnail
+    const thumbW = Math.max(1, Math.round(canvas.width * 0.45));
+    const thumbH = Math.max(1, Math.round(canvas.height * 0.45));
     const thumbCanvas = document.createElement('canvas');
-    thumbCanvas.width = Math.max(1, Math.round(canvas.width * 0.45));
-    thumbCanvas.height = Math.max(1, Math.round(canvas.height * 0.45));
+    thumbCanvas.width = thumbW;
+    thumbCanvas.height = thumbH;
     const thumbCtx = thumbCanvas.getContext('2d');
-    if (thumbCtx) {
-      thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-    }
+    if (thumbCtx) thumbCtx.drawImage(canvas, 0, 0, thumbW, thumbH);
 
     pageData.push({
       pageNumber: i,
-      normalizedText,
-      textLength: normalizedText.length,
+      normText,
+      rawTextLen: rawText.trim().length,
+      wordCount,
       hasImages,
       width: Math.round(page.getViewport({ scale: 1 }).width),
       height: Math.round(page.getViewport({ scale: 1 }).height),
-      thumb: thumbCanvas.toDataURL('image/png'),
-      imageHash
+      thumb: thumbCanvas.toDataURL('image/jpeg', 0.7),
+      ah,
+      dh,
     });
   }
 
-  onProgress?.(76, 'Comparing pages...');
+  onProgress?.(76, 'Comparing pages for duplicates...');
+
+  // ── Union-Find for duplicate clustering ────────────────────────────────────
 
   const n = pageData.length;
   const parent = Array.from({ length: n }, (_, idx) => idx);
@@ -2435,62 +2415,72 @@ export const detectDuplicatePages = async (
     return parent[x];
   };
   const union = (a: number, b: number) => {
-    const ra = find(a);
-    const rb = find(b);
+    const ra = find(a); const rb = find(b);
     if (ra !== rb) parent[rb] = ra;
   };
 
-  const pairInfo = new Map<string, { sim: number; conf: number; reason: string; textSim: number; imageSim: number; layoutSim: number; }>();
+  const pairMeta = new Map<string, {
+    sim: number; conf: number; reason: string;
+    textSim: number; imgSim: number;
+  }>();
+
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const p1 = pageData[i];
       const p2 = pageData[j];
-      const textSim = jaccardTextSimilarity(p1.normalizedText, p2.normalizedText);
-      const imageSim = imageSimilarityFromHashes(p1.imageHash, p2.imageHash);
-      const wRatio = Math.min(p1.width, p2.width) / Math.max(p1.width, p2.width);
-      const hRatio = Math.min(p1.height, p2.height) / Math.max(p1.height, p2.height);
+
+      const textSim = jaccardSim(p1.normText, p2.normText);
+      const imgSim = visualSim(p1, p2);
+
+      // Layout match (same page dimensions)
+      const wRatio = Math.min(p1.width, p2.width) / Math.max(p1.width, p2.width || 1);
+      const hRatio = Math.min(p1.height, p2.height) / Math.max(p1.height, p2.height || 1);
       const layoutSim = Math.round(((wRatio + hRatio) / 2) * 100);
 
-      const hasSubstantialText = Math.min(p1.textLength, p2.textLength) >= 40;
-      
-      // Multi-tier accurate similarity evaluation
+      const minWords = Math.min(p1.wordCount, p2.wordCount);
+      const isTextPage = minWords >= 15;       // has meaningful text
+      const isImagePage = !isTextPage && (p1.hasImages || p2.hasImages);
+
       let similarity = 0;
       let isDuplicate = false;
-      let reason = 'Similarity match';
+      let reason = '';
 
-      if (hasSubstantialText && textSim >= 90) {
-        // High confidence text duplicate
-        similarity = Math.max(textSim, Math.round((textSim * 0.7) + (imageSim * 0.3)));
-        isDuplicate = similarity >= Math.min(similarityThreshold, 80);
-        reason = textSim >= 98 ? 'Exact text match (100%)' : `High text match (${textSim}%)`;
-      } else if (!hasSubstantialText && imageSim >= 85) {
-        // High confidence visual/scanned duplicate
-        similarity = imageSim;
-        isDuplicate = similarity >= Math.min(similarityThreshold, 80);
-        reason = imageSim >= 95 ? 'Exact visual match (100%)' : `High visual match (${imageSim}%)`;
+      if (isTextPage) {
+        // For text-heavy pages: BOTH text AND visual must be high
+        // textSim alone >= 85 is NOT enough — same document pages share headers/footers
+        // We need textSim >= 92 AND visualSim >= 75 to be sure
+        similarity = Math.round(textSim * 0.70 + imgSim * 0.30);
+        isDuplicate = (textSim >= 92 && imgSim >= 70) || (textSim >= 97 && imgSim >= 55);
+        reason = textSim >= 99
+          ? `Exact text match (${textSim}%) · Visual ${imgSim}%`
+          : `Text match ${textSim}% · Visual ${imgSim}%`;
+      } else if (isImagePage) {
+        // For image-heavy pages: visual hash must be very high
+        similarity = Math.round(imgSim * 0.80 + layoutSim * 0.20);
+        isDuplicate = imgSim >= 90;
+        reason = imgSim >= 95
+          ? `Exact visual match (${imgSim}%)`
+          : `Visual match ${imgSim}% · Layout ${layoutSim}%`;
       } else {
-        // Hybrid comparison
-        similarity = Math.round((textSim * 0.45) + (imageSim * 0.45) + (layoutSim * 0.10));
-        isDuplicate = similarity >= similarityThreshold;
-        reason = `Hybrid match (Text ${textSim}%, Visual ${imageSim}%)`;
+        // Mixed / minimal content: both signals required
+        similarity = Math.round(textSim * 0.40 + imgSim * 0.45 + layoutSim * 0.15);
+        isDuplicate = similarity >= Math.max(similarityThreshold, 82)
+          && textSim >= 80 && imgSim >= 75;
+        reason = `Combined match — Text ${textSim}% · Visual ${imgSim}%`;
       }
 
-      const confidence = Math.max(60, Math.min(99, Math.round((textSim * 0.4) + (imageSim * 0.4) + (layoutSim * 0.2))));
 
-      if (isDuplicate) {
-        union(i, j);
-      }
+      const confidence = Math.min(99, Math.round(
+        textSim * 0.40 + imgSim * 0.40 + layoutSim * 0.20
+      ));
 
-      pairInfo.set(`${i}:${j}`, {
-        sim: similarity,
-        conf: confidence,
-        reason,
-        textSim,
-        imageSim,
-        layoutSim
-      });
+      pairMeta.set(`${i}:${j}`, { sim: similarity, conf: confidence, reason, textSim, imgSim });
+
+      if (isDuplicate) union(i, j);
     }
   }
+
+  // ── Build duplicate groups from clusters ───────────────────────────────────
 
   const clusters = new Map<number, number[]>();
   for (let i = 0; i < n; i++) {
@@ -2512,49 +2502,44 @@ export const detectDuplicatePages = async (
   let gid = 1;
   clusters.forEach((indices) => {
     if (indices.length < 2) return;
-    let c = 0;
-    let simSum = 0;
-    let confSum = 0;
-    let textSum = 0;
-    let imageSum = 0;
-    let layoutSum = 0;
+
+    let simSum = 0, confSum = 0, count = 0;
     let bestReason = '';
 
     for (let a = 0; a < indices.length; a++) {
       for (let b = a + 1; b < indices.length; b++) {
-        const i = indices[a];
-        const j = indices[b];
-        const key = i < j ? `${i}:${j}` : `${j}:${i}`;
-        const p = pairInfo.get(key);
-        if (!p) continue;
-        c++;
-        simSum += p.sim;
-        confSum += p.conf;
-        textSum += p.textSim;
-        imageSum += p.imageSim;
-        layoutSum += p.layoutSim;
-        if (!bestReason) bestReason = p.reason;
+        const ia = indices[a]; const ib = indices[b];
+        const key = ia < ib ? `${ia}:${ib}` : `${ib}:${ia}`;
+        const meta = pairMeta.get(key);
+        if (!meta) continue;
+        simSum += meta.sim;
+        confSum += meta.conf;
+        count++;
+        if (!bestReason) bestReason = meta.reason;
       }
     }
-    if (c === 0) return;
-    const hasText = indices.some(idx => pageData[idx].textLength > 40);
-    const hasImage = indices.some(idx => pageData[idx].hasImages);
+    if (count === 0) return;
+
+    const hasText = indices.some(idx => pageData[idx].wordCount >= 15);
+    const hasImg = indices.some(idx => pageData[idx].hasImages);
     const pageType: 'text' | 'scanned' | 'mixed' =
-      hasText && !hasImage ? 'text' : (!hasText && hasImage ? 'scanned' : 'mixed');
+      hasText && !hasImg ? 'text' : !hasText && hasImg ? 'scanned' : 'mixed';
+
     duplicates.push({
       groupId: `group-${gid++}`,
       pages: indices.map(idx => pageData[idx].pageNumber).sort((a, b) => a - b),
-      similarity: Math.round(simSum / c),
-      confidence: Math.round(confSum / c),
+      similarity: Math.round(simSum / count),
+      confidence: Math.round(confSum / count),
       pageType,
-      reasoning: bestReason || `Text ${Math.round(textSum / c)}% • Image ${Math.round(imageSum / c)}%`
+      reasoning: bestReason || 'Duplicate content detected',
     });
   });
 
-  duplicates.sort((a, b) => (b.similarity - a.similarity) || (b.pages.length - a.pages.length));
+  duplicates.sort((a, b) => b.similarity - a.similarity || b.pages.length - a.pages.length);
 
-  const duplicatePages = duplicates.reduce((sum, group) => sum + Math.max(0, group.pages.length - 1), 0);
+  const duplicatePages = duplicates.reduce((s, g) => s + Math.max(0, g.pages.length - 1), 0);
   const uniquePages = totalPages - duplicatePages;
+
   onProgress?.(100, 'Analysis complete');
 
   return {
@@ -2565,9 +2550,9 @@ export const detectDuplicatePages = async (
       duplicatePages,
       totalDuplicates: duplicates.length,
       analyzedPages: pagesToAnalyze,
-      processingTime: Date.now() - startTime
+      processingTime: Date.now() - startTime,
     },
-    pageThumbnails: pageData.map(p => p.thumb)
+    pageThumbnails: pageData.map(p => p.thumb),
   };
 };
 

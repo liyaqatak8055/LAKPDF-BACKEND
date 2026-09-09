@@ -16,7 +16,7 @@ export const About: React.FC = () => {
 
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 my-10">
           <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Heart className="text-primary-400 fill-current w-6 h-6" />
+            <img src="/logo-80x80.webp" alt="LAK PDF" width={28} height={28} className="w-7 h-7 object-contain animate-heartbeat inline-block" />
             With LAK PDF, you can:
           </h3>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 list-none pl-0">

@@ -474,7 +474,7 @@ const extractFlightTicketData = (text: string): FlightTicketData => {
   const strictRouteFrom = normalizeCityLabel(strictUpperRouteMatch?.[1] || null);
   const strictRouteTo = normalizeCityLabel(strictUpperRouteMatch?.[2] || null);
 
-  const airportCodes = (clean.match(/\b[A-Z]{3}\b/g) || []).filter((code) => {
+  const airportCodes = (clean.match(/\b[A-Z]{3}\b/g) || []).filter((code: string) => {
     const blocked = ['PNR', 'DOB', 'ETA', 'STD', 'ETD', 'GATE', 'AIR', 'BAG', 'SEQ', 'NOI'];
     return !blocked.includes(code.toUpperCase());
   });
@@ -1833,7 +1833,7 @@ const generateSmartSummary = async (
     const { generateStructuredSummary } = await import('./structuredSummary');
     const structuredResult = generateStructuredSummary(cleanedText);
 
-    const isTrainTicketSchema = (value: any): value is { ticketType: 'TRAIN'; status: string | null; pnr?: string | null; train?: any; journey?: any; passengers?: any[]; } => {
+    const isTrainTicketSchema = (value: any): value is { ticketType: 'TRAIN'; status: string | null; pnr?: string | null; train?: any; journey?: any; passengers?: any[]; pricing?: any; } => {
       return value && value.ticketType === 'TRAIN' && value.train && value.journey;
     };
 

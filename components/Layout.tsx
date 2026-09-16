@@ -41,6 +41,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     '/pdf-to-img': { title: 'PDF to Image Converter | LAK PDF', description: 'Convert PDF pages to high-quality image files online.' },
     '/compress-img': { title: 'Compress Image Online Free | LAK PDF', description: 'Reduce JPG and PNG image size quickly while preserving visual quality.' },
     '/advance-compress-img': { title: 'Compress Image to 50KB | LAK PDF', description: 'Compress photos and images close to 50KB for forms, exams, and uploads.' },
+    '/make-ppt': { title: 'Make PPT - Images to PowerPoint | LAK PDF', description: 'Convert photos and images into professional PowerPoint presentations (.pptx) with smart aspect ratio auto-fit.' },
+    '/img-to-ppt': { title: 'Image to PowerPoint Converter | LAK PDF', description: 'Turn JPG, PNG and photos into neatly formatted PowerPoint slides (.pptx).' },
+    '/passport-photo-maker': { title: 'Passport Size Photo Maker | LAK PDF', description: 'Create official passport size photos online free. Auto-align face, change background, 4x6 & A4 print sheets, and 20-50KB form mode.' },
+    '/passport-photo': { title: 'Passport Photo Maker Free | LAK PDF', description: 'Free passport size photo maker with biometric face guides and printable sheets.' },
+    '/redact-pdf': { title: 'Redact PDF Online Free | LAK PDF', description: 'Permanently blackout and erase sensitive info from PDF files with true pixel sanitization.' },
+    '/blackout-pdf': { title: 'Blackout PDF Online | LAK PDF', description: 'Permanently black out text and confidential data in PDF documents.' },
     '/convert': { title: 'Convert PDF Online | LAK PDF', description: 'Convert PDF documents into popular editable or shareable formats.' },
     '/pdf-to-word': { title: 'PDF to Word Online | LAK PDF', description: 'Convert PDF files to editable Word documents quickly.' },
     '/pdf-to-powerpoint': { title: 'PDF to PowerPoint Online | LAK PDF', description: 'Turn PDF pages into editable PowerPoint slides in a few steps.' },
@@ -56,10 +62,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     '/compare-pdf': { title: 'Compare PDF Online | LAK PDF', description: 'Compare two PDF files and highlight differences quickly.' },
     '/delete-page': { title: 'Delete PDF Pages Online | LAK PDF', description: 'Remove unwanted pages from PDF documents in one click.' },
     '/detect-duplicates': { title: 'Detect Duplicate PDF Pages | LAK PDF', description: 'Find duplicate pages in PDF and clean file structure faster.' },
-    '/summarizer-qa': { title: 'AI PDF Summarizer & Q&A | LAK PDF', description: 'Generate concise summaries and ask questions from your PDF content.' },
+    '/summarizer-qa': { title: 'AI Summary | LAK PDF', description: 'Generate concise summaries and main topics from your document.' },
     '/ai-pdf-to-mcq': { title: 'AI PDF to MCQ Generator | LAK PDF', description: 'Create exam-style MCQs from PDF notes with answer keys and test mode.' },
     '/ai-interview-generator': { title: 'AI Interview Generator | LAK PDF', description: 'Generate technical and HR interview questions from resume or notes.' },
     '/pdf-editor': { title: 'PDF Editor Online | LAK PDF', description: 'Use normal PDF editor mode to add text, highlights, and shapes directly in your PDF.' },
+    '/protect-pdf': { title: 'Protect PDF Online Free | LAK PDF', description: 'Password protect PDF documents with bank-grade encryption in your browser.' },
+    '/pdf-to-text': { title: 'PDF to Text OCR Converter | LAK PDF', description: 'Extract clean selectable text and OCR from scanned PDF documents online.' },
+    '/ai-edit-pdf': { title: 'AI PDF Editor Online | LAK PDF', description: 'Edit text, annotate, erase, and highlight PDFs directly with AI-powered OCR.' },
   };
   const seo = toolSeoMap[location.pathname];
   const showToolBack = isToolRoute(location.pathname);
@@ -470,13 +479,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
 
             <div>
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">PDF Tools</h4>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Popular Tools</h4>
               <ul className="space-y-2.5 text-sm text-slate-400">
+                <li><Link to="/redact-pdf" className="text-rose-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Redact PDF</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-rose-500/20 text-rose-300 font-bold">NEW</span></Link></li>
+                <li><Link to="/passport-photo-maker" className="text-blue-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Passport Photo Maker</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-blue-500/20 text-blue-300 font-bold">NEW</span></Link></li>
+                <li><Link to="/make-ppt" className="text-orange-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Make PPT from Images</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-500/20 text-orange-300 font-bold">NEW</span></Link></li>
                 <li><Link to="/merge" className="hover:text-white transition-colors">Merge PDF</Link></li>
                 <li><Link to="/split" className="hover:text-white transition-colors">Split PDF</Link></li>
                 <li><Link to="/compress" className="hover:text-white transition-colors">Compress PDF</Link></li>
+                <li><Link to="/advance-compress-img" className="hover:text-white transition-colors">Compress Image to 50KB</Link></li>
                 <li><Link to="/pdf-to-word" className="hover:text-white transition-colors">PDF to Word</Link></li>
-                <li><Link to="/word-to-pdf" className="hover:text-white transition-colors">Word to PDF</Link></li>
+                <li><Link to="/sign-pdf" className="hover:text-white transition-colors">Sign PDF Online</Link></li>
+                <li><Link to="/pdf-editor" className="hover:text-white transition-colors">PDF Editor</Link></li>
                 <li><Link to="/tools" className="hover:text-primary-400 font-semibold transition-colors">View All 30+ Tools →</Link></li>
               </ul>
             </div>
@@ -522,7 +536,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy</Link>
               <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms</Link>
               <Link to="/contact" className="hover:text-white transition-colors">Support</Link>
-              <Link to="/sitemap.xml" className="hover:text-white transition-colors">Sitemap</Link>
+              <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Sitemap</a>
             </div>
           </div>
         </div>

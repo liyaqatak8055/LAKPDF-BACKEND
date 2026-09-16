@@ -12,24 +12,32 @@ export function createAsyncQueue(options = {}) {
     if (!next) return;
 
     activeCount += 1;
+    let isSettled = false;
+
     const timeout = setTimeout(() => {
-      next.reject(new Error("AI queue task timeout"));
+      if (isSettled) return;
+      isSettled = true;
       activeCount -= 1;
+      next.reject(new Error("AI queue task timeout"));
       runNext();
     }, taskTimeoutMs);
 
     Promise.resolve()
       .then(next.task)
       .then((result) => {
+        if (isSettled) return;
+        isSettled = true;
         clearTimeout(timeout);
+        activeCount -= 1;
         next.resolve(result);
+        runNext();
       })
       .catch((error) => {
+        if (isSettled) return;
+        isSettled = true;
         clearTimeout(timeout);
-        next.reject(error);
-      })
-      .finally(() => {
         activeCount -= 1;
+        next.reject(error);
         runNext();
       });
   };

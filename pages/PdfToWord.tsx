@@ -1,173 +1,136 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
-import { convertPdfToWord, convertPdfToWordOCR, detectPdfType, detectPdfScriptProfile, PdfScriptProfile } from '../services/officeService';
-import { downloadFile, formatBytes, getPdfPageCount, parsePageRange } from '../services/pdfService';
-import { FileText, X, Zap, Scan, CheckCircle, AlertCircle, LayoutGrid, Pencil, Download, ArrowRight } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { NextStepPanel, RelatedActions, ToolStartPanel } from '../components/ToolProductPanels';
+import { convertPdfToWord } from '../services/officeService';
+import { downloadFile, formatBytes, getPdfPageCount } from '../services/pdfService';
+import {
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  Download,
+  RotateCcw,
+  Sparkles,
+  ShieldCheck,
+  Table,
+  Zap,
+  Upload,
+} from 'lucide-react';
 import { ToolSEOContent } from '../components/ToolSEOContent';
-
-type ConversionMethod = 'auto' | 'ocr';
-type PdfType = 'text' | 'scanned' | null;
-type OutputMode = 'layout' | 'editable';
-type OcrStrength = 'fast' | 'balanced' | 'accurate';
-type DocumentPreset = 'general' | 'ticket' | 'invoice' | 'form';
+import { trackEvent } from '../utils/analytics';
 
 export const PdfToWord: React.FC = () => {
-  const [file, setFile] = useState<{file: File, id: string, name: string, size: number} | null>(null);
-  const [pdfType, setPdfType] = useState<PdfType>(null);
-  const [conversionMethod, setConversionMethod] = useState<ConversionMethod>('auto');
-  const [outputMode, setOutputMode] = useState<OutputMode>('editable');
-  const [ocrStrength, setOcrStrength] = useState<OcrStrength>('balanced');
-  const [documentPreset, setDocumentPreset] = useState<DocumentPreset>('general');
-  const [includeReviewSection, setIncludeReviewSection] = useState<boolean>(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [file, setFile] = useState<{ file: File; name: string; size: number } | null>(null);
   const [pageCount, setPageCount] = useState<number | null>(null);
-  const [pageRange, setPageRange] = useState<string>('all');
-  const [status, setStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({ type: 'idle', message: '' });
-  const [scriptProfile, setScriptProfile] = useState<PdfScriptProfile | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState<string>('');
   const [readyDocx, setReadyDocx] = useState<{ blob: Blob; name: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleFileSelected = async (selectedFiles: File[]) => {
-    if (selectedFiles.length > 0) {
-      const selectedFile = selectedFiles[0];
-      const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
-      if (!isPdf) {
-        setStatus({ type: 'error', message: 'Please select a valid PDF file.' });
-        return;
-      }
-      const fileData = {
-        id: uuidv4(),
-        file: selectedFile,
-        name: selectedFile.name,
-        size: selectedFile.size,
-      };
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-      setFile(fileData);
-      setPdfType(null);
-      setConversionMethod('auto');
-      setOutputMode('editable');
-      setOcrStrength('balanced');
-      setDocumentPreset('general');
-      setIncludeReviewSection(true);
-      setProgress(0);
-      setPageRange('all');
-      setStatus({ type: 'idle', message: '' });
-      setPageCount(null);
-      setScriptProfile(null);
-      setReadyDocx(null);
-
-      // Auto-detect PDF type
-      setIsDetecting(true);
-      try {
-        const totalPages = await getPdfPageCount(selectedFile);
-        setPageCount(totalPages);
-        const [detectedType, profile] = await Promise.all([
-          detectPdfType(selectedFile),
-          detectPdfScriptProfile(selectedFile)
-        ]);
-        setPdfType(detectedType);
-        setScriptProfile(profile);
-        // Auto-select best method based on detected type
-        if (detectedType === 'scanned' || profile.forceOcr) {
-          setConversionMethod('ocr');
-        }
-      } catch (error) {
-        console.error('PDF type detection failed:', error);
-        setPdfType('text'); // Default to text if detection fails
-      } finally {
-        setIsDetecting(false);
-      }
-    }
-  };
-
-  const handleConvert = async () => {
-    if (!file) return;
+  // Directly convert file with maximum accuracy
+  const startDirectConversion = async (selectedFile: File) => {
     setIsProcessing(true);
-    setProgress(0);
-    setStatus({ type: 'idle', message: 'Preparing conversion...' });
+    setProgress(5);
+    setStatusMessage('Reading PDF document structure...');
     setReadyDocx(null);
-
-    let selectedPages: number[] | undefined;
-    if (pageCount && pageRange.trim().toLowerCase() !== 'all') {
-      const parsed = parsePageRange(pageRange, pageCount);
-      if (parsed.error || parsed.pages.length === 0) {
-        setIsProcessing(false);
-        setStatus({ type: 'error', message: parsed.error || 'Invalid page range.' });
-        return;
-      }
-      selectedPages = parsed.pages.map((idx) => idx + 1);
-    }
+    setErrorMessage(null);
 
     try {
-      let blob: Blob;
-
-      if (conversionMethod === 'auto') {
-        const shouldForceOcr = scriptProfile?.forceOcr === true;
-        if (pdfType === 'text' && !shouldForceOcr) {
-          // Text PDFs: use direct extraction, respect outputMode
-          blob = await convertPdfToWord(file.file, { method: 'text', preserveLayout: outputMode === 'layout' });
-          setProgress(100);
-        } else {
-          const language = 'eng';
-          blob = await convertPdfToWordOCR(file.file, language, {
-            preserveLayout: outputMode === 'layout',
-            pages: selectedPages,
-            forceOcr: true,
-            ocrStrength,
-            preset: documentPreset,
-            includeReviewSection,
-            onProgress: (current, total) => {
-              setProgress(Math.round((current / total) * 100));
-              setStatus({ type: 'idle', message: `Processing page ${current} of ${total}...` });
-            }
-          });
-        }
-      } else {
-        // OCR mode: use selected language
-        const effectiveLanguage = 'eng';
-        blob = await convertPdfToWordOCR(file.file, effectiveLanguage, {
-          preserveLayout: outputMode === 'layout',
-          pages: selectedPages,
-          forceOcr: true,
-          ocrStrength,
-          preset: documentPreset,
-          includeReviewSection,
-          onProgress: (current, total) => {
-            setProgress(Math.round((current / total) * 100));
-            setStatus({ type: 'idle', message: `Processing page ${current} of ${total}...` });
-          }
-        });
+      // 1. Get total page count
+      let totalPages = 1;
+      try {
+        totalPages = await getPdfPageCount(selectedFile);
+        setPageCount(totalPages);
+      } catch {
+        // Fallback page count
       }
 
-      const outputFilename = `${file.name.replace(/\.pdf$/i, '')}.docx`;
-      setReadyDocx({ blob, name: outputFilename });
-      downloadFile(blob, outputFilename, { autoDownload: true });
-      setStatus({ type: 'success', message: 'Word file ready & downloaded automatically!' });
-    } catch (e) {
-      console.error(e);
-      setStatus({ type: 'error', message: `Conversion failed: ${e instanceof Error ? e.message : 'Unknown error'}` });
+      setProgress(15);
+      setStatusMessage(`Analyzing ${totalPages} ${totalPages === 1 ? 'page' : 'pages'} with high-precision layout detection...`);
+
+      // 2. Perform direct high-accuracy conversion
+      const docxBlob = await convertPdfToWord(selectedFile, {
+        method: 'auto',
+        preserveLayout: true,
+        onProgress: (current, total, msg) => {
+          const pct = Math.min(95, Math.max(15, Math.round((current / total) * 90)));
+          setProgress(pct);
+          setStatusMessage(msg || `Converting page ${current} of ${total}...`);
+        },
+      });
+
+      setProgress(100);
+      setStatusMessage('Word document ready!');
+
+      const outputFilename = `${selectedFile.name.replace(/\.pdf$/i, '')}.docx`;
+      setReadyDocx({ blob: docxBlob, name: outputFilename });
+
+      // 3. Instant automatic download
+      downloadFile(docxBlob, outputFilename, { autoDownload: true });
+
+      trackEvent({
+        category: 'PdfToWord',
+        action: 'direct_conversion_success',
+        label: `${totalPages}_pages`,
+      });
+    } catch (err: any) {
+      console.error('PDF to Word conversion failed:', err);
+      setErrorMessage(
+        err?.message || 'Could not convert this PDF. The document may be encrypted or corrupted.'
+      );
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const getMethodDescription = () => {
-    switch (conversionMethod) {
-      case 'auto':
-        return 'Smart OCR conversion - automatically optimized for your PDF';
-      case 'ocr':
-        return 'Advanced OCR processing with language selection';
-      default:
-        return '';
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files[0]) {
+      processSelectedFile(files[0]);
     }
   };
 
-  const handleDownloadReady = () => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processSelectedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const processSelectedFile = (selectedFile: File) => {
+    const isPdf =
+      selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setErrorMessage('Please select a valid PDF document (.pdf).');
+      return;
+    }
+
+    setFile({
+      file: selectedFile,
+      name: selectedFile.name,
+      size: selectedFile.size,
+    });
+
+    // Directly trigger conversion automatically without requiring any option selection
+    startDirectConversion(selectedFile);
+  };
+
+  const resetAll = () => {
+    setFile(null);
+    setPageCount(null);
+    setIsProcessing(false);
+    setProgress(0);
+    setStatusMessage('');
+    setReadyDocx(null);
+    setErrorMessage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleManualDownload = () => {
     if (!readyDocx) return;
     downloadFile(readyDocx.blob, readyDocx.name, { autoDownload: true });
   };
@@ -176,336 +139,236 @@ export const PdfToWord: React.FC = () => {
     <>
       <Helmet>
         <title>PDF to Word Online Free | Convert PDF to DOCX - LAK PDF</title>
-        <meta name="description" content="Convert PDF to Word online free. Export fully editable DOCX from any PDF with smart OCR detection. No signup required." />
+        <meta
+          name="description"
+          content="Convert PDF to Word online free. Export accurate, fully editable DOCX from any PDF with typography, tables, and headings preserved. 100% private."
+        />
         <link rel="canonical" href="https://lakpdf.com/pdf-to-word" />
         <meta property="og:title" content="PDF to Word Online Free | Convert PDF to DOCX - LAK PDF" />
-        <meta property="og:description" content="Convert PDF to Word online free. Export fully editable DOCX from any PDF with smart OCR detection. No signup required." />
+        <meta
+          property="og:description"
+          content="Convert PDF to Word online free. Accurate, fully editable DOCX from any PDF. 100% private in your browser."
+        />
         <meta property="og:url" content="https://lakpdf.com/pdf-to-word" />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://lakpdf.com/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="PDF to Word Online Free | Convert PDF to DOCX - LAK PDF" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="PDF to Word Online Free | Convert PDF to DOCX - LAK PDF" />
-        <meta name="twitter:description" content="Convert PDF to Word online free. Export fully editable DOCX from any PDF with smart OCR detection. No signup required." />
-        <meta name="twitter:image" content="https://lakpdf.com/og-image.png" />
       </Helmet>
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">PDF to Word</h1>
-        <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
-          Convert your PDF files to editable Word documents with smart detection and OCR support.
-        </p>
-      </div>
 
-      {!file ? (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-          <FileUploader
-            onFilesSelected={handleFileSelected}
-            multiple={false}
-            accept=".pdf"
-            icon={<FileText className="w-12 h-12 text-blue-600" />}
-            title="Select PDF file"
-            description="Drop your PDF here - we'll auto-detect the type"
-            helperText="Runs 100% in your browser"
-          />
-          <ToolStartPanel
-            supportedFormats={['PDF']}
-            fileSizeNote="No fixed upload cap is enforced. Scanned or large PDFs can take longer to process."
-            privacyNote="Detection, OCR, and conversion run in your browser."
-            workflowSteps={[
-              'Upload one PDF.',
-              'Review detected type and output options.',
-              'Convert and download the Word file.',
-            ]}
-          />
-        </div>
-      ) : (
-        <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px] items-start">
-        <div className="space-y-6">
-          {/* File Info */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0">
-                  PDF
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900 truncate max-w-[240px]">{file.name}</h3>
-                  <p className="text-sm text-slate-500">
-                    {formatBytes(file.size)}{pageCount ? ` • ${pageCount} pages` : ''}
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => { setFile(null); setPageCount(null); setScriptProfile(null); setStatus({ type: 'idle', message: '' }); setReadyDocx(null); }} className="text-slate-400 hover:text-red-500 cursor-pointer">
-                <X />
-              </button>
+      {/* Pure White Background Outer Container */}
+      <div className="min-h-screen bg-white text-slate-800 py-10 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs sm:text-sm font-bold mb-3 border border-blue-200/60 shadow-sm">
+              <Sparkles className="w-4 h-4 text-blue-600" />
+              <span>Direct 1-Click Conversion • High Precision Layout • 100% Private</span>
             </div>
 
-            {/* PDF Type Detection */}
-            <div className="bg-slate-50 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                {isDetecting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-sm font-medium text-slate-700">Detecting PDF type...</span>
-                  </>
-                ) : pdfType ? (
-                  <>
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                    <span className="text-sm font-medium text-slate-700">
-                      Detected: {pdfType === 'text' ? 'Text-based PDF' : 'Scanned/Image PDF'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-5 h-5 text-amber-500" />
-                    <span className="text-sm font-medium text-slate-700">Could not detect PDF type</span>
-                  </>
-                )}
-              </div>
-              {pdfType && (
-                <p className="text-xs text-slate-500">{getMethodDescription()}</p>
-              )}
-              {scriptProfile?.forceOcr && (
-                <p className="text-xs text-amber-700 mt-2">
-                  {scriptProfile.reason}
-                </p>
-              )}
-            </div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mb-3">
+              PDF to <span className="text-blue-600">Word</span>
+            </h1>
+
+            <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-500">
+              Convert your PDF into an accurate, fully editable Microsoft Word (.docx) document.
+              Headings, tables, paragraphs, and formatting are preserved with maximum fidelity.
+            </p>
           </div>
 
-          {/* Conversion Options */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-semibold text-slate-900 mb-4">Conversion Method</h3>
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".pdf,application/pdf"
+            className="hidden"
+          />
 
-            {/* Method Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-              <button
-                onClick={() => setConversionMethod('auto')}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                  conversionMethod === 'auto'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
+          {/* Main Card Container (Pure White) */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-100/70 p-6 sm:p-10 mb-12">
+            {/* 1. INITIAL STATE: Drag and Drop Upload Zone */}
+            {!file && (
+              <div
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => fileInputRef.current?.click()}
+                className="relative rounded-2xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/20 hover:bg-blue-50/40 p-10 sm:p-14 text-center cursor-pointer transition-all group"
               >
-                <Zap className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm font-medium">Auto Detect</div>
-                <div className="text-xs opacity-75">Smart OCR</div>
-              </button>
-
-              <button
-                onClick={() => setConversionMethod('ocr')}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                  conversionMethod === 'ocr'
-                    ? 'border-purple-500 bg-purple-50 text-purple-700'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <Scan className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm font-medium">OCR</div>
-                <div className="text-xs opacity-75">Advanced</div>
-              </button>
-            </div>
-
-            {(conversionMethod === 'ocr' || (conversionMethod === 'auto' && pdfType === 'scanned')) && (
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-sm font-medium text-slate-700">OCR Language: English (fixed)</p>
-                <p className="text-xs text-slate-500 mt-1">Hindi option temporarily disabled for stable output.</p>
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">Document Preset</label>
-                    <select
-                      value={documentPreset}
-                      onChange={(e) => setDocumentPreset(e.target.value as DocumentPreset)}
-                      className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="general">General</option>
-                      <option value="ticket">Ticket</option>
-                      <option value="invoice">Invoice</option>
-                      <option value="form">Form</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">OCR Strength</label>
-                    <select
-                      value={ocrStrength}
-                      onChange={(e) => setOcrStrength(e.target.value as OcrStrength)}
-                      className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="fast">Fast</option>
-                      <option value="balanced">Balanced</option>
-                      <option value="accurate">Accurate</option>
-                    </select>
-                  </div>
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/25 mb-6 group-hover:scale-105 transition-transform">
+                  <FileText className="w-10 h-10" />
                 </div>
-                <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={includeReviewSection}
-                    onChange={(e) => setIncludeReviewSection(e.target.checked)}
-                    className="rounded border-slate-300"
-                  />
-                  Add low-confidence review list at end of DOCX
-                </label>
+
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">
+                  Select PDF to Convert to Word
+                </h3>
+                <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">
+                  Drag and drop your PDF document here, or click to choose from your computer.
+                  Conversion starts automatically with zero configuration needed.
+                </p>
+
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 text-base font-bold shadow-md shadow-blue-600/20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <Upload className="w-5 h-5 mr-2" />
+                  Select PDF Document
+                </Button>
+
+                <div className="mt-8 flex flex-wrap justify-center items-center gap-6 text-xs text-slate-500 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-amber-500" />
+                    Direct 1-Click Conversion
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Table className="w-4 h-4 text-emerald-500" />
+                    Tables & Headings Preserved
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-blue-500" />
+                    100% Private (No Server Uploads)
+                  </span>
+                </div>
               </div>
             )}
 
-            <div className="border-t border-slate-100 pt-4 mt-4">
-              <div className="text-sm font-medium text-slate-700 mb-3">Output Style</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={() => setOutputMode('layout')}
-                  className={`p-3 rounded-xl border-2 transition-all cursor-pointer ${
-                    outputMode === 'layout'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <LayoutGrid className="w-5 h-5 mx-auto mb-1" />
-                  <div className="text-sm font-medium">Layout Preserve</div>
-                  <div className="text-xs opacity-75">Tables · Columns · Per-line</div>
-                </button>
-                <button
-                  onClick={() => setOutputMode('editable')}
-                  className={`p-3 rounded-xl border-2 transition-all cursor-pointer ${
-                    outputMode === 'editable'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <Pencil className="w-5 h-5 mx-auto mb-1" />
-                  <div className="text-sm font-medium">Editable Text</div>
-                  <div className="text-xs opacity-75">Lines merged → Paragraphs</div>
-                </button>
+            {/* 2. PROCESSING STATE: Direct Conversion in Progress */}
+            {file && isProcessing && (
+              <div className="py-10 text-center space-y-6">
+                <div className="inline-flex p-4 rounded-2xl bg-blue-50 text-blue-600 mb-2">
+                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-1">
+                    Converting PDF to Word (.docx)...
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {file.name} • {formatBytes(file.size)}
+                    {pageCount ? ` • ${pageCount} pages` : ''}
+                  </p>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="max-w-md mx-auto space-y-2">
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.max(8, progress)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs font-semibold text-slate-500">
+                    <span>{statusMessage || 'Processing...'}</span>
+                    <span>{progress}%</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Running lossless client-side conversion. Your file stays strictly on your computer.
+                </p>
               </div>
-              <p className="text-xs text-slate-500 mt-2">
-                <strong>Layout Preserve:</strong> Tables, columns aur per-line structure rakhe. <strong>Editable Text:</strong> Lines ko smart paragraphs mein join kare — easy editing ke liye.
-              </p>
-            </div>
+            )}
 
-            <div className="border-t border-slate-100 pt-4 mt-4">
-              <label className="text-sm font-medium text-slate-700">Page Range</label>
-              <input
-                type="text"
-                value={pageRange}
-                onChange={(e) => setPageRange(e.target.value)}
-                placeholder="all or 1,3,5-8"
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-slate-500 mt-2">Use `all` for full document, or ranges like `1,3,7-10`.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN: Sticky Convert & Actions Sidebar ────────────────── */}
-        <div className="sticky top-6 space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 pb-3 border-b border-slate-100">
-              PDF to Word Options
-            </h3>
-
-            <div className="space-y-4">
-              <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Pages:</span>
-                  <span className="font-semibold text-slate-800">{pageRange || 'All'}</span>
+            {/* 3. SUCCESS STATE: Completed & Downloaded */}
+            {file && !isProcessing && readyDocx && (
+              <div className="py-6 text-center space-y-6">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-lg shadow-emerald-500/10 mb-2">
+                  <CheckCircle className="w-10 h-10" />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Mode:</span>
-                  <span className="font-semibold text-slate-800">{outputMode === 'layout' ? 'Layout Preserve' : 'Editable Text'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Method:</span>
-                  <span className="font-semibold text-slate-800">{conversionMethod === 'auto' ? 'Auto Detect' : 'OCR'}</span>
-                </div>
-              </div>
 
-              {/* Convert / Download Actions */}
-              {!readyDocx ? (
-                <button
-                  type="button"
-                  onClick={handleConvert}
-                  disabled={isProcessing}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#e5323f] hover:bg-[#d4202d] text-white py-4 px-6 text-base font-extrabold shadow-lg shadow-red-500/25 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-60 disabled:pointer-events-none cursor-pointer"
-                >
-                  {isProcessing ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Converting...</span>
+                <div>
+                  <h3 className="text-2xl font-extrabold text-slate-900 mb-1">
+                    Conversion Complete!
+                  </h3>
+                  <p className="text-sm text-slate-600 max-w-md mx-auto">
+                    Your editable Word document has been accurately generated and your download
+                    started automatically.
+                  </p>
+                </div>
+
+                {/* File info card */}
+                <div className="max-w-md mx-auto p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0">
+                      DOCX
                     </div>
-                  ) : (
-                    <>
-                      <span>Convert to Word</span>
-                      <ArrowRight className="h-5 w-5" />
-                    </>
-                  )}
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-2.5">
-                    <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">Word File Ready!</p>
-                      <p className="text-[10px] text-slate-500">{readyDocx.name}</p>
+                    <div className="truncate">
+                      <p className="font-bold text-sm text-slate-900 truncate">{readyDocx.name}</p>
+                      <p className="text-xs text-slate-500">
+                        Microsoft Word Document • {pageCount ? `${pageCount} pages` : 'Ready'}
+                      </p>
                     </div>
                   </div>
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-100/70 px-2.5 py-1 rounded-full shrink-0">
+                    Ready
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto pt-2">
                   <Button
                     variant="primary"
                     size="lg"
-                    className="w-full py-4 text-base font-bold bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 cursor-pointer"
-                    onClick={handleDownloadReady}
+                    className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 shadow-md shadow-blue-600/20"
+                    onClick={handleManualDownload}
                   >
                     <Download className="w-5 h-5 mr-2" />
                     Download Word Again
                   </Button>
-                </div>
-              )}
 
-              {/* Progress Bar */}
-              {isProcessing && (
-                <div className="mt-3">
-                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-[#e5323f] h-full rounded-full transition-all duration-300"
-                      style={{ width: `${Math.max(10, progress)}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2 text-center">
-                    {status.message || 'Processing your PDF...'}
-                  </p>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    className="w-full sm:w-auto font-bold py-3.5 border-slate-300 hover:bg-slate-50"
+                    onClick={resetAll}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Convert Another PDF
+                  </Button>
                 </div>
-              )}
+              </div>
+            )}
 
-              {status.message && !isProcessing && (
-                <p className={`mt-2 text-xs text-center font-medium ${status.type === 'error' ? 'text-red-600' : status.type === 'success' ? 'text-emerald-600' : 'text-slate-500'}`}>
-                  {status.message}
-                </p>
-              )}
-            </div>
+            {/* 4. ERROR STATE */}
+            {file && !isProcessing && errorMessage && (
+              <div className="py-8 text-center space-y-6">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 border border-rose-200">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-1">
+                    Conversion Encountered an Issue
+                  </h3>
+                  <p className="text-sm text-rose-600 max-w-md mx-auto">{errorMessage}</p>
+                </div>
+
+                <div className="flex items-center justify-center gap-3">
+                  <Button
+                    variant="primary"
+                    onClick={() => file && startDirectConversion(file.file)}
+                    className="bg-blue-600 hover:bg-blue-700 font-bold"
+                  >
+                    Try Again
+                  </Button>
+                  <Button variant="secondary" onClick={resetAll}>
+                    Upload Another PDF
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
+        </div>
+      </div>
 
-          <NextStepPanel
-            title="Next step"
-            steps={[
-              'Review the detected PDF type.',
-              'Choose the output style and page range.',
-              'Convert and download the Word file.',
-            ]}
-          />
-          <RelatedActions
-            actions={[
-              { label: 'OCR PDF', to: '/ocr-pdf' },
-              { label: 'PDF to PowerPoint', to: '/pdf-to-powerpoint' },
-              { label: 'Compress PDF', to: '/compress' },
-            ]}
-          />
-        </div>
-        </div>
-      )}
-    </div>
-      <ToolSEOContent toolKey="/pdf-to-word" />
+      {/* SEO & Informational Content */}
+      <div className="bg-white">
+        <ToolSEOContent toolKey="/pdf-to-word" />
+      </div>
     </>
   );
 };
+
+export default PdfToWord;

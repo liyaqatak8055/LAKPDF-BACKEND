@@ -53,6 +53,36 @@ const TOOL_THEMES: Record<string, { gradient: string; shadow: string; accent: st
     shadow: 'shadow-cyan-500/25',
     accent: 'text-cyan-500',
   },
+  '/make-ppt': {
+    gradient: 'from-orange-500 via-amber-500 to-red-500',
+    shadow: 'shadow-orange-500/30',
+    accent: 'text-orange-500',
+  },
+  '/img-to-ppt': {
+    gradient: 'from-orange-500 via-amber-500 to-red-500',
+    shadow: 'shadow-orange-500/30',
+    accent: 'text-orange-500',
+  },
+  '/passport-photo-maker': {
+    gradient: 'from-blue-600 via-indigo-600 to-sky-500',
+    shadow: 'shadow-blue-500/30',
+    accent: 'text-blue-600',
+  },
+  '/passport-photo': {
+    gradient: 'from-blue-600 via-indigo-600 to-sky-500',
+    shadow: 'shadow-blue-500/30',
+    accent: 'text-blue-600',
+  },
+  '/redact-pdf': {
+    gradient: 'from-slate-950 via-rose-950 to-rose-700',
+    shadow: 'shadow-rose-600/30',
+    accent: 'text-rose-600',
+  },
+  '/blackout-pdf': {
+    gradient: 'from-slate-950 via-rose-950 to-rose-700',
+    shadow: 'shadow-rose-600/30',
+    accent: 'text-rose-600',
+  },
   '/convert': {
     gradient: 'from-amber-500 via-yellow-500 to-orange-500',
     shadow: 'shadow-amber-500/25',

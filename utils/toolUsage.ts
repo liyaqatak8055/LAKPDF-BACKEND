@@ -33,7 +33,7 @@ const TOOL_TITLE_MAP: Record<string, string> = {
   '/ocr-pdf': 'OCR PDF',
   '/compare-pdf': 'Compare PDF',
   '/delete-page': 'Delete Pages',
-  '/summarizer-qa': 'AI Summarizer',
+  '/summarizer-qa': 'AI Summary',
   '/detect-duplicates': 'Detect Duplicates',
   '/ai-pdf-to-mcq': 'AI PDF to MCQ',
   '/pdf-editor': 'PDF Editor',

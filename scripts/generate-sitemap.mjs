@@ -28,6 +28,9 @@ const toolPaths = [
   "/pdf-to-img",
   "/compress-img",
   "/advance-compress-img",
+  "/make-ppt",
+  "/passport-photo-maker",
+  "/redact-pdf",
   "/convert",
   "/pdf-to-word",
   "/pdf-to-powerpoint",
@@ -47,6 +50,9 @@ const toolPaths = [
   "/ai-pdf-to-mcq",
   "/pdf-editor",
   "/ai-interview-generator",
+  "/protect-pdf",
+  "/pdf-to-text",
+  "/ai-edit-pdf",
 ];
 
 const toolNamesForBlogGuides = [
@@ -72,11 +78,14 @@ const toolNamesForBlogGuides = [
   "OCR PDF",
   "Compare PDF",
   "Delete Pages",
-  "Ai Summarizer",
+  "AI Summary",
   "Detect Duplicates",
   "AI PDF to MCQ",
   "PDF Editor",
   "AI Interview Generator",
+  "Protect PDF",
+  "PDF to Text",
+  "AI Edit PDF",
 ];
 
 const slugify = (value) =>

@@ -15,6 +15,9 @@
 - [Page Numbers](https://lakpdf.com/page-number): Add customized page numbers and headers/footers to PDFs.
 - [Crop PDF](https://lakpdf.com/crop-pdf): Trim margins and resize PDF page boundaries.
 - [OCR PDF](https://lakpdf.com/ocr-pdf): Recognize text in scanned documents with optical character recognition.
+- [Make PPT](https://lakpdf.com/make-ppt): Convert JPG, PNG, and photos to PowerPoint (.pptx) presentations with smart aspect-ratio auto-fit.
+- [Passport Photo Maker](https://lakpdf.com/passport-photo-maker): Create compliant passport size photos (3.5x4.5 cm, 2x2 in), printable 4x6/A4 sheets, and 20-50KB exam form files.
+- [Redact PDF](https://lakpdf.com/redact-pdf): Permanently blackout and erase sensitive data from PDF with true pixel sanitization and zero server uploads.
 - [PDF Editor](https://lakpdf.com/pdf-editor): Draw, annotate, sign, and modify PDFs directly in the browser.
 
 ## Privacy and Architecture

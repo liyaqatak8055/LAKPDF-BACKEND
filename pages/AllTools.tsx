@@ -36,6 +36,11 @@ import {
   Lightbulb,
   Mic,
   CalendarDays,
+  Camera,
+  EyeOff,
+  IdCard,
+  Shield,
+  FileEdit,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { ToolCard } from '../components/ToolCard';
@@ -115,6 +120,15 @@ const AllTools: React.FC = () => {
       color: "bg-indigo-50",
       category: "pdf-core"
     },
+    {
+      id: "protect-pdf",
+      title: "Protect PDF",
+      description: "Encrypt PDF files with a password to prevent unauthorized access",
+      iconName: "Shield",
+      to: "/protect-pdf",
+      color: "bg-emerald-50",
+      category: "pdf-core"
+    },
 
     // Image Tools
     {
@@ -155,6 +169,26 @@ const AllTools: React.FC = () => {
       color: "bg-cyan-50",
       category: "image"
     },
+    {
+      id: "make-ppt",
+      title: "Make PPT from Images",
+      description: "Convert photos and images into PowerPoint (.pptx) with smart aspect ratio auto-fit",
+      iconName: "Presentation",
+      to: "/make-ppt",
+      color: "bg-orange-50",
+      category: "image",
+      popular: true
+    },
+    {
+      id: "passport-photo-maker",
+      title: "Passport Size Photo Maker",
+      description: "Create official 3.5x4.5 cm passport photos, 4x6 print sheets, and 20-50KB exam form files",
+      iconName: "Camera",
+      to: "/passport-photo-maker",
+      color: "bg-blue-50",
+      category: "image",
+      popular: true
+    },
 
     // Conversion
     {
@@ -164,6 +198,15 @@ const AllTools: React.FC = () => {
       iconName: "ArrowRight",
       to: "/convert",
       color: "bg-yellow-50",
+      category: "conversion"
+    },
+    {
+      id: "pdf-to-text",
+      title: "PDF to Text",
+      description: "Extract clean text and OCR from scanned PDF documents",
+      iconName: "FileText",
+      to: "/pdf-to-text",
+      color: "bg-blue-50",
       category: "conversion"
     },
     {
@@ -259,6 +302,16 @@ const AllTools: React.FC = () => {
       category: "pdf-tools"
     },
     {
+      id: "redact-pdf",
+      title: "Redact PDF",
+      description: "Permanently blackout and erase sensitive text and confidential data",
+      iconName: "EyeOff",
+      to: "/redact-pdf",
+      color: "bg-rose-50",
+      category: "pdf-tools",
+      popular: true
+    },
+    {
       id: "ocr-pdf",
       title: "OCR PDF",
       description: "Extract text from scanned PDF using OCR",
@@ -278,13 +331,13 @@ const AllTools: React.FC = () => {
     },
     {
       id: "summarizer-qa",
-      title: "AI Summarizer",
-      description: "Generate smart summaries and ask context-based questions from PDF",
-      iconName: "Search",
+      title: "AI Summary",
+      description: "Generate executive summary and main topics from any document or PDF",
+      iconName: "Brain",
       to: "/summarizer-qa",
       color: "bg-blue-50",
-      category: "pdf-tools",
-      comingSoon: true
+      category: "ai-tools",
+      popular: true
     },
     {
       id: "ai-pdf-to-mcq",
@@ -293,8 +346,8 @@ const AllTools: React.FC = () => {
       iconName: "GraduationCap",
       to: "/ai-pdf-to-mcq",
       color: "bg-amber-50",
-      category: "pdf-tools",
-      comingSoon: true
+      category: "ai-tools",
+      popular: true
     },
     {
       id: "pdf-editor",
@@ -312,13 +365,24 @@ const AllTools: React.FC = () => {
       iconName: "Briefcase",
       to: "/ai-interview-generator",
       color: "bg-emerald-50",
-      category: "pdf-tools",
-      comingSoon: true
+      category: "ai-tools",
+      popular: true
+    },
+    {
+      id: "ai-edit-pdf",
+      title: "AI Edit PDF",
+      description: "Edit text, annotate, erase and highlight PDFs with AI OCR",
+      iconName: "FileEdit",
+      to: "/ai-edit-pdf",
+      color: "bg-purple-50",
+      category: "ai-tools",
+      popular: true
     },
   ];
 
   const categories = [
     { id: 'all', name: 'All Tools', icon: Grid3X3 },
+    { id: 'ai-tools', name: 'AI Tools', icon: Brain },
     { id: 'pdf-core', name: 'PDF Core', icon: FileText },
     { id: 'image', name: 'Image Tools', icon: Image },
     { id: 'conversion', name: 'Conversion', icon: ArrowRight },
@@ -328,7 +392,7 @@ const AllTools: React.FC = () => {
   const iconMap: Record<string, React.ComponentType<any>> = {
     FileText, Scissors, Minimize2, Image, FileImage, RotateCw, Trash2,
     FileType, Presentation, PenTool, Signature, Scan, Hash, Eye, Crop, Zap,
-    Type, LayoutGrid, Sliders, Code, Plus, Unlink, BarChart3, Target, ArrowRight, Grid3X3, Languages, GraduationCap, Briefcase, Lightbulb, Mic, CalendarDays, Brain
+    Type, LayoutGrid, Sliders, Code, Plus, Unlink, BarChart3, Target, ArrowRight, Grid3X3, Languages, GraduationCap, Briefcase, Lightbulb, Mic, CalendarDays, Brain, Camera, EyeOff, IdCard, Shield, FileEdit
   };
 
   const filteredTools = useMemo(() => {
@@ -508,7 +572,7 @@ const AllTools: React.FC = () => {
             </div>
             <div>
               <h3 className="font-semibold text-slate-900">Which tools are best for students?</h3>
-              <p>Start with Merge PDF, Compress PDF, AI Summarizer, OCR PDF, and PDF to Word.</p>
+              <p>Start with Merge PDF, Compress PDF, AI Summary, OCR PDF, and PDF to Word.</p>
             </div>
             <div>
               <h3 className="font-semibold text-slate-900">Can I process documents on mobile?</h3>

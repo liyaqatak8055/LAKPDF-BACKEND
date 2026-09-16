@@ -13,13 +13,15 @@ const requiredVars = ["PORT", providerKey];
 const requiredProdVars = [
   "MONGODB_URI",
   "JWT_SECRET",
+];
+const recommendedProdVars = [
+  "ALLOWED_ORIGINS",
   "SMTP_HOST",
   "SMTP_PORT",
   "SMTP_USER",
   "SMTP_PASS",
   "SMTP_FROM",
 ];
-const recommendedProdVars = ["ALLOWED_ORIGINS"];
 
 const isPlaceholder = (value = "") => {
   const v = String(value).trim().toLowerCase();

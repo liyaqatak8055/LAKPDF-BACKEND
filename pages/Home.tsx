@@ -40,6 +40,9 @@ import {
   Upload,
   Download,
   Sparkles,
+  Camera,
+  EyeOff,
+  IdCard,
 } from "lucide-react";
 
 // Lazy load AdUnit for better performance
@@ -78,6 +81,9 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Lightbulb,
   Mic,
   CalendarDays,
+  Camera,
+  EyeOff,
+  IdCard,
 };
 
 // Dynamic Icon Component
@@ -98,7 +104,17 @@ const LazySection: React.FC<{ children: React.ReactNode; className?: string; roo
     return <div className={`content-section-lazy ${className}`}>{children}</div>;
   };
 
-const allTools = [
+interface ToolItem {
+  id: string;
+  title: string;
+  description: string;
+  iconName: string;
+  to: string;
+  color: string;
+  comingSoon?: boolean;
+}
+
+const allTools: ToolItem[] = [
     {
       id: "merge",
       title: "Merge PDF",
@@ -162,6 +178,30 @@ const allTools = [
       iconName: "Sliders",
       to: "/advance-compress-img",
       color: "bg-cyan-50"
+    },
+    {
+      id: "make-ppt",
+      title: "Make PPT from Images",
+      description: "Convert photos and images to PowerPoint (.pptx) with smart aspect ratio auto-fit",
+      iconName: "Presentation",
+      to: "/make-ppt",
+      color: "bg-orange-50"
+    },
+    {
+      id: "passport-photo-maker",
+      title: "Passport Size Photo Maker",
+      description: "Create official 3.5x4.5 cm passport photos, 4x6 print sheets, and 20-50KB exam form files",
+      iconName: "Camera",
+      to: "/passport-photo-maker",
+      color: "bg-blue-50"
+    },
+    {
+      id: "redact-pdf",
+      title: "Redact PDF",
+      description: "Permanently blackout and erase sensitive data from PDF with true pixel sanitization",
+      iconName: "EyeOff",
+      to: "/redact-pdf",
+      color: "bg-rose-50"
     },
     {
       id: "convert",
@@ -278,12 +318,11 @@ const allTools = [
     },
     {
       id: "summarizer-qa",
-      title: "AI Summarizer",
-      description: "Generate summary and ask questions from PDF with page context",
-      iconName: "Search",
+      title: "AI Summary",
+      description: "Generate executive summary and main topics from any document or PDF",
+      iconName: "Brain",
       to: "/summarizer-qa",
-      color: "bg-blue-50",
-      comingSoon: true
+      color: "bg-blue-50"
     },
     {
       id: "detect-duplicates",
@@ -299,8 +338,7 @@ const allTools = [
       description: "Generate exam MCQs with answer key, test mode, and score analysis",
       iconName: "GraduationCap",
       to: "/ai-pdf-to-mcq",
-      color: "bg-amber-50",
-      comingSoon: true
+      color: "bg-amber-50"
     },
     {
       id: "pdf-editor",
@@ -316,15 +354,16 @@ const allTools = [
       description: "Resume analyzer + technical, HR, behavioral questions with model answers",
       iconName: "Briefcase",
       to: "/ai-interview-generator",
-      color: "bg-emerald-50",
-      comingSoon: true
+      color: "bg-emerald-50"
     },
   ];
 
   // Specific IDs for the popular tools
-  const popularIds = ["img-to-pdf", "compress", "compress-img", "pdf-to-word"];
+  const popularIds = ["img-to-pdf", "compress", "compress-img", "summarizer-qa"];
 
-  const popularTools = allTools.filter(t => popularIds.includes(t.id));
+  const popularTools = popularIds
+    .map(id => allTools.find(t => t.id === id))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
   const categorySections = [
     {
       id: "organize",
@@ -338,26 +377,26 @@ const allTools = [
       title: "Convert",
       description: "Move between PDF, image, Word, and PowerPoint formats.",
       iconName: "ArrowRight",
-      toolIds: ["convert", "img-to-pdf", "pdf-to-img", "pdf-to-word", "pdf-to-powerpoint", "word-to-pdf", "powerpoint-to-pdf", "scan-pdf"]
+      toolIds: ["convert", "passport-photo-maker", "make-ppt", "img-to-pdf", "pdf-to-img", "pdf-to-word", "pdf-to-powerpoint", "word-to-pdf", "powerpoint-to-pdf", "scan-pdf"]
     },
     {
       id: "edit",
       title: "Edit",
       description: "Refine file size, text, layout, and document content.",
       iconName: "PenTool",
-      toolIds: ["compress", "compress-img", "advance-compress-img", "pdf-editor", "ocr-pdf", "compare-pdf"]
+      toolIds: ["compress", "compress-img", "advance-compress-img", "passport-photo-maker", "pdf-editor", "ocr-pdf", "compare-pdf"]
     },
     {
       id: "security",
       title: "Security",
-      description: "Sign and brand PDFs before you send them out.",
+      description: "Permanently blackout sensitive data, sign, and brand PDFs securely.",
       iconName: "Shield",
-      toolIds: ["watermark", "sign-pdf"]
+      toolIds: ["redact-pdf", "watermark", "sign-pdf"]
     },
     {
       id: "ai-tools",
-      title: "AI Tools (Coming Soon)",
-      description: "Next-gen AI summarizer, MCQ generator and interview prep — launching soon!",
+      title: "AI Tools",
+      description: "Smart AI document summarizer, exam MCQ maker, and interview preparation studio.",
       iconName: "Brain",
       toolIds: ["summarizer-qa", "ai-pdf-to-mcq", "ai-interview-generator"]
     }
@@ -735,8 +774,8 @@ const Home: React.FC = () => {
             <Link to="/img-to-pdf" className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-dark-hover dark:text-dark-text-secondary dark:hover:text-primary-400">
               Image to PDF
             </Link>
-            <Link to="/pdf-to-word" className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-dark-hover dark:text-dark-text-secondary dark:hover:text-primary-400">
-              PDF to Word
+            <Link to="/summarizer-qa" className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-dark-hover dark:text-dark-text-secondary dark:hover:text-primary-400">
+              AI Summary
             </Link>
           </div>
         </div>

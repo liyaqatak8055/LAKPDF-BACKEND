@@ -6,6 +6,8 @@ import cookieParser from "cookie-parser";
 import { askAI, aiConfig } from "./aiService.js";
 import { createAsyncQueue } from "./aiQueue.js";
 import { authStore } from "./authStore.js";
+import { fallbackAnalyzeResume, fallbackGenerateQuestions, fallbackEvaluateAnswer } from "./interviewFallback.js";
+import { fallbackGenerateMcqs } from "./mcqFallback.js";
 
 const app = express();
 const NODE_ENV = String(process.env.NODE_ENV || "development").toLowerCase();
@@ -21,7 +23,7 @@ const providerKeyMap = {
   deepinfra: DEEPINFRA_API_KEY,
 };
 const selectedProviderKey = providerKeyMap[AI_PROVIDER] || OPENROUTER_API_KEY;
-const SUMMARY_WORD_HARD_LIMIT = Math.max(50, Number(process.env.SUMMARY_WORD_HARD_LIMIT || 120));
+const SUMMARY_WORD_HARD_LIMIT = Math.max(50, Number(process.env.SUMMARY_WORD_HARD_LIMIT || 2000));
 
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS || 60_000);
 const ASK_RATE_LIMIT = Number(process.env.ASK_RATE_LIMIT || 30);
@@ -33,7 +35,7 @@ const DAILY_AI_REQUEST_CAP = Number(process.env.DAILY_AI_REQUEST_CAP || 200);
 const DAILY_AI_TOKEN_CAP = Number(process.env.DAILY_AI_TOKEN_CAP || 100_000);
 const AI_MAX_CONCURRENT_REQUESTS = Number(process.env.AI_MAX_CONCURRENT_REQUESTS || 8);
 const AI_MAX_QUEUE_SIZE = Number(process.env.AI_MAX_QUEUE_SIZE || 200);
-const AI_TASK_TIMEOUT_MS = Number(process.env.AI_TASK_TIMEOUT_MS || 45_000);
+const AI_TASK_TIMEOUT_MS = Number(process.env.AI_TASK_TIMEOUT_MS || 150_000);
 const UPSTREAM_429_COOLDOWN_MS = Number(process.env.UPSTREAM_429_COOLDOWN_MS || 15_000);
 const MAX_PARALLEL_PER_IP = Number(process.env.MAX_PARALLEL_PER_IP || 2);
 const ASK_BURST_LIMIT = Number(process.env.ASK_BURST_LIMIT || 6);
@@ -52,7 +54,7 @@ const AUTH_FAIL_MAX_PER_IP = Math.max(5, Number(process.env.AUTH_FAIL_MAX_PER_IP
 const AUTH_FAIL_MAX_PER_EMAIL_IP = Math.max(3, Number(process.env.AUTH_FAIL_MAX_PER_EMAIL_IP || 6));
 const ALLOWED_AI_MODELS = String(
   process.env.ALLOWED_AI_MODELS ||
-    "meta-llama/llama-3.1-8b-instruct:free,meta-llama/llama-3.3-70b-instruct:free,openai/gpt-4o-mini"
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,openrouter/free,nex-agi/nex-n2.5-mini:free,nvidia/nemotron-3.5-lightning:free,google/gemma-4-26b-a4b-it:free,openai/gpt-4o-mini"
 )
   .split(",")
   .map((v) => v.trim())
@@ -140,6 +142,15 @@ const CSRF_EXEMPT_PATHS = new Set([
   "/api/metrics/files-processed-today",
   "/api/metrics/ai-latency",
   "/api/metrics/core-web-vitals",
+  "/api/ai/ask",
+  "/api/ask",
+  "/api/ai/openrouter",
+  "/api/interview/analyze-resume",
+  "/api/interview/generate-questions",
+  "/api/interview/mock",
+  "/api/interview/evaluate-answer",
+  "/api/mcq/generate",
+  "/api/mcq/validate",
 ]);
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
 
@@ -990,43 +1001,55 @@ const stripMarkdownFences = (raw = "") => String(raw).replace(/```json|```/gi, "
 const extractFirstJsonObject = (raw = "") => {
   const text = stripMarkdownFences(raw);
 
-  // Find first { and last }
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
+  const startObj = text.indexOf("{");
+  const endObj = text.lastIndexOf("}");
+  const startArr = text.indexOf("[");
+  const endArr = text.lastIndexOf("]");
 
-  if (start < 0 || end < 0 || end <= start) {
-    console.warn("[JSON Extractor] Could not find valid JSON boundaries in raw text:", text.substring(0, 100));
-    return null;
-  }
+  let start = -1;
+  let end = -1;
 
-  const candidate = text.slice(start, end + 1);
-
-  // Basic validation without full parsing (which is slow for large objects)
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < candidate.length; i += 1) {
-    const ch = candidate[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === "\"") inString = false;
-      continue;
-    }
-    if (ch === "\"") {
-      inString = true;
-      continue;
-    }
-    if (ch === "{") depth += 1;
-    if (ch === "}") {
-      depth -= 1;
-    }
+  if (startObj >= 0 && (startArr < 0 || startObj <= startArr)) {
+    start = startObj;
+    end = endObj;
+  } else if (startArr >= 0) {
+    start = startArr;
+    end = endArr;
   }
 
   if (start >= 0 && end > start) {
-    return candidate;
+    return text.slice(start, end + 1);
   }
+
+  return text;
+};
+
+const safeParseJson = (raw = "") => {
+  if (!raw) return null;
+  const parsedText = extractFirstJsonObject(raw) || String(raw).trim();
+  try {
+    return JSON.parse(parsedText);
+  } catch {}
+
+  // 1. Trailing comma cleanup
+  try {
+    const cleaned = parsedText.replace(/,\s*([\]}])/g, "$1");
+    return JSON.parse(cleaned);
+  } catch {}
+
+  // 2. Truncated JSON repair (close unclosed quotes, brackets, braces)
+  try {
+    let attempt = parsedText.trim().replace(/,\s*$/, "");
+    const quotes = (attempt.match(/(?<!\\)"/g) || []).length;
+    if (quotes % 2 !== 0) attempt += '"';
+    const openB = (attempt.match(/\{/g) || []).length;
+    const closeB = (attempt.match(/\}/g) || []).length;
+    const openA = (attempt.match(/\[/g) || []).length;
+    const closeA = (attempt.match(/\]/g) || []).length;
+    if (openA > closeA) attempt += "]".repeat(openA - closeA);
+    if (openB > closeB) attempt += "}".repeat(openB - closeB);
+    return JSON.parse(attempt);
+  } catch {}
 
   return null;
 };
@@ -1041,12 +1064,25 @@ const ensureJson = (req, res) => {
 
 const countWords = (text = "") => String(text).trim().split(/\s+/).filter(Boolean).length;
 const enforceWordLimit = (text = "", hardLimit = SUMMARY_WORD_HARD_LIMIT) => {
-  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  const str = String(text || "").trim();
+  const words = str.split(/\s+/).filter(Boolean);
   if (words.length <= hardLimit) {
-    return { text: words.join(" "), truncated: false, count: words.length };
+    return { text: str, truncated: false, count: words.length };
+  }
+  // Truncate at the hardLimit-th word while preserving newlines and markdown
+  let count = 0;
+  let cutIndex = str.length;
+  const regex = /\S+/g;
+  let match;
+  while ((match = regex.exec(str)) !== null) {
+    count++;
+    if (count === hardLimit) {
+      cutIndex = match.index + match[0].length;
+      break;
+    }
   }
   return {
-    text: words.slice(0, hardLimit).join(" "),
+    text: str.slice(0, cutIndex),
     truncated: true,
     count: hardLimit,
   };
@@ -1727,7 +1763,7 @@ app.get("/api/admin/tools", async (req, res) => {
     { id: "protect-pdf", name: "Protect PDF", route: "/protect-pdf", category: "Security", defaultStatus: "operational", usageCount: getMetricCount("process_protect") || 530 },
     { id: "organize-pdf", name: "Organize PDF", route: "/organize-pdf", category: "Core PDF", defaultStatus: "operational", usageCount: getMetricCount("process_organize") || 740 },
     { id: "crop-pdf", name: "Crop PDF", route: "/crop-pdf", category: "Edit & Annotate", defaultStatus: "operational", usageCount: getMetricCount("process_crop") || 490 },
-    { id: "summarizer-qa", name: "AI Summarizer & QA", route: "/summarizer-qa", category: "AI Tools", defaultStatus: "operational", usageCount: getMetricCount("ai_summarizer") || 830 },
+    { id: "summarizer-qa", name: "AI Summary", route: "/summarizer-qa", category: "AI Tools", defaultStatus: "operational", usageCount: getMetricCount("ai_summarizer") || 830 },
   ];
 
   const tools = baseTools.map((tool) => {
@@ -2056,10 +2092,14 @@ app.post(["/api/ai/ask", "/api/ask"], async (req, res) => {
   const stop = Array.isArray(req.body?.stop)
     ? req.body.stop.map((s) => String(s || "").trim()).filter(Boolean).slice(0, 4)
     : [];
+  const customApiKey = String(
+    req.headers["x-openrouter-key"] ||
+    req.headers["x-custom-api-key"] ||
+    req.body?.apiKey ||
+    ""
+  ).trim();
+
   const isSummaryFeature = featureType === "summary";
-  if (requireJson && maxOutputTokens > 420) {
-    return respondAsk(400, { error: "For JSON mode, maxOutputTokens cannot exceed 420." });
-  }
   if (temperature < 0 || temperature > 2 || Number.isNaN(temperature)) {
     return respondAsk(400, { error: "invalid temperature (0-2)" });
   }
@@ -2068,26 +2108,31 @@ app.post(["/api/ai/ask", "/api/ask"], async (req, res) => {
   }
 
   let authUser = null;
-  if (isSummaryFeature) {
-    authUser = await requireAuthUser(req, res);
-    if (!authUser) return;
+  if (isSummaryFeature && authStore.isAuthConfigured()) {
     try {
-      const usage = await authStore.consumeSummaryUsage(authUser.id);
-      res.setHeader("X-Summary-Daily-Limit", String(usage.limit));
-      res.setHeader("X-Summary-Daily-Used", String(usage.used));
-      res.setHeader("X-Summary-Daily-Remaining", String(usage.remaining));
-      if (!usage.allowed) {
-        return respondAsk(429, { error: `Free limit reached. You can generate ${usage.limit} summaries per day.` });
+      authUser = await authStore.getUserFromAuth({
+        authorizationHeader: req.headers.authorization || "",
+        cookies: req.cookies || {},
+      });
+      if (authUser) {
+        const usage = await authStore.consumeSummaryUsage(authUser.id);
+        res.setHeader("X-Summary-Daily-Limit", String(usage.limit));
+        res.setHeader("X-Summary-Daily-Used", String(usage.used));
+        res.setHeader("X-Summary-Daily-Remaining", String(usage.remaining));
+        if (!usage.allowed) {
+          return respondAsk(429, { error: `Free limit reached. You can generate ${usage.limit} summaries per day.` });
+        }
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to verify summary quota";
-      return respondAsk(500, { error: message });
+    } catch {
+      // Continue with general client cap for guests
     }
   }
 
-  const estimatedTokenCost = estimateTokens(prompt) + maxOutputTokens;
-  if (await applyDailyAICap(req, res, estimatedTokenCost)) {
-    return respondAsk(429, { error: "Daily AI usage cap exceeded for this client" });
+  if (!customApiKey) {
+    const estimatedTokenCost = estimateTokens(prompt) + maxOutputTokens;
+    if (await applyDailyAICap(req, res, estimatedTokenCost)) {
+      return respondAsk(429, { error: "Daily AI usage cap exceeded for this client" });
+    }
   }
 
   const cacheKey = getCacheKey({
@@ -2134,24 +2179,84 @@ app.post(["/api/ai/ask", "/api/ask"], async (req, res) => {
         stop,
         systemPrompt,
         userPrompt,
+        apiKey: customApiKey,
       })
     );
     if (requireJson) {
       const aiResponse = String(result?.text || "");
-      const parsedText = extractFirstJsonObject(aiResponse);
-      if (!parsedText) {
-        console.error("Invalid JSON from AI: no JSON object found");
-        return respondAsk(500, { error: "AI format error" });
-      }
+      let parsedText = extractFirstJsonObject(aiResponse) || aiResponse;
+      let parsed = null;
+
       try {
-        const parsed = JSON.parse(parsedText);
-        const payload = { ...result, json: parsed, text: parsedText };
-        await putCachedResponse(cacheKey, payload);
-        return respondAsk(200, payload, { cacheStatus: "MISS" });
-      } catch (err) {
-        console.error("Invalid JSON from AI:", err);
-        return respondAsk(500, { error: "AI format error" });
+        parsed = JSON.parse(parsedText);
+      } catch {
+        // Try repairing trailing commas
+        try {
+          const cleaned = parsedText.replace(/,\s*([\]}])/g, "$1");
+          parsed = JSON.parse(cleaned);
+          parsedText = cleaned;
+        } catch (e) {
+          console.warn("AI JSON parse warning:", e instanceof Error ? e.message : e);
+        }
+
+        // If still not parsed, attempt closing open strings, objects, and brackets
+        if (!parsed) {
+          try {
+            let attempt = parsedText.trim().replace(/,\s*$/, "");
+            const quotes = (attempt.match(/(?<!\\)"/g) || []).length;
+            if (quotes % 2 !== 0) attempt += '"';
+            const openB = (attempt.match(/\{/g) || []).length;
+            const closeB = (attempt.match(/\}/g) || []).length;
+            const openA = (attempt.match(/\[/g) || []).length;
+            const closeA = (attempt.match(/\]/g) || []).length;
+            if (openB > closeB) attempt += "}".repeat(openB - closeB);
+            if (openA > closeA) attempt += "]".repeat(openA - closeA);
+            const finalOpenB = (attempt.match(/\{/g) || []).length;
+            const finalCloseB = (attempt.match(/\}/g) || []).length;
+            if (finalOpenB > finalCloseB) attempt += "}".repeat(finalOpenB - finalCloseB);
+            parsed = JSON.parse(attempt);
+            parsedText = attempt;
+          } catch {
+            // Regex extraction fallback for structured summary format
+            const titleMatch = parsedText.match(/"title"\s*:\s*"([^"]+)"/);
+            const docTypeMatch = parsedText.match(/"document_type"\s*:\s*"([^"]+)"/);
+            const bullets = [];
+            const bRegex = /\{\s*"(?:heading|topic)"\s*:\s*"([^"]+)"\s*,\s*"(?:text|detail)"\s*:\s*"([^"]+)"/g;
+            let m;
+            while ((m = bRegex.exec(parsedText)) !== null) {
+              bullets.push({ heading: m[1].trim(), text: m[2].trim(), topic: m[1].trim(), detail: m[2].trim() });
+            }
+            if (bullets.length === 0) {
+              const bAltRegex = /\{\s*"(?:text|detail)"\s*:\s*"([^"]+)"\s*,\s*"(?:heading|topic)"\s*:\s*"([^"]+)"/g;
+              while ((m = bAltRegex.exec(parsedText)) !== null) {
+                bullets.push({ heading: m[2].trim(), text: m[1].trim(), topic: m[2].trim(), detail: m[1].trim() });
+              }
+            }
+            if (bullets.length > 0) {
+              const sqMatch = parsedText.match(/"(?:suggested_questions|suggestedQuestions)"\s*:\s*\[([\s\S]*?)(\]|$)/);
+              const questions = [];
+              if (sqMatch) {
+                const qM = sqMatch[1].match(/"([^"]+)"/g);
+                if (qM) qM.forEach((q) => questions.push(q.replace(/^"|"$/g, "").trim()));
+              }
+              parsed = {
+                title: titleMatch ? titleMatch[1].trim() : "Document Summary",
+                document_type: docTypeMatch ? docTypeMatch[1].trim() : "general",
+                summary: bullets,
+                bullets,
+                suggested_questions: questions,
+                suggestedQuestions: questions,
+              };
+            }
+          }
+        }
       }
+
+      const payload = { ...result, json: parsed, text: parsedText };
+      if (parsed) {
+        await putCachedResponse(cacheKey, payload);
+      }
+      return respondAsk(200, payload, { cacheStatus: "MISS" });
     }
     if (isSummaryFeature && !requireJson) {
       const limited = enforceWordLimit(result?.text || "", SUMMARY_WORD_HARD_LIMIT);
@@ -2315,6 +2420,690 @@ app.post("/api/ai/openrouter", async (req, res) => {
   } finally {
     releaseIpSlot();
   }
+});
+
+// ── AI Interview Prep Dedicated Endpoints ─────────────────────────
+
+const sanitizeString = (val, max = 25000) =>
+  typeof val === "string" ? val.trim().slice(0, max) : "";
+
+const callWithTimeout = (promise, ms = 15000, desc = "Request timed out") =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(desc)), ms)),
+  ]);
+
+app.post("/api/interview/analyze-resume", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  if (isGlobalAiRateLimited()) {
+    return res.status(503).json({ error: "Server is experiencing high AI demand. Please retry in a moment." });
+  }
+  if (await applyRateLimit(req, res, "interview-analyze", ASK_RATE_LIMIT)) {
+    return res.status(429).json({ error: "Rate limit exceeded. Please slow down." });
+  }
+
+  const resumeText = sanitizeString(req.body?.resumeText, 25000);
+  if (!resumeText || resumeText.length < 30) {
+    return res.status(400).json({ error: "Resume text is too short or empty to analyze." });
+  }
+
+  const language = sanitizeString(req.body?.language || "en", 20);
+  const customApiKey = String(req.headers["x-openrouter-key"] || req.body?.apiKey || "").trim();
+  const requestedModel = sanitizeString(req.body?.gptModel || "", 100);
+
+  const systemPrompt = `You are a strict, objective, professional HR and technical interviewer.
+Analyze the provided resume text and extract candidate information.
+CRITICAL SAFETY & ACCURACY RULES:
+1. Extract ONLY information explicitly stated in the resume.
+2. NEVER invent, assume, or hallucinate any skill, programming language, framework, database, project, experience, metric, job title, company, college, certification, or achievement.
+3. If something is missing or not present (e.g. no cloud tools or no professional work experience), set it as empty array or null.
+4. Detect specific resume claims that an interviewer will probe (e.g. 'reduced load time by 30%', 'managed team of 5', 'built auth from scratch').
+5. Respond in STRICT VALID JSON only matching this exact schema:
+{
+  "candidate": {
+    "name": "Full Name or 'Candidate'",
+    "target_role": "Detected Primary Role (e.g. Frontend Developer, Full Stack Engineer)",
+    "experience_level": "Fresher" | "Junior" | "Mid-Level" | "Senior" | "Lead",
+    "education": ["Degree, Major, Institution, Year (only if in resume)"],
+    "skills": {
+      "programming_languages": ["Javascript", "Python", etc],
+      "frameworks": ["React", "Express", etc],
+      "tools": ["Git", "Postman", etc],
+      "databases": ["PostgreSQL", "MongoDB", etc],
+      "cloud": ["AWS S3", "Docker", etc]
+    },
+    "projects": [
+      {
+        "name": "Project Name",
+        "description": "Factual 1-sentence summary from resume",
+        "tech_stack": ["Technologies mentioned in connection with this project"]
+      }
+    ],
+    "work_experience": [
+      {
+        "role": "Job Title",
+        "company": "Company Name",
+        "duration": "Dates or Duration",
+        "responsibilities": ["Key bullet points from resume"]
+      }
+    ],
+    "internships": ["Internship details if present"],
+    "certifications": ["Certifications explicitly listed"],
+    "achievements": ["Awards or achievements explicitly listed"],
+    "resume_claims": ["Specific numbers, architectural claims, or high-impact statements from resume"]
+  },
+  "summary": {
+    "overview": "Concise 2-sentence summary of the candidate's actual demonstrated profile",
+    "strengths": ["Strength 1 (supported by resume)", "Strength 2 (supported by resume)"],
+    "areas_to_prepare": ["Conceptual area or technical topic directly related to their skills that requires thorough prep"]
+  }
+}`;
+
+  const userPrompt = `Resume text to analyze (Language requested: ${language}):
+--- RESUME START ---
+${resumeText}
+--- RESUME END ---`;
+
+  let parsed = null;
+  let modelMeta = null;
+
+  try {
+    const result = await callWithTimeout(
+      aiQueue.enqueue(() =>
+        askAI(userPrompt, {
+          gptModel: requestedModel,
+          maxOutputTokens: 2500,
+          requireJson: true,
+          temperature: 0.1,
+          systemPrompt,
+          apiKey: customApiKey,
+        })
+      ),
+      18000,
+      "AI Analyze Resume timed out"
+    );
+
+    const raw = String(result?.text || "");
+    parsed = safeParseJson(raw);
+    if (parsed) {
+      modelMeta = { model: result?.model, provider: result?.provider };
+    }
+  } catch (err) {
+    console.warn(`[AI Analyze Resume] Upstream AI failed (${err?.message || err}). Activating precision fallback.`);
+  }
+
+  if (!parsed) {
+    parsed = fallbackAnalyzeResume(resumeText, language);
+    modelMeta = { model: "lak-interview-engine", provider: "precision-fallback" };
+  }
+
+  return res.json({
+    success: true,
+    analysis: parsed,
+    meta: modelMeta,
+  });
+});
+
+app.post("/api/interview/generate-questions", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  if (isGlobalAiRateLimited()) {
+    return res.status(503).json({ error: "Server is experiencing high AI demand. Please retry in a moment." });
+  }
+  if (await applyRateLimit(req, res, "interview-questions", ASK_RATE_LIMIT)) {
+    return res.status(429).json({ error: "Rate limit exceeded. Please slow down." });
+  }
+
+  const resumeText = sanitizeString(req.body?.resumeText, 25000);
+  if (!resumeText || resumeText.length < 10) {
+    return res.status(400).json({ error: "Missing or invalid resume text for question generation." });
+  }
+  const analysis = req.body?.analysis || {};
+  const language = sanitizeString(req.body?.language || "en", 20);
+  const role = sanitizeString(req.body?.role || analysis?.candidate?.target_role || "Software Developer", 100);
+  const experienceLevel = sanitizeString(req.body?.experienceLevel || analysis?.candidate?.experience_level || "Mid-Level", 50);
+  const customApiKey = String(req.headers["x-openrouter-key"] || req.body?.apiKey || "").trim();
+  const requestedModel = sanitizeString(req.body?.gptModel || "", 100);
+
+  const systemPrompt = `You are an expert technical interviewer and interview-preparation researcher.
+Generate a realistic, interview-level question set based STRICTLY on the candidate's verified resume and detected target role.
+
+EVIDENCE RULES & QUESTION DESIGN:
+1. Every question must have an "evidenceType" field with EXACTLY one of these values:
+   - "REPORTED": The exact or substantially similar question pattern has been publicly reported by candidates at top tech companies.
+   - "COMMON": The topic/pattern appears repeatedly across established interview prep resources or technical hiring drills.
+   - "ROLE-RELEVANT": Essential core concept based on technical requirements, without claiming an unverified specific report.
+2. NEVER fabricate company claims, URLs, dates, or interview stories. If not supported by reliable pattern, set "sourceReport": null.
+3. Questions must test WHY, HOW, WHAT HAPPENS, WHEN TO USE, TRADE-OFFS, DEBUGGING, or PRACTICAL IMPLEMENTATION — avoid superficial dictionary definitions.
+4. If programming skills exist, include practical coding challenges (e.g. debouncing, string reversal, array methods, DOM interaction).
+5. Priority assignment:
+   - 'must_prepare': High-yield questions frequently tested for this role and seniority.
+   - 'important': Medium priority core technical and architectural questions.
+   - 'additional_practice': Deep edge cases, scenario-based or design questions.
+6. Categories: 'Technical', 'Projects', 'HR / Behavioral', 'Coding'.
+7. Language: ${language === 'hi' ? 'Hindi (Keep tech terms in English)' : language === 'hinglish' ? 'Hinglish (Conversational Hindi+English)' : 'English'}.
+
+Return STRICT VALID JSON matching this schema:
+{
+  "readiness": {
+    "technical_coverage_pct": 75,
+    "projects_coverage_pct": 80,
+    "hr_coverage_pct": 70,
+    "resume_based_pct": 85,
+    "overall_pct": 78
+  },
+  "weak_areas": [
+    "Identified key topic candidate should review"
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Question text testing practical depth",
+      "category": "Technical" | "Projects" | "HR / Behavioral" | "Coding",
+      "subcategory": "e.g. React Internals, Event Loop, State Architecture, Machine Coding",
+      "evidenceType": "REPORTED" | "COMMON" | "ROLE-RELEVANT",
+      "questionType": "Conceptual" | "Debugging" | "Trade-offs" | "Output Prediction" | "Machine Coding",
+      "code_language": "Optional programming language for Coding",
+      "difficulty": "easy" | "medium" | "advanced",
+      "priority": "must_prepare" | "important" | "additional_practice",
+      "source": "resume" | "technical" | "behavioral" | "project" | "scenario" | "coding",
+      "why_ask": "Why interviewer asks this",
+      "whyImportant": "Strategic importance of this concept in real interview evaluation",
+      "prepare": [
+        "Core concept 1",
+        "Core concept 2"
+      ],
+      "sample_answer": {
+        "answer": "Professional, natural benchmark response",
+        "key_points": ["Point 1", "Point 2"],
+        "common_mistakes": ["Mistake 1"],
+        "better_approach": "Actionable interview tip or pro approach",
+        "is_general_guidance": false
+      },
+      "follow_ups": [
+        "Follow-up question 1",
+        "Follow-up question 2"
+      ],
+      "project_name": "Project name if tied to a specific project",
+      "sourceReport": {
+        "type": "candidate_report" | "interview_pattern",
+        "company": "Company Name if verified pattern (e.g. Meta, Amazon, Google, etc)",
+        "date": "Approx year if available"
+      }
+    }
+  ],
+  "project_deep_dives": [
+    {
+      "project_name": "Project Name",
+      "overview": "Brief summary",
+      "core_questions": [
+        {
+          "question": "What problem does this project solve?",
+          "why_ask": "Interviewer wants to test product thinking",
+          "prepare": ["User problem", "Value proposition"]
+        },
+        {
+          "question": "Why did you choose [tech stack]?",
+          "why_ask": "Tests architectural justification",
+          "prepare": ["Trade-offs considered", "Alternatives rejected"]
+        },
+        {
+          "question": "What was the biggest technical challenge and how did you solve it?",
+          "why_ask": "Tests real problem-solving ability",
+          "prepare": ["The bottleneck", "Debug process", "The resolution"]
+        }
+      ],
+      "follow_ups": [
+        "How would you scale this to 100k daily active users?",
+        "How did you handle error states and data validation?"
+      ]
+    }
+  ]
+}`;
+
+  const userPrompt = `Candidate Profile:
+Role: ${role}
+Experience Level: ${experienceLevel}
+Language: ${language}
+Resume Details: ${JSON.stringify(analysis?.candidate || {})}
+Resume Excerpt:
+${resumeText.slice(0, 10000)}`;
+
+  let parsed = null;
+  let modelMeta = null;
+
+  try {
+    const result = await callWithTimeout(
+      aiQueue.enqueue(() =>
+        askAI(userPrompt, {
+          gptModel: requestedModel,
+          maxOutputTokens: 1200,
+          requireJson: true,
+          temperature: 0.25,
+          systemPrompt,
+          apiKey: customApiKey,
+        })
+      ),
+      18000,
+      "AI Generate Questions timed out"
+    );
+
+    const raw = String(result?.text || "");
+    parsed = safeParseJson(raw);
+    if (parsed) {
+      modelMeta = { model: result?.model, provider: result?.provider };
+    }
+  } catch (err) {
+    console.warn(`[AI Generate Questions] Upstream AI failed (${err?.message || err}). Activating precision fallback.`);
+  }
+
+  if (!parsed || !Array.isArray(parsed?.questions) || parsed.questions.length === 0) {
+    parsed = fallbackGenerateQuestions(resumeText, analysis, { role, experienceLevel, language });
+    modelMeta = { model: "lak-interview-engine", provider: "precision-fallback" };
+  }
+
+  return res.json({
+    success: true,
+    data: parsed,
+    meta: modelMeta,
+  });
+});
+
+app.post("/api/interview/evaluate-answer", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  if (isGlobalAiRateLimited()) {
+    return res.status(503).json({ error: "Server is experiencing high AI demand. Please retry in a moment." });
+  }
+  if (await applyRateLimit(req, res, "interview-eval", ASK_RATE_LIMIT)) {
+    return res.status(429).json({ error: "Rate limit exceeded. Please slow down." });
+  }
+
+  const question = sanitizeString(req.body?.question, 1000);
+  const userAnswer = sanitizeString(req.body?.userAnswer, 5000);
+  const whyAsk = sanitizeString(req.body?.whyAsk, 1000);
+  const prepare = Array.isArray(req.body?.prepare) ? req.body.prepare.slice(0, 5) : [];
+  const customApiKey = String(req.headers["x-openrouter-key"] || req.body?.apiKey || "").trim();
+  const requestedModel = sanitizeString(req.body?.gptModel || "", 100);
+  const language = sanitizeString(req.body?.language || "en", 20);
+
+  if (!question || !userAnswer) {
+    return res.status(400).json({ error: "Both question and userAnswer are required." });
+  }
+
+  const systemPrompt = `You are a constructive, professional interview coach.
+Evaluate the candidate's answer across 6 dimensions:
+1. Relevance (Did they address the core question?)
+2. Clarity (Is it easy to follow without rambling?)
+3. Technical Accuracy (Are facts and terminology correct?)
+4. Structure (Did they use a clear logical flow like STAR or Situation-Action-Result?)
+5. Communication (Tone, confidence, professional vocabulary)
+6. Completeness (Did they include enough substance?)
+
+CRITICAL RULES:
+- Feedback MUST be constructive and supportive.
+- Do NOT make unsupported assumptions about the candidate.
+- Return STRICT VALID JSON only matching:
+{
+  "score": number (1.0 to 10.0),
+  "verdict": "Outstanding" | "Strong" | "Satisfactory" | "Needs Improvement",
+  "feedback": "2-3 sentences of overall assessment",
+  "what_went_well": ["Highlight 1", "Highlight 2"],
+  "areas_to_improve": ["Actionable improvement 1", "Actionable improvement 2"],
+  "model_delivery": "A crisp, natural 2-3 sentence version of how top performers deliver this response",
+  "follow_up_question": "A realistic follow-up question the interviewer would ask next"
+}`;
+
+  const userPrompt = `Interview Question: "${question}"
+Context/Objective: "${whyAsk}"
+Key concepts to cover: ${JSON.stringify(prepare)}
+Candidate's Practice Response:
+"${userAnswer}"`;
+
+  let parsed = null;
+  let modelMeta = null;
+
+  try {
+    const result = await callWithTimeout(
+      aiQueue.enqueue(() =>
+        askAI(userPrompt, {
+          gptModel: requestedModel,
+          maxOutputTokens: 1200,
+          requireJson: true,
+          temperature: 0.2,
+          systemPrompt,
+          apiKey: customApiKey,
+        })
+      ),
+      15000,
+      "AI Evaluate Answer timed out"
+    );
+
+    const raw = String(result?.text || "");
+    parsed = safeParseJson(raw);
+    if (parsed) {
+      modelMeta = { model: result?.model, provider: result?.provider };
+    }
+  } catch (err) {
+    console.warn(`[AI Evaluate Answer] Upstream AI failed (${err?.message || err}). Activating precision fallback.`);
+  }
+
+  if (!parsed) {
+    parsed = fallbackEvaluateAnswer(question, userAnswer, language);
+    modelMeta = { model: "lak-eval-engine", provider: "precision-fallback" };
+  }
+
+  return res.json({
+    success: true,
+    evaluation: parsed,
+    meta: modelMeta,
+  });
+});
+
+app.post("/api/interview/mock", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  if (isGlobalAiRateLimited()) {
+    return res.status(503).json({ error: "Server is experiencing high AI demand. Please retry in a moment." });
+  }
+  if (await applyRateLimit(req, res, "interview-mock", ASK_RATE_LIMIT)) {
+    return res.status(429).json({ error: "Rate limit exceeded. Please slow down." });
+  }
+
+  const action = sanitizeString(req.body?.action || "start", 20);
+  const candidateName = sanitizeString(req.body?.candidateName || "Candidate", 100);
+  const role = sanitizeString(req.body?.role || "Software Engineer", 100);
+  const currentStep = Number(req.body?.currentStep || 0);
+  const questions = Array.isArray(req.body?.questions) ? req.body.questions : [];
+  const language = sanitizeString(req.body?.language || "en", 20);
+  const customApiKey = String(req.headers["x-openrouter-key"] || req.body?.apiKey || "").trim();
+  const requestedModel = sanitizeString(req.body?.gptModel || "", 100);
+
+  const systemPrompt = `You are Alex, an experienced and empathetic Senior Technical Interviewer conducting a realistic mock interview for a ${role} position.
+Speak naturally and warmly. Never break character.
+Return STRICT VALID JSON only:
+{
+  "greeting": "A warm, natural 1-sentence opening greeting addressing the candidate",
+  "interviewer_note": "A helpful whisper/tip for the candidate before answering (under 15 words)",
+  "question": "The question to ask",
+  "category": "HR" | "Technical" | "Project" | "Scenario",
+  "phase": "Introduction" | "Technical Drill" | "Project Architecture" | "Behavioral & Closing"
+}`;
+
+  let userPrompt = "";
+  if (action === "start") {
+    userPrompt = `Candidate Name: ${candidateName}
+Role: ${role}
+Language: ${language}
+Start the interview session with the standard opening question (e.g. Tell me about yourself and your journey as a ${role}).`;
+  } else {
+    const targetQ = questions[currentStep] || {};
+    userPrompt = `Candidate Name: ${candidateName}
+Role: ${role}
+Step: ${currentStep + 1} of ${questions.length}
+Target Question Topic: "${targetQ.question || 'Explain your technical background'}"
+Language: ${language}
+Provide a natural transition and present this question to the candidate.`;
+  }
+
+  try {
+    const result = await callWithTimeout(
+      aiQueue.enqueue(() =>
+        askAI(userPrompt, {
+          gptModel: requestedModel,
+          maxOutputTokens: 600,
+          requireJson: true,
+          temperature: 0.3,
+          systemPrompt,
+          apiKey: customApiKey,
+        })
+      ),
+      12000,
+      "AI Next Question timed out"
+    );
+
+    const raw = String(result?.text || "");
+    const cleanJson = extractFirstJsonObject(raw) || raw;
+    let parsed = null;
+    try {
+      parsed = JSON.parse(cleanJson);
+    } catch {
+      // Fallback
+      parsed = {
+        greeting: `Hi ${candidateName}, welcome! Let's get started with your ${role} mock interview.`,
+        interviewer_note: "Take a breath and structure your thoughts clearly.",
+        question: questions[currentStep]?.question || "Tell me about yourself and your experience.",
+        category: "HR",
+        phase: "Introduction",
+      };
+    }
+
+    return res.json({
+      success: true,
+      data: parsed,
+      meta: { model: result?.model, provider: result?.provider },
+    });
+  } catch (err) {
+    const status = Number(err?.statusCode || 500);
+    return res.status(status).json({ error: err?.message || "Failed to start mock question." });
+  }
+});
+
+// ── AI PDF to MCQ Generator Dedicated Endpoints ───────────────────
+
+app.post("/api/mcq/generate", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  if (isGlobalAiRateLimited()) {
+    return res.status(503).json({ error: "Server is experiencing high AI demand. Please retry in a moment." });
+  }
+  if (await applyRateLimit(req, res, "mcq-generate", ASK_RATE_LIMIT)) {
+    return res.status(429).json({ error: "Rate limit exceeded. Please slow down." });
+  }
+
+  const documentText = sanitizeString(req.body?.documentText, 25000);
+  if (!documentText || documentText.length < 40) {
+    return res.status(400).json({ error: "Document text is too short or unreadable to generate MCQs." });
+  }
+
+  const count = Math.min(50, Math.max(5, Number(req.body?.count || 20)));
+  const difficulty = sanitizeString(req.body?.difficulty || "mixed", 20).toLowerCase();
+  const language = sanitizeString(req.body?.language || "en", 20).toLowerCase();
+  const optionCount = Number(req.body?.optionCount === 5 ? 5 : 4);
+  const topicFocus = sanitizeString(req.body?.topicFocus || "", 200);
+  const documentTitle = sanitizeString(req.body?.documentTitle || "Practice Question Paper", 200);
+  const customApiKey = String(req.headers["x-openrouter-key"] || req.body?.apiKey || "").trim();
+  const requestedModel = sanitizeString(req.body?.gptModel || "", 100);
+
+  const optionLabels = optionCount === 5 ? ["A", "B", "C", "D", "E"] : ["A", "B", "C", "D"];
+
+  let langInstruction = "Language: English.";
+  let langEmphasisHeader = "Language: English.";
+  let langEmphasisFooter = "Return valid JSON.";
+
+  if (language === "hi") {
+    langInstruction = `CRITICAL LANGUAGE REQUIREMENT: STRICTLY IN HINDI (हिन्दी भाषा / देवनागरी लिपि).
+All questions, options, topics, and explanations MUST be written in grammatically fluent Hindi.
+Do NOT write questions or options in English. Technical abbreviations may be kept in brackets, e.g. प्रकाश संश्लेषण (Photosynthesis).`;
+    langEmphasisHeader = `MANDATORY LANGUAGE: HINDI (हिन्दी / देवनागरी लिपि).
+YOU MUST TRANSLATE AND GENERATE EVERY QUESTION, OPTION (A, B, C, D), AND EXPLANATION IN FLUENT HINDI. DO NOT OUTPUT ENGLISH.`;
+    langEmphasisFooter = `FINAL INSTRUCTION: The user selected HINDI. Every question, option, and explanation MUST BE IN HINDI (हिन्दी). Return valid JSON.`;
+  } else if (language === "hinglish") {
+    langInstruction = `CRITICAL LANGUAGE REQUIREMENT: STRICTLY IN HINGLISH (Conversational Hindi-English blend written in Roman script).
+All questions, options, topics, and explanations MUST be written in Hinglish as used by Indian students (e.g. "Mitochondria ka main function kya hai?").`;
+    langEmphasisHeader = `MANDATORY LANGUAGE: HINGLISH (Conversational Hindi-English blend in Roman script).
+YOU MUST GENERATE EVERY QUESTION, OPTION, AND EXPLANATION IN HINGLISH.`;
+    langEmphasisFooter = `FINAL INSTRUCTION: The user selected HINGLISH. Every question, option, and explanation MUST BE IN HINGLISH. Return valid JSON.`;
+  }
+
+  const difficultyInstruction =
+    difficulty === "easy"
+      ? "Difficulty: Easy. Focus directly on key facts, formulas, and definitions stated in the text."
+      : difficulty === "hard"
+      ? "Difficulty: Hard. Test deep comprehension, cause-and-effect relationships, and multi-step inference based on the text."
+      : difficulty === "medium"
+      ? "Difficulty: Medium. Focus on concept comparisons, functional relationships, and processes."
+      : "Difficulty: Mixed. Provide a balanced distribution (approx 30% Easy, 50% Medium, 20% Hard).";
+
+  const systemPrompt = `You are a distinguished academic examiner and professional test paper creator.
+Generate an authentic multiple-choice practice question paper based STRICTLY on the provided educational document.
+
+CRITICAL ACCURACY & INTEGRITY RULES:
+1. Ground every question strictly in the provided text. NEVER invent facts, statistics, or concepts from outside knowledge.
+2. Distribute questions proportionally across all main chapters/topics/sections in the text. DO NOT bunch questions on the first page.
+3. Every question must have exactly ONE objectively correct answer supported by the text.
+4. Distractors must be plausible, academically related alternatives from the same topic. Never write absurd or obviously wrong options.
+5. All options must be grammatically consistent and similar in length. Avoid patterns that give away the answer.
+6. Avoid 'All of the above' or 'None of the above' unless strictly appropriate.
+7. Total options per question: ${optionCount} (${optionLabels.join(", ")}).
+8. ${difficultyInstruction}
+9. ${langInstruction}
+${topicFocus ? `10. Focus topic emphasis: "${topicFocus}".` : ""}
+
+Respond in STRICT VALID JSON matching this exact schema:
+{
+  "title": "${documentTitle}",
+  "total_questions": ${count},
+  "language": "${language}",
+  "difficulty": "${difficulty}",
+  "questions": [
+    {
+      "id": 1,
+      "question": "Question text here",
+      "options": [
+        { "label": "A", "text": "Option A text" },
+        { "label": "B", "text": "Option B text" },
+        { "label": "C", "text": "Option C text" },
+        { "label": "D", "text": "Option D text" }${optionCount === 5 ? ',\n        { "label": "E", "text": "Option E text" }' : ''}
+      ],
+      "correct_answer": "B",
+      "explanation": "Clear factual explanation based only on the document",
+      "difficulty": "easy" | "medium" | "hard",
+      "topic": "Specific chapter or section heading"
+    }
+  ]
+}`;
+
+  const userPrompt = `${langEmphasisHeader}
+
+Document Content to convert into Practice Question Paper (${count} questions requested in ${language.toUpperCase()}):
+--- START DOCUMENT ---
+${documentText}
+--- END DOCUMENT ---
+
+${langEmphasisFooter}`;
+
+  let parsed = null;
+  let modelMeta = null;
+
+  try {
+    const result = await callWithTimeout(
+      aiQueue.enqueue(() =>
+        askAI(userPrompt, {
+          gptModel: requestedModel,
+          maxOutputTokens: Math.min(3800, Math.max(1600, count * 220)),
+          requireJson: true,
+          temperature: 0.2,
+          systemPrompt,
+          apiKey: customApiKey,
+        })
+      ),
+      18000,
+      "AI Generate Curriculum timed out"
+    );
+
+    const raw = String(result?.text || "");
+    parsed = safeParseJson(raw);
+    if (parsed) {
+      modelMeta = { model: result?.model, provider: result?.provider };
+    }
+  } catch (err) {
+    console.warn(`[AI MCQ Generate] Upstream AI failed (${err?.message || err}). Activating precision fallback.`);
+  }
+
+  const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : Array.isArray(parsed) ? parsed : [];
+  if (!parsed || rawQuestions.length === 0) {
+    const fallbackPaper = fallbackGenerateMcqs(documentText, count, difficulty, {
+      language,
+      optionCount,
+      documentTitle,
+    });
+    return res.json({
+      success: true,
+      paper: fallbackPaper,
+      meta: { model: "lak-mcq-engine", provider: "precision-fallback" },
+    });
+  }
+
+  // Normalize format
+  const normalizedQuestions = rawQuestions.map((q, idx) => {
+    let optionsList = [];
+    if (Array.isArray(q.options)) {
+      optionsList = q.options.map((opt, oIdx) => ({
+        label: String(opt.label || optionLabels[oIdx] || "A").toUpperCase(),
+        text: String(opt.text || opt || "").trim(),
+      }));
+    } else if (q.options && typeof q.options === "object") {
+      optionsList = optionLabels.map((lbl) => ({
+        label: lbl,
+        text: String(q.options[lbl] || "").trim(),
+      })).filter((o) => o.text);
+    }
+
+    return {
+      id: q.id || idx + 1,
+      question: String(q.question || "").trim(),
+      options: optionsList,
+      correct_answer: String(q.correct_answer || q.correctOption || "A").toUpperCase().trim(),
+      explanation: String(q.explanation || "").trim(),
+      difficulty: String(q.difficulty || "medium").toLowerCase(),
+      topic: String(q.topic || topicFocus || "General").trim(),
+    };
+  }).filter((q) => q.question && q.options.length >= 3);
+
+  return res.json({
+    success: true,
+    paper: {
+      title: parsed?.title || documentTitle,
+      total_questions: normalizedQuestions.length,
+      requested_count: count,
+      language: parsed?.language || language,
+      difficulty: parsed?.difficulty || difficulty,
+      questions: normalizedQuestions,
+    },
+    meta: modelMeta || { model: "lak-mcq-engine", provider: "openrouter" },
+  });
+});
+
+app.post("/api/mcq/validate", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  const questions = Array.isArray(req.body?.questions) ? req.body.questions : [];
+  if (questions.length === 0) {
+    return res.status(400).json({ error: "Questions array is required." });
+  }
+
+  // Duplicate detection & quality validation
+  const seenQuestions = new Set();
+  const validated = [];
+  const duplicates = [];
+
+  for (const q of questions) {
+    const simplified = String(q.question || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+
+    if (seenQuestions.has(simplified)) {
+      duplicates.push(q.id);
+    } else {
+      seenQuestions.add(simplified);
+      validated.push(q);
+    }
+  }
+
+  return res.json({
+    success: true,
+    total: questions.length,
+    valid_count: validated.length,
+    duplicate_count: duplicates.length,
+    duplicate_ids: duplicates,
+    questions: validated,
+  });
 });
 
 app.use((_req, res) => {

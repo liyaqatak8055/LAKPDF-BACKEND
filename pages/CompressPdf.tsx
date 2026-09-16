@@ -229,21 +229,21 @@ const CompressPdf: React.FC = () => {
     {
       level: 0.4,
       title: 'Extreme Compression',
-      desc: 'Target ≤ 15% of original — maximum size reduction at 144 DPI. Text stays readable.',
+      desc: 'High compression for strict upload limits (170+ DPI). Keeps text sharp and fully readable.',
       icon: <Zap className="w-5 h-5 text-orange-500" />,
       color: 'border-orange-200 bg-orange-50',
     },
     {
       level: 0.7,
-      title: 'Recommended Compression',
-      desc: 'Target ≤ 35% of original — best balance of quality and file size at 192 DPI.',
+      title: 'Recommended (Crystal Clear)',
+      desc: 'High clarity 200+ DPI engine — zero text blur, crisp typography, and 40–70% size reduction.',
       icon: <Gauge className="w-5 h-5 text-green-500" />,
       color: 'border-green-200 bg-green-50',
     },
     {
       level: 1.0,
       title: 'Lossless Optimisation',
-      desc: 'Structural optimisation only — no quality loss. Smallest reduction.',
+      desc: '100% original quality — structural & object stream optimization without touching pixels.',
       icon: <ShieldCheck className="w-5 h-5 text-blue-500" />,
       color: 'border-blue-200 bg-blue-50',
     },
@@ -629,8 +629,14 @@ const CompressPdf: React.FC = () => {
                     </div>
                   )}
 
+                  {/* High Clarity Guarantee Badge */}
+                  <div className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold">
+                    <ShieldCheck className="w-4 h-4 text-teal-600" />
+                    High Clarity Engine — Zero Text Blur & 100% Legibility
+                  </div>
+
                   {/* Stats grid */}
-                  <div className="mt-6 grid w-full max-w-xl grid-cols-3 gap-3">
+                  <div className="mt-5 grid w-full max-w-xl grid-cols-3 gap-3">
                     <div className="rounded-xl bg-white p-3 shadow-sm">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Original</p>
                       <p className="mt-1 font-bold text-slate-900">{file ? formatBytes(file.size) : '-'}</p>

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const routesToSmoke = ["/", "/summarizer-qa", "/ai-pdf-to-mcq", "/ai-interview-generator", "/pdf-editor", "/tools", "/merge", "/split"];
+const routesToSmoke = ["/", "/summarizer-qa", "/ai-pdf-to-mcq", "/ai-interview-generator", "/ai-edit-pdf", "/pdf-to-text", "/pdf-editor", "/tools", "/merge", "/split"];
 
 for (const route of routesToSmoke) {
   test(`blank-page prevention smoke on ${route}`, async ({ page }) => {

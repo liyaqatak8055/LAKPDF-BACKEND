@@ -86,6 +86,36 @@ const ROUTE_SEO: Record<string, RouteSeo> = {
     description: "Compress image to 50KB online free for forms, exams and uploads.",
     canonicalPath: "/advance-compress-img",
   },
+  "/make-ppt": {
+    title: "Make PPT Online Free | Images to PowerPoint Converter - LAK PDF",
+    description: "Convert JPG, PNG, WEBP and photos to PowerPoint (.pptx) online free. Smart aspect ratio prevents stretching. Custom 16:9 widescreen or 4:3 layouts. 100% private.",
+    canonicalPath: "/make-ppt",
+  },
+  "/img-to-ppt": {
+    title: "Image to PowerPoint Converter Free | JPG to PPT - LAK PDF",
+    description: "Turn photos and images into beautifully formatted PowerPoint presentations (.pptx). Zero distortion, drag-and-drop organizer, and instant PPTX download.",
+    canonicalPath: "/make-ppt",
+  },
+  "/passport-photo-maker": {
+    title: "Passport Size Photo Maker Online Free | 3.5x4.5 cm Photo Resizer - LAK PDF",
+    description: "Create official passport photos online free. Auto-align face, change background, resize to 3.5x4.5 cm, 2x2 inch, or PAN card size. Generate printable 4x6 & A4 sheets.",
+    canonicalPath: "/passport-photo-maker",
+  },
+  "/passport-photo": {
+    title: "Passport Photo Maker Free | 3.5x4.5 cm Photo Resizer - LAK PDF",
+    description: "Free online passport size photo maker with biometric face guides, 4x6 & A4 print sheets, and 20-50KB government form compression.",
+    canonicalPath: "/passport-photo-maker",
+  },
+  "/redact-pdf": {
+    title: "Redact PDF Online Free | Permanently Blackout Sensitive Info - LAK PDF",
+    description: "Permanently redact and blackout sensitive information from PDF online for free. Hide Aadhaar, bank details, phone numbers, and signatures with true pixel sanitization. 100% private.",
+    canonicalPath: "/redact-pdf",
+  },
+  "/blackout-pdf": {
+    title: "Blackout PDF Online Free | Permanently Hide Sensitive Data - LAK PDF",
+    description: "Blackout and erase confidential text and numbers from PDF files with true permanent sanitization. No data recovery possible.",
+    canonicalPath: "/redact-pdf",
+  },
   "/convert": {
     title: "Convert PDF Online Free | PDF Converter - LAK PDF",
     description: "Convert PDF online free with a fast PDF converter workflow.",
@@ -157,8 +187,8 @@ const ROUTE_SEO: Record<string, RouteSeo> = {
     canonicalPath: "/delete-page",
   },
   "/summarizer-qa": {
-    title: "AI PDF Summarizer & Q&A Online - LAK PDF",
-    description: "Summarize PDF with AI and ask questions from your document instantly.",
+    title: "AI Summary Online Free - LAK PDF",
+    description: "Summarize PDF and documents with AI instantly with clean main topic formatting.",
     canonicalPath: "/summarizer-qa",
   },
   "/ai-pdf-to-mcq": {
@@ -185,6 +215,16 @@ const ROUTE_SEO: Record<string, RouteSeo> = {
     title: "Protect PDF Online Free | Password Protect PDF - LAK PDF",
     description: "Password protect PDF online free. Add encryption to prevent unauthorized access to your PDF documents.",
     canonicalPath: "/protect-pdf",
+  },
+  "/pdf-to-text": {
+    title: "PDF to Text Online Free | OCR Text Extractor - LAK PDF",
+    description: "Convert PDF to text online free. Extract searchable text and perform OCR on scanned PDFs.",
+    canonicalPath: "/pdf-to-text",
+  },
+  "/ai-edit-pdf": {
+    title: "AI PDF Editor Online Free | Edit, Erase & Annotate - LAK PDF",
+    description: "Edit PDF documents online with AI-assisted text editing, erase, highlight and OCR tools. Free and browser-based.",
+    canonicalPath: "/ai-edit-pdf",
   },
 };
 
@@ -244,12 +284,21 @@ const TOOL_JSON_LD: Record<string, object> = {
   "/pdf-to-img": { "@context": "https://schema.org", "@type": "WebApplication", "name": "PDF to JPG Converter Free", "url": "https://lakpdf.com/pdf-to-img", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Convert PDF to JPG images online for free. Export PDF pages as high quality images." },
   "/compress-img": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Compress Image Online Free", "url": "https://lakpdf.com/compress-img", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Compress image online free and reduce JPG/PNG file size without losing quality." },
   "/advance-compress-img": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Compress Image to 50KB Free", "url": "https://lakpdf.com/advance-compress-img", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Compress image to 50KB online free for forms, exams and government portals." },
+  "/make-ppt": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Make PPT - Images to PowerPoint Converter", "url": "https://lakpdf.com/make-ppt", "applicationCategory": "UtilitiesApplication", "operatingSystem": "All (Web Browser)", "browserRequirements": "Requires JavaScript. Requires HTML5.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Convert images and photos into professional PowerPoint presentations online for free with smart aspect ratio auto-fit.", "featureList": "Zero distortion auto-fit, 16:9 and 4:3 slide ratios, multi-image layouts, reordering and rotation, instant PPTX download" },
+  "/img-to-ppt": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Image to PowerPoint Converter Free", "url": "https://lakpdf.com/img-to-ppt", "applicationCategory": "UtilitiesApplication", "operatingSystem": "All (Web Browser)", "browserRequirements": "Requires JavaScript. Requires HTML5.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Turn photos into clean PowerPoint slides online without stretching or quality loss.", "featureList": "Smart aspect ratio fit, 16:9 & 4:3 screen support, 100% browser-based privacy" },
+  "/passport-photo-maker": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Passport Size Photo Maker", "url": "https://lakpdf.com/passport-photo-maker", "applicationCategory": "MultimediaApplication", "operatingSystem": "All (Web Browser)", "browserRequirements": "Requires JavaScript. Requires HTML5 Canvas.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Create compliant passport photos online free with biometric face alignment, 4x6 and A4 printable sheets, and 20-50KB govt form compression.", "featureList": "Biometric face guide, 3.5x4.5cm, 2x2 inch, PAN card, 4x6 & A4 print sheets, PDF export, 20-50KB optimizer" },
+  "/passport-photo": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Passport Photo Maker Free", "url": "https://lakpdf.com/passport-photo-maker", "applicationCategory": "MultimediaApplication", "operatingSystem": "All (Web Browser)", "browserRequirements": "Requires JavaScript. Requires HTML5 Canvas.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Free passport size photo maker with printable 4x6 sheet generator.", "featureList": "Biometric face guide, 300 DPI high resolution, 100% private" },
+  "/redact-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Redact PDF - Permanently Blackout Sensitive Info", "url": "https://lakpdf.com/redact-pdf", "applicationCategory": "SecurityApplication", "operatingSystem": "All (Web Browser)", "browserRequirements": "Requires JavaScript. Requires HTML5 Canvas.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Permanently redact and blackout confidential information from PDFs online with true pixel sanitization.", "featureList": "True pixel sanitization, interactive blackout and whiteout boxes, keyword search auto-redact, metadata scrub, 100% client-side" },
+  "/blackout-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Blackout PDF Online", "url": "https://lakpdf.com/redact-pdf", "applicationCategory": "SecurityApplication", "operatingSystem": "All (Web Browser)", "browserRequirements": "Requires JavaScript. Requires HTML5 Canvas.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Permanently black out text in PDF documents online free.", "featureList": "True pixel redaction, 100% private" },
   "/sign-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Sign PDF Online Free", "url": "https://lakpdf.com/sign-pdf", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Sign PDF online for free. Add digital signature to PDF and download instantly." },
   "/pdf-editor": { "@context": "https://schema.org", "@type": "WebApplication", "name": "PDF Editor Online Free", "url": "https://lakpdf.com/pdf-editor", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Edit PDF online for free. Add text, draw, annotate and update PDF files instantly." },
   "/ocr-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "OCR PDF Online Free", "url": "https://lakpdf.com/ocr-pdf", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "OCR PDF online free and extract searchable text from scanned PDF files." },
-  "/summarizer-qa": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI PDF Summarizer", "url": "https://lakpdf.com/summarizer-qa", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Summarize PDF with AI and ask questions from your document instantly." },
+  "/summarizer-qa": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI Summary", "url": "https://lakpdf.com/summarizer-qa", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Summarize PDF and documents with AI and ask questions from your document instantly." },
   "/ai-pdf-to-mcq": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI PDF to MCQ Generator", "url": "https://lakpdf.com/ai-pdf-to-mcq", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Generate MCQs from PDF with AI for tests, revision and practice." },
   "/ai-interview-generator": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI Interview Question Generator", "url": "https://lakpdf.com/ai-interview-generator", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Generate technical, HR and behavioral interview questions from your resume with AI." },
+  "/protect-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Protect PDF Online Free", "url": "https://lakpdf.com/protect-pdf", "applicationCategory": "SecurityApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Password protect PDF documents online free with AES encryption." },
+  "/pdf-to-text": { "@context": "https://schema.org", "@type": "WebApplication", "name": "PDF to Text OCR Extractor Free", "url": "https://lakpdf.com/pdf-to-text", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Extract text and run OCR on PDF documents online free." },
+  "/ai-edit-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI PDF Editor Free", "url": "https://lakpdf.com/ai-edit-pdf", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Edit, erase and annotate text in PDF files with AI OCR." },
 };
 
 const RouteSeoManager = () => {
@@ -473,7 +522,7 @@ const ComparePdf = createLazyComponent(() =>
   import("./pages/ComparePdf").then((m) => ({ default: m.ComparePdf }))
   , "Compare PDF");
 
-const PdfSummarizerQA = createLazyComponent(() => import("./pages/PdfSummarizerQA"), "Ai Summarizer");
+const PdfSummarizerQA = createLazyComponent(() => import("./pages/PdfSummarizerQA"), "AI Summary");
 const AiPdfToMcq = createLazyComponent(() => import("./pages/AiPdfToMcq"), "AI PDF to MCQ Generator");
 const AiInterviewGenerator = createLazyComponent(() => import("./pages/AiInterviewGenerator"), "AI Interview Question Generator");
 const PdfEditor = createLazyComponent(() => import("./pages/PdfEditor"), "PDF Editor");
@@ -485,6 +534,13 @@ const DetectDuplicatePages = createLazyComponent(() => import("./pages/DetectDup
 const ProtectPdf = createLazyComponent(() =>
   import("./pages/ProtectPdf").then((m) => ({ default: m.ProtectPdf }))
   , "Protect PDF");
+const MakePpt = createLazyComponent(() => import("./pages/MakePpt"), "Make PPT");
+const PassportPhotoMaker = createLazyComponent(() => import("./pages/PassportPhotoMaker"), "Passport Photo Maker");
+const RedactPdf = createLazyComponent(() => import("./pages/RedactPdf"), "Redact PDF");
+const PdfToText = createLazyComponent(() =>
+  import("./pages/PdfToText").then((m) => ({ default: m.PdfToText }))
+  , "PDF to Text");
+const AiEditPdf = createLazyComponent(() => import("./pages/AiEditPdf"), "AI Edit PDF");
 
 // Company
 const About = createLazyComponent(() =>
@@ -754,6 +810,36 @@ const App: React.FC = () => {
                   <AdvanceCompressImage />
                 </ErrorBoundary>
               } />
+              <Route path="/make-ppt" element={
+                <ErrorBoundary componentName="Make PPT">
+                  <MakePpt />
+                </ErrorBoundary>
+              } />
+              <Route path="/img-to-ppt" element={
+                <ErrorBoundary componentName="Make PPT">
+                  <MakePpt />
+                </ErrorBoundary>
+              } />
+              <Route path="/passport-photo-maker" element={
+                <ErrorBoundary componentName="Passport Photo Maker">
+                  <PassportPhotoMaker />
+                </ErrorBoundary>
+              } />
+              <Route path="/passport-photo" element={
+                <ErrorBoundary componentName="Passport Photo Maker">
+                  <PassportPhotoMaker />
+                </ErrorBoundary>
+              } />
+              <Route path="/redact-pdf" element={
+                <ErrorBoundary componentName="Redact PDF">
+                  <RedactPdf />
+                </ErrorBoundary>
+              } />
+              <Route path="/blackout-pdf" element={
+                <ErrorBoundary componentName="Redact PDF">
+                  <RedactPdf />
+                </ErrorBoundary>
+              } />
 
               {/* Conversion */}
               <Route path="/convert" element={
@@ -860,7 +946,7 @@ const App: React.FC = () => {
                 </ErrorBoundary>
               } />
               <Route path="/summarizer-qa" element={
-                <ErrorBoundary componentName="Ai Summarizer">
+                <ErrorBoundary componentName="AI Summary">
                   <PdfSummarizerQA />
                 </ErrorBoundary>
               } />
@@ -874,11 +960,34 @@ const App: React.FC = () => {
                   <AiInterviewGenerator />
                 </ErrorBoundary>
               } />
+              <Route path="/ai-interview-prep" element={
+                <ErrorBoundary componentName="AI Interview Prep">
+                  <AiInterviewGenerator />
+                </ErrorBoundary>
+              } />
               <Route path="/pdf-editor" element={
                 <ErrorBoundary componentName="PDF Editor">
                   <PdfEditor />
                 </ErrorBoundary>
               } />
+              <Route path="/ai-edit-pdf" element={
+                <ErrorBoundary componentName="AI Edit PDF">
+                  <AiEditPdf />
+                </ErrorBoundary>
+              } />
+              <Route path="/pdf-to-text" element={
+                <ErrorBoundary componentName="PDF to Text">
+                  <PdfToText />
+                </ErrorBoundary>
+              } />
+
+              {/* Alias Redirects to prevent 404 on client-side routing */}
+              <Route path="/pdf-to-jpg" element={<Navigate to="/pdf-to-img" replace />} />
+              <Route path="/jpg-to-pdf" element={<Navigate to="/img-to-pdf" replace />} />
+              <Route path="/merge-pdf" element={<Navigate to="/merge" replace />} />
+              <Route path="/split-pdf" element={<Navigate to="/split" replace />} />
+              <Route path="/scan-to-pdf" element={<Navigate to="/scan-pdf" replace />} />
+              <Route path="/add-page-numbers-to-pdf" element={<Navigate to="/page-number" replace />} />
 
               {/* New Tools */}
               <Route path="/detect-duplicates" element={

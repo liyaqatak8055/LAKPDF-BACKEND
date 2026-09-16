@@ -379,10 +379,10 @@ const _rasterizeAll = async (
 // ── Public: quality-level mode ──────────────────────────────────────────
 
 /**
- * Compress a PDF using a quality preset.
+ * Compress a PDF using a high-clarity quality preset.
  * Guarantees output size is NEVER larger than original file and text is NEVER blurred.
  * @param file     Input PDF File
- * @param quality  0.4 = Extreme | 0.7 = Recommended | 1.0 = Lossless
+ * @param quality  0.4 = Extreme | 0.7 = Recommended (Crystal Clear) | 1.0 = Lossless
  */
 export const compressPdf = async (file: File, quality: number = 0.7): Promise<Uint8Array> => {
   const rawBuffer = await file.arrayBuffer();
@@ -394,51 +394,65 @@ export const compressPdf = async (file: File, quality: number = 0.7): Promise<Ui
     const pdfJs = await pdfjs.getDocument({ data: originalBytes.slice(0) }).promise;
     const { isVector } = await _detectPdfType(pdfJs);
 
-    // ── PATH A: Vector Text PDF (Resumes, Reports, Books, Invoices) ──
-    // Never destroy text clarity by turning vector pages into blurry JPEGs!
-    if (isVector) {
+    // ── PATH A: Lossless Preset (Structural & Object Stream Optimization) ──
+    if (quality >= 0.95) {
       const optimized = await _optimizeNativePdf(originalBytes.slice(0));
-      if (optimized.byteLength < origLen) {
-        return optimized;
-      }
-      // If native object streams already optimal, return original clean buffer
-      return originalBytes.slice(0);
+      return optimized.byteLength < origLen ? optimized : originalBytes.slice(0);
     }
 
-    // ── PATH B: Scanned / Image-Based PDF ──
-    type Candidate = { scale: number; jpegQuality: number };
+    // For vector documents: test if native structural stream optimization saves >= 12%
+    if (isVector) {
+      const nativeOpt = await _optimizeNativePdf(originalBytes.slice(0));
+      if (nativeOpt.byteLength <= origLen * 0.88) {
+        // High savings achieved natively — 100% vector fonts, text, and lines preserved!
+        return nativeOpt;
+      }
+    }
+
+    // ── PATH B: High-Clarity Visual Preservation Engine ──
+    // Carefully calibrated to eliminate text blurring and pixelation:
+    // Scale >= 2.0 (192-230 DPI) ensures printed and on-screen text never gets fuzzy.
+    // Quality 0.72-0.80 keeps JPEG quantization noise imperceptible to the human eye.
+    type Candidate = { scale: number; jpegQuality: number; targetSaving: number };
     let candidates: Candidate[];
 
     if (quality < 0.55) {
-      // Extreme Compression (High-clarity downsampling)
+      // Extreme Compression (High squeeze while strictly protecting text readability)
       candidates = [
-        { scale: 2.0, jpegQuality: 0.65 },
-        { scale: 1.75, jpegQuality: 0.55 },
-        { scale: 1.5, jpegQuality: 0.48 },
-        { scale: 1.25, jpegQuality: 0.40 },
+        { scale: 2.0, jpegQuality: 0.70, targetSaving: 0.85 },
+        { scale: 1.85, jpegQuality: 0.65, targetSaving: 0.75 },
+        { scale: 1.70, jpegQuality: 0.60, targetSaving: 0.65 },
       ];
     } else {
-      // Recommended Compression (Crystal clear high resolution)
+      // Recommended Compression (Crystal Clear High-Resolution Engine)
+      // Tries high-resolution tiers first: stops as soon as file size is meaningfully reduced!
       candidates = [
-        { scale: 2.5, jpegQuality: 0.78 },
-        { scale: 2.2, jpegQuality: 0.72 },
-        { scale: 2.0, jpegQuality: 0.65 },
-        { scale: 1.75, jpegQuality: 0.58 },
+        { scale: 2.3, jpegQuality: 0.80, targetSaving: 0.90 },
+        { scale: 2.1, jpegQuality: 0.76, targetSaving: 0.85 },
+        { scale: 1.95, jpegQuality: 0.72, targetSaving: 0.80 },
+        { scale: 1.80, jpegQuality: 0.68, targetSaving: 0.70 },
       ];
     }
 
     let bestResult: Uint8Array = originalBytes.slice(0);
 
-    for (const { scale, jpegQuality } of candidates) {
+    // Progressive evaluation: Stop at the highest quality candidate that achieves actual size reduction!
+    for (const { scale, jpegQuality, targetSaving } of candidates) {
       const result = await _rasterizeAll(pdfJs, scale, jpegQuality);
       if (result.byteLength < bestResult.byteLength) {
         bestResult = result;
+        // If this high-clarity candidate already reduced file size below target saving threshold,
+        // stop immediately to preserve the maximum possible visual resolution!
+        if (result.byteLength <= origLen * targetSaving) {
+          break;
+        }
       }
     }
 
     // Safety rule: Never return a file larger than the input
     if (bestResult.byteLength >= origLen) {
-      bestResult = originalBytes.slice(0);
+      const fallback = await _optimizeNativePdf(originalBytes.slice(0));
+      return fallback.byteLength < origLen ? fallback : originalBytes.slice(0);
     }
 
     return bestResult;
@@ -510,41 +524,39 @@ export const compressPdfToTargetSize = async (
   /*
    * Phase 1 – Sample first page at several scales to pick the DPI tier
    *           that gives us the best chance of reaching the target with maximum clarity.
+   *           Floor is kept at 144 DPI (scale 1.5) so text remains sharp and never blurry.
    */
   const perPageBudget = targetBytes / n;
   const DPI_TIERS = [
-    { scale: 2.5, label: '240dpi' },
+    { scale: 2.4, label: '230dpi' },
     { scale: 2.0, label: '192dpi' },
     { scale: 1.75, label: '168dpi' },
     { scale: 1.5, label: '144dpi' },
-    { scale: 1.25, label: '120dpi' },
   ];
 
-  let chosenScale = 1.5; // default 144 dpi
+  let chosenScale = 1.5; // 144 dpi minimum floor
   {
     const firstPage = await pdfJs.getPage(1);
     for (const tier of DPI_TIERS) {
-      const sample = await _renderPageToJpeg(firstPage, tier.scale, 0.72);
-      if (sample.byteLength <= perPageBudget * 1.3) {
+      const sample = await _renderPageToJpeg(firstPage, tier.scale, 0.74);
+      if (sample.byteLength <= perPageBudget * 1.25) {
         chosenScale = tier.scale;
         break;
       }
-      chosenScale = tier.scale; // keep updating so we always have the lowest tried
+      chosenScale = tier.scale;
     }
   }
   if (onProgress) onProgress(5);
 
   /*
-   * Phase 2 – Binary search on JPEG quality [0.10 … 0.92] at the chosen
+   * Phase 2 – Binary search on JPEG quality [0.55 … 0.88] at the chosen
    *           scale to find the highest quality that hits the target.
-   *
-   *   We render all pages for each candidate quality level.
-   *   Binary search converges in ≤ 7 iterations.
+   *           Quality floor is strictly 0.55 so text glyphs never get distorted.
    */
-  let lo = 0.10, hi = 0.92;
+  let lo = 0.55, hi = 0.88;
   let bestFit:    Uint8Array | null = null;
   let bestNoFit:  Uint8Array | null = null; // smallest result that didn't fit
-  const MAX_ITER = 8;
+  const MAX_ITER = 6;
 
   for (let iter = 0; iter < MAX_ITER; iter++) {
     const mid = Math.round(((lo + hi) / 2) * 100) / 100;

@@ -16,13 +16,14 @@ const ensurePdfjs = async () => {
 
 // --- docx ---
 let Document: any, Packer: any, Paragraph: any, TextRun: any,
-    Table: any, TableRow: any, TableCell: any;
+    Table: any, TableRow: any, TableCell: any, PageBreak: any,
+    BorderStyle: any, WidthType: any;
 const ensureDocx = async () => {
   if (Document) return;
   // @ts-ignore
   const m = await import('docx');
   const docx: any = (m as any).default || m;
-  ({ Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell } = docx);
+  ({ Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, PageBreak, BorderStyle, WidthType } = docx);
 };
 
 // --- pptxgenjs ---
@@ -43,6 +44,16 @@ const ensureMammoth = async () => {
   const m = await import('mammoth');
   _mammoth = (m as any).default || m;
   return _mammoth;
+};
+
+// --- docx-preview ---
+let _docxPreview: any = null;
+const ensureDocxPreview = async () => {
+  if (_docxPreview) return _docxPreview;
+  // @ts-ignore
+  const m = await import('docx-preview');
+  _docxPreview = (m as any).default || m;
+  return _docxPreview;
 };
 
 // --- jspdf ---
@@ -407,9 +418,10 @@ export const detectPdfScriptProfile = async (file: File): Promise<PdfScriptProfi
 export const convertPdfToWord = async (
   file: File,
   options: {
-    method: 'auto' | 'text' | 'ocr';
+    method?: 'auto' | 'text' | 'ocr';
     ocrLanguage?: 'eng' | 'hin' | 'eng+hin';
     preserveLayout?: boolean;
+    onProgress?: (current: number, total: number, msg?: string) => void;
   } = { method: 'auto' }
 ): Promise<Blob> => {
   await ensureDocx();
@@ -417,143 +429,175 @@ export const convertPdfToWord = async (
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   const documentChildren: DocxElement[] = [];
-  const preserveLayout = options.preserveLayout !== false; // default true
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    if (options.onProgress) {
+      options.onProgress(pageNum, pdf.numPages, `Converting page ${pageNum} of ${pdf.numPages}...`);
+    }
+
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
     const items = textContent.items as any[];
+    const hasDigitalText = items.length > 0 && items.some((it) => it.str && it.str.trim().length > 0);
 
-    if (items.length > 0) {
+    if (hasDigitalText) {
       const structuredLines = buildStructuredLinesFromTextItems(items);
 
-      if (preserveLayout) {
-        // ── LAYOUT PRESERVE: maintain tables, columns, per-line structure ──
-        let tableBuffer: string[][] = [];
+      // Collect potential tabular rows
+      let tableBuffer: string[][] = [];
 
-        const flushTableBuffer = () => {
-          if (tableBuffer.length >= 2) {
-            const normalized = normalizeTableRows(tableBuffer);
-            if (normalized.length >= 2) {
-              documentChildren.push(createProfessionalTable(normalized));
-            } else {
-              tableBuffer.forEach((row) => {
-                documentChildren.push(createBodyParagraph(row.join('  |  '), 'normalPara'));
-              });
-            }
-          } else if (tableBuffer.length === 1) {
-            documentChildren.push(createBodyParagraph(tableBuffer[0].join('  |  '), 'normalPara'));
-          }
-          tableBuffer = [];
-        };
-
-        structuredLines.forEach((line, lineIndex) => {
-          const isTableLine = shouldTreatAsTableLine(line.cells);
-          if (isTableLine) {
-            tableBuffer.push(line.cells);
-            return;
-          }
-
-          flushTableBuffer();
-
-          const isHeading = line.isBold || line.fontSize > 14 || detectHeadingFromText(line.lineText);
-          const headingLevel = isHeading ? (line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3) : 0;
-
-          if (headingLevel === 1 || headingLevel === 2 || headingLevel === 3) {
-            documentChildren.push(createProfessionalHeading(line.lineText, headingLevel as 1|2|3));
+      const flushTableBuffer = () => {
+        if (tableBuffer.length >= 2) {
+          const normalized = normalizeTableRows(tableBuffer);
+          if (normalized.length >= 2) {
+            documentChildren.push(createProfessionalTable(normalized));
           } else {
+            tableBuffer.forEach((row) => {
+              documentChildren.push(createBodyParagraph(row.join('    '), 'normalPara'));
+            });
+          }
+        } else if (tableBuffer.length === 1) {
+          documentChildren.push(createBodyParagraph(tableBuffer[0].join('    '), 'normalPara'));
+        }
+        tableBuffer = [];
+      };
+
+      // Flowing body paragraph buffer
+      const paragraphBuffer: string[] = [];
+      const flushParagraph = () => {
+        if (paragraphBuffer.length > 0) {
+          const merged = paragraphBuffer.join(' ').replace(/\s+/g, ' ').trim();
+          if (merged) {
             documentChildren.push(new Paragraph({
               children: [new TextRun({
-                text: line.lineText,
-                size: safeInt(Math.max(16, line.fontSize * 2), 24),
-                bold: Boolean(line.isBold),
-                color: '000000',
+                text: merged,
+                size: 22, // 11pt
                 font: 'Calibri',
+                color: '1F2937',
               })],
-              spacing: {
-                after: lineIndex === structuredLines.length - 1 ? 240 : 80,
-                line: 276,
-              },
+              spacing: { after: 140, line: 276 },
             }));
           }
-        });
+          paragraphBuffer.length = 0;
+        }
+      };
 
+      structuredLines.forEach((line) => {
+        const cleanL = cleanText(line.lineText);
+        if (!cleanL) return;
+
+        // 1. Table row detection
+        const isTableLine = shouldTreatAsTableLine(line.cells);
+        if (isTableLine) {
+          flushParagraph();
+          tableBuffer.push(line.cells);
+          return;
+        }
         flushTableBuffer();
-      } else {
-        // ── EDITABLE TEXT: smart-join lines into flowing paragraphs ──
-        // Headings are still detected and rendered, body lines are merged
-        const paragraphBuffer: string[] = [];
 
-        const flushParagraph = () => {
-          if (paragraphBuffer.length > 0) {
-            const merged = paragraphBuffer.join(' ').replace(/\s+/g, ' ').trim();
-            if (merged) documentChildren.push(createBodyParagraph(merged, 'normalPara'));
-            paragraphBuffer.length = 0;
+        // 2. Heading detection
+        const isHeading = line.isBold || line.fontSize >= 15 || detectHeadingFromText(cleanL);
+        if (isHeading) {
+          flushParagraph();
+          const headingLevel = line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3;
+          documentChildren.push(createProfessionalHeading(cleanL, headingLevel as 1 | 2 | 3));
+          return;
+        }
+
+        // 3. Bullet / Numbered list item detection
+        const listMatch = detectListFromText(cleanL);
+        if (listMatch) {
+          flushParagraph();
+          documentChildren.push(createProfessionalListItem(listMatch.text, listMatch.type, listMatch.level));
+          return;
+        }
+
+        // 4. Natural body paragraph reflow
+        const endsWithPunctuation = /[.!?:;]$/.test(cleanL.trim());
+        const isShortLine = cleanL.length < 50;
+
+        if (endsWithPunctuation || isShortLine) {
+          paragraphBuffer.push(cleanL);
+          flushParagraph();
+        } else {
+          paragraphBuffer.push(cleanL);
+        }
+      });
+
+      flushTableBuffer();
+      flushParagraph();
+    } else {
+      // Automatic OCR fallback for scanned pages or image-only pages
+      try {
+        if (options.onProgress) {
+          options.onProgress(pageNum, pdf.numPages, `Running accurate OCR on page ${pageNum}...`);
+        }
+        const tesseract = await ensureTesseract();
+        const worker = await tesseract.createWorker('eng');
+        const viewport = page.getViewport({ scale: 2.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const imgBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+          if (imgBlob) {
+            const result = await worker.recognize(imgBlob);
+            const lines = result?.data?.lines || [];
+            lines.forEach((l: any) => {
+              const txt = (l.text || '').trim();
+              if (txt) {
+                const isHeading = detectHeadingFromText(txt);
+                if (isHeading) {
+                  documentChildren.push(createProfessionalHeading(txt, 2));
+                } else {
+                  documentChildren.push(new Paragraph({
+                    children: [new TextRun({
+                      text: txt,
+                      size: 22,
+                      font: 'Calibri',
+                      color: '1F2937',
+                    })],
+                    spacing: { after: 120, line: 276 },
+                  }));
+                }
+              }
+            });
           }
-        };
-
-        structuredLines.forEach((line) => {
-          const lineText = cleanText(line.lineText);
-          if (!lineText) return;
-
-          const isHeading = line.isBold || line.fontSize > 14 || detectHeadingFromText(lineText);
-          if (isHeading) {
-            flushParagraph();
-            const level = line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3;
-            documentChildren.push(createProfessionalHeading(lineText, level as 1|2|3));
-            return;
-          }
-
-          // Short lines (likely header/footer fragments) → merge into paragraph
-          // Long lines (>= 60 chars) or ends with sentence punctuation → flush as own paragraph
-          const endsWithPunctuation = /[.!?:;]$/.test(lineText.trim());
-          const isLongLine = lineText.length >= 60;
-
-          if (isLongLine && endsWithPunctuation) {
-            paragraphBuffer.push(lineText);
-            flushParagraph();
-          } else if (endsWithPunctuation) {
-            paragraphBuffer.push(lineText);
-            flushParagraph();
-          } else {
-            paragraphBuffer.push(lineText);
-          }
-        });
-
-        flushParagraph();
+        }
+        await worker.terminate();
+      } catch (ocrErr) {
+        console.warn(`OCR fallback skipped on page ${pageNum}:`, ocrErr);
       }
     }
 
-    // Add page separator if not the last page
+    // Add clean native Word page break between pages
     if (pageNum < pdf.numPages) {
       documentChildren.push(
         new Paragraph({
-          children: [new TextRun({
-            text: `─── Page ${pageNum + 1} ───`,
-            size: 18,
-            bold: true,
-            color: 'AAAAAA',
-            font: 'Calibri',
-          })],
-          spacing: { after: 280, before: 280 },
-          alignment: 'center' as any,
+          children: [PageBreak ? new PageBreak() : new TextRun({ text: '' })],
         })
       );
     }
   }
 
   const doc = new Document({
+    title: file.name.replace(/\.pdf$/i, ''),
+    creator: 'LAK PDF',
     styles: {
       default: {
         document: {
-          run: { font: 'Calibri', size: 24, color: '000000' },
+          run: { font: 'Calibri', size: 22, color: '1F2937' },
         },
       },
       paragraphStyles: [{
         id: 'normalPara',
         name: 'Normal Para',
-        run: { font: 'Calibri', size: 24 },
-        paragraph: { spacing: { line: 276, after: 200 } },
+        run: { font: 'Calibri', size: 22 },
+        paragraph: { spacing: { line: 276, after: 140 } },
       }],
     },
     sections: [{
@@ -569,7 +613,7 @@ export const convertPdfToWord = async (
       },
       children: documentChildren.length > 0 ? documentChildren : [
         new Paragraph({
-          children: [new TextRun({ text: 'No content extracted', size: 24, font: 'Calibri' })]
+          children: [new TextRun({ text: 'Document converted successfully.', size: 22, font: 'Calibri' })]
         })
       ],
     }],
@@ -1480,42 +1524,56 @@ function createProfessionalTable(data: string[][]): DocxElement {
     return new Table({ rows: [] });
   }
 
+  const borderCfg = BorderStyle ? {
+    top: { style: BorderStyle.SINGLE, size: 1, color: 'D1D5DB' },
+    bottom: { style: BorderStyle.SINGLE, size: 1, color: 'D1D5DB' },
+    left: { style: BorderStyle.SINGLE, size: 1, color: 'D1D5DB' },
+    right: { style: BorderStyle.SINGLE, size: 1, color: 'D1D5DB' },
+    insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+    insideVertical: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+  } : undefined;
+
   // Create header row
   const headerRow = new TableRow({
+    tableHeader: true,
     children: cleanData[0].map(cell => new TableCell({
       children: [new Paragraph({
         children: [new TextRun({
           text: cell || '',
           bold: true,
-          size: 24, // 12pt
-          color: '000000',
+          size: 22,
+          color: '111827',
+          font: 'Calibri',
         })],
       })],
+      shading: { fill: 'F3F4F6' },
       margins: {
-        top: 120,    // 0.08 inch
-        bottom: 120,
-        left: 120,
-        right: 120,
+        top: 140,
+        bottom: 140,
+        left: 140,
+        right: 140,
       },
     })),
   });
 
   // Create data rows
-  const dataRows = cleanData.slice(1).map(row =>
+  const dataRows = cleanData.slice(1).map((row, rIdx) =>
     new TableRow({
       children: row.map(cell => new TableCell({
         children: [new Paragraph({
           children: [new TextRun({
             text: cell || '',
-            size: 24, // 12pt
-            color: '000000',
+            size: 21,
+            color: '374151',
+            font: 'Calibri',
           })],
         })],
+        shading: rIdx % 2 === 1 ? { fill: 'F9FAFB' } : undefined,
         margins: {
           top: 120,
           bottom: 120,
-          left: 120,
-          right: 120,
+          left: 140,
+          right: 140,
         },
       })),
     })
@@ -1525,16 +1583,9 @@ function createProfessionalTable(data: string[][]): DocxElement {
     rows: [headerRow, ...dataRows],
     width: {
       size: 100,
-      type: 'percentage' as any, // 100% width
+      type: WidthType ? WidthType.PERCENTAGE : ('percentage' as any),
     },
-    // borders: {
-    //   top: { style: 'single' as any, size: 1, color: '000000' },
-    //   bottom: { style: 'single' as any, size: 1, color: '000000' },
-    //   left: { style: 'single' as any, size: 1, color: '000000' },
-    //   right: { style: 'single' as any, size: 1, color: '000000' },
-    //   insideHorizontal: { style: 'single' as any, size: 1, color: '000000' },
-    //   insideVertical: { style: 'single' as any, size: 1, color: '000000' },
-    // },
+    borders: borderCfg,
   });
 }
 
@@ -1723,7 +1774,256 @@ export const convertPdfToPowerPoint = async (
   }
 
   return (await pres.write({ outputType: "blob" })) as Blob;
+};
 
+// --- Make PPT / Images to PowerPoint ---
+
+export interface ImageToPptOptions {
+  layout?: 'wide' | 'standard'; // wide = 16:9, standard = 4:3
+  imagesPerSlide?: 1 | 2 | 4;
+  backgroundColor?: string; // hex without #, e.g. 'FFFFFF', '1E293B'
+  margin?: 'none' | 'small' | 'medium';
+  includeTitles?: boolean;
+  onProgress?: (current: number, total: number) => void;
+}
+
+export interface ImageInputItem {
+  dataUrl: string;
+  name: string;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  title?: string;
+}
+
+/**
+ * Prepares an image (applies user rotation, gets natural dimensions and clean data URL)
+ */
+const preparePptxImage = (item: ImageInputItem): Promise<{ dataUrl: string; width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const rot = (item.rotation || 0) % 360;
+      const isSwapped = rot === 90 || rot === 270;
+      const finalW = isSwapped ? img.naturalHeight : img.naturalWidth;
+      const finalH = isSwapped ? img.naturalWidth : img.naturalHeight;
+
+      if (rot === 0 && item.dataUrl.startsWith('data:image/')) {
+        resolve({ dataUrl: item.dataUrl, width: finalW, height: finalH });
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, finalW);
+      canvas.height = Math.max(1, finalH);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve({ dataUrl: item.dataUrl, width: finalW, height: finalH });
+        return;
+      }
+
+      ctx.save();
+      ctx.translate(finalW / 2, finalH / 2);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      ctx.restore();
+
+      const format = item.dataUrl.includes('image/png') ? 'image/png' : 'image/jpeg';
+      const outputDataUrl = canvas.toDataURL(format, 0.95);
+      resolve({ dataUrl: outputDataUrl, width: finalW, height: finalH });
+    };
+    img.onerror = () => reject(new Error(`Failed to load image: ${item.name}`));
+    img.src = item.dataUrl;
+  });
+};
+
+/**
+ * Converts user images into a professional, neatly adjusted PowerPoint (.pptx) presentation
+ */
+export const convertImagesToPowerPoint = async (
+  items: ImageInputItem[],
+  options: ImageToPptOptions = {}
+): Promise<Blob> => {
+  if (!items || items.length === 0) {
+    throw new Error('Please select at least one image to convert to PowerPoint.');
+  }
+
+  const PptxGenJS = await ensurePptx();
+  const pres = new PptxGenJS();
+
+  const {
+    layout = 'wide',
+    imagesPerSlide = 1,
+    backgroundColor = 'FFFFFF',
+    margin = 'small',
+    includeTitles = false,
+    onProgress
+  } = options;
+
+  // Slide Layout setup
+  const standardLayoutName = 'CUSTOM_STANDARD_4_3';
+  const wideLayoutName = 'CUSTOM_WIDE_16_9';
+  pres.defineLayout({ name: standardLayoutName, width: 10, height: 7.5 });
+  pres.defineLayout({ name: wideLayoutName, width: 13.333, height: 7.5 });
+  pres.layout = layout === 'standard' ? standardLayoutName : wideLayoutName;
+
+  const slideW = layout === 'standard' ? 10 : 13.333;
+  const slideH = 7.5;
+
+  // Padding margin
+  const pad = margin === 'none' ? 0.05 : margin === 'medium' ? 0.6 : 0.35;
+  const titleH = includeTitles ? 0.65 : 0;
+  const areaX = pad;
+  const areaY = includeTitles ? pad + titleH + 0.1 : pad;
+  const areaW = Math.max(1, slideW - 2 * pad);
+  const areaH = Math.max(1, slideH - areaY - pad);
+
+  // Title text color depending on background darkness
+  const isDarkBg = ['1E293B', '0F172A', '000000', '18181B'].includes(backgroundColor.toUpperCase());
+  const titleColor = isDarkBg ? 'F8FAFC' : '0F172A';
+
+  // Process all images to get rotated dimensions and clean dataUrls
+  const preparedImages = [];
+  for (let i = 0; i < items.length; i++) {
+    const prep = await preparePptxImage(items[i]);
+    preparedImages.push({
+      ...prep,
+      name: items[i].name,
+      title: items[i].title || items[i].name.replace(/\.[^/.]+$/, '')
+    });
+  }
+
+  // Calculate slide chunks based on imagesPerSlide
+  const chunks: typeof preparedImages[] = [];
+  for (let i = 0; i < preparedImages.length; i += imagesPerSlide) {
+    chunks.push(preparedImages.slice(i, i + imagesPerSlide));
+  }
+
+  // Build each slide
+  for (let slideIdx = 0; slideIdx < chunks.length; slideIdx++) {
+    const chunk = chunks[slideIdx];
+    const pptSlide = pres.addSlide();
+    pptSlide.background = { color: backgroundColor };
+
+    // Slide title if enabled
+    if (includeTitles) {
+      const slideTitle = chunk.length === 1 ? chunk[0].title : `Slide ${slideIdx + 1}`;
+      pptSlide.addText(slideTitle, {
+        x: pad,
+        y: pad,
+        w: areaW,
+        h: titleH,
+        fontSize: 16,
+        bold: true,
+        align: 'center',
+        color: titleColor,
+      });
+    }
+
+    if (chunk.length === 1) {
+      // 1 Image per slide - Centered Fit
+      const img = chunk[0];
+      const imgRatio = img.width / img.height;
+      const boxRatio = areaW / areaH;
+
+      let w = areaW;
+      let h = areaH;
+      if (imgRatio >= boxRatio) {
+        w = areaW;
+        h = areaW / imgRatio;
+      } else {
+        h = areaH;
+        w = areaH * imgRatio;
+      }
+
+      const x = areaX + (areaW - w) / 2;
+      const y = areaY + (areaH - h) / 2;
+
+      pptSlide.addImage({
+        data: img.dataUrl,
+        x,
+        y,
+        w,
+        h,
+      });
+    } else if (chunk.length === 2) {
+      // 2 Images per slide - Side-by-Side Dual Fit
+      const gap = 0.3;
+      const boxW = (areaW - gap) / 2;
+      const boxH = areaH;
+
+      for (let c = 0; c < chunk.length; c++) {
+        const img = chunk[c];
+        const boxX = areaX + c * (boxW + gap);
+        const imgRatio = img.width / img.height;
+        const boxRatio = boxW / boxH;
+
+        let w = boxW;
+        let h = boxH;
+        if (imgRatio >= boxRatio) {
+          w = boxW;
+          h = boxW / imgRatio;
+        } else {
+          h = boxH;
+          w = boxH * imgRatio;
+        }
+
+        const x = boxX + (boxW - w) / 2;
+        const y = areaY + (boxH - h) / 2;
+
+        pptSlide.addImage({
+          data: img.dataUrl,
+          x,
+          y,
+          w,
+          h,
+        });
+      }
+    } else {
+      // 3 or 4 Images per slide - 2x2 Grid Fit
+      const gapX = 0.3;
+      const gapY = 0.25;
+      const boxW = (areaW - gapX) / 2;
+      const boxH = (areaH - gapY) / 2;
+
+      for (let c = 0; c < chunk.length; c++) {
+        const img = chunk[c];
+        const col = c % 2;
+        const row = Math.floor(c / 2);
+        const boxX = areaX + col * (boxW + gapX);
+        const boxY = areaY + row * (boxH + gapY);
+
+        const imgRatio = img.width / img.height;
+        const boxRatio = boxW / boxH;
+
+        let w = boxW;
+        let h = boxH;
+        if (imgRatio >= boxRatio) {
+          w = boxW;
+          h = boxW / imgRatio;
+        } else {
+          h = boxH;
+          w = boxH * imgRatio;
+        }
+
+        const x = boxX + (boxW - w) / 2;
+        const y = boxY + (boxH - h) / 2;
+
+        pptSlide.addImage({
+          data: img.dataUrl,
+          x,
+          y,
+          w,
+          h,
+        });
+      }
+    }
+
+    onProgress?.(slideIdx + 1, chunks.length);
+  }
+
+  return (await pres.write({ outputType: 'blob' })) as Blob;
 };
 
 // --- Office to PDF Converters ---
@@ -1734,6 +2034,10 @@ export const convertPdfToPowerPoint = async (
 const cleanWordHtmlAndMojibake = (html: string): string => {
   if (!html) return '';
   return html
+    // Remove browser print header/footer stamps often embedded in web-saved docs
+    .replace(/<p[^>]*>\s*(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?\s+)?about:blank(?:\s+\d+\/\d+)?\s*<\/p>/gi, '')
+    .replace(/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?\s+about:blank\b/gi, '')
+    .replace(/\babout:blank(?:\s+\d+\/\d+)?\b/gi, '')
     // Replace broken wingdings/contact icon mojibake with clean unicode icons
     .replace(/Ø=ÜÞ/g, ' 📞 ')
     .replace(/Ø=Üç/g, ' ✉ ')
@@ -1754,155 +2058,412 @@ const cleanWordHtmlAndMojibake = (html: string): string => {
 };
 
 /**
+ * Remove browser print stamps (e.g. "about:blank", "15/05/2026, 14:45 about:blank") from rendered DOM
+ */
+const cleanBrowserPrintStampsFromDom = (root: HTMLElement) => {
+  const elements = root.querySelectorAll('p, div, span, header, footer, td');
+  elements.forEach((el) => {
+    const text = (el.textContent || '').trim();
+    if (
+      /^(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?\s+)?about:blank(?:\s+\d+\/\d+)?$/i.test(text) ||
+      /^about:blank$/i.test(text) ||
+      /^about:blank\s+\d+\/\d+$/i.test(text)
+    ) {
+      el.remove();
+    }
+  });
+};
+
+/**
+ * Scans upward from idealBreakY to find a clean horizontal row of whitespace
+ * (gap between lines/paragraphs/table rows) so text is never sliced in half.
+ */
+const findCleanPageBreak = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  startY: number,
+  idealBreakY: number,
+  maxLookback: number
+): number => {
+  const searchStart = Math.min(idealBreakY, ctx.canvas.height - 1);
+  const searchEnd = Math.max(startY + 40, idealBreakY - maxLookback);
+  const scanHeight = searchStart - searchEnd + 1;
+  if (scanHeight <= 0) return idealBreakY;
+
+  const imgData = ctx.getImageData(0, searchEnd, width, scanHeight);
+  const data = imgData.data;
+
+  let bestY = idealBreakY;
+  let minDarkCount = Infinity;
+
+  // Scan backwards from idealBreakY towards searchEnd to find whitespace between lines
+  for (let y = searchStart; y >= searchEnd; y--) {
+    const rowOffset = (y - searchEnd) * width * 4;
+    let darkPixels = 0;
+
+    for (let x = 0; x < width; x += 4) {
+      const idx = rowOffset + x * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+
+      if (a > 30 && (r < 240 || g < 240 || b < 240)) {
+        darkPixels++;
+      }
+    }
+
+    if (darkPixels === 0) {
+      return y;
+    }
+
+    if (darkPixels < minDarkCount) {
+      minDarkCount = darkPixels;
+      bestY = y;
+    }
+  }
+
+  return minDarkCount <= 4 ? bestY : idealBreakY;
+};
+
+/**
+ * Paginates a high-resolution canvas into A4 PDF pages with smart whitespace-aware slicing
+ */
+const paginateCanvasToPdf = (
+  canvas: HTMLCanvasElement,
+  pdf: any,
+  addedPagesCount: number
+): number => {
+  const imgWidth = 210; // A4 mm
+  const imgHeight = 297; // A4 mm
+  const canvasPageHeight = Math.round(canvas.width * (297 / 210));
+  const totalHeight = canvas.height;
+  let currentY = 0;
+  let pagesAdded = addedPagesCount;
+
+  while (currentY < totalHeight) {
+    const remainingHeight = totalHeight - currentY;
+
+    // If remaining content fits comfortably on this page (within 18% tolerance to never create a blank 5-line page)
+    if (remainingHeight <= canvasPageHeight * 1.18) {
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = canvasPageHeight;
+      const sliceCtx = sliceCanvas.getContext('2d');
+      if (sliceCtx) {
+        sliceCtx.fillStyle = '#FFFFFF';
+        sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        sliceCtx.drawImage(
+          canvas,
+          0, currentY, canvas.width, remainingHeight,
+          0, 0, sliceCanvas.width, remainingHeight
+        );
+
+        // Check if page has actual content
+        if (pagesAdded > 0) {
+          const pixelData = sliceCtx.getImageData(0, 0, sliceCanvas.width, sliceCanvas.height).data;
+          let hasContent = false;
+          for (let i = 0; i < pixelData.length; i += 64) {
+            if (pixelData[i] < 245 || pixelData[i + 1] < 245 || pixelData[i + 2] < 245) {
+              hasContent = true;
+              break;
+            }
+          }
+          if (!hasContent) break;
+        }
+
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.98);
+        if (pagesAdded > 0) pdf.addPage();
+        pdf.addImage(sliceData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+        pagesAdded++;
+      }
+      break;
+    }
+
+    // Target break point: find clean whitespace line
+    const idealBreakY = currentY + canvasPageHeight;
+    const fullCtx = canvas.getContext('2d');
+    const cleanCutY = fullCtx
+      ? findCleanPageBreak(fullCtx, canvas.width, currentY, idealBreakY, Math.round(canvasPageHeight * 0.18))
+      : idealBreakY;
+
+    const remainingAfterCut = totalHeight - cleanCutY;
+    // If what would be left for the next page is just 4-5 lines (less than 150px),
+    // do NOT create an almost-empty page; scale the full remaining height onto this page!
+    if (remainingAfterCut < 150) {
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = canvasPageHeight;
+      const sliceCtx = sliceCanvas.getContext('2d');
+      if (sliceCtx) {
+        sliceCtx.fillStyle = '#FFFFFF';
+        sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        sliceCtx.drawImage(
+          canvas,
+          0, currentY, canvas.width, totalHeight - currentY,
+          0, 0, sliceCanvas.width, canvasPageHeight
+        );
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.98);
+        if (pagesAdded > 0) pdf.addPage();
+        pdf.addImage(sliceData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+        pagesAdded++;
+      }
+      break;
+    }
+
+    const sliceHeight = cleanCutY - currentY;
+    if (sliceHeight <= 20) {
+      break;
+    }
+
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = canvas.width;
+    sliceCanvas.height = canvasPageHeight;
+    const sliceCtx = sliceCanvas.getContext('2d');
+    if (sliceCtx) {
+      sliceCtx.fillStyle = '#FFFFFF';
+      sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      sliceCtx.drawImage(
+        canvas,
+        0, currentY, canvas.width, sliceHeight,
+        0, 0, sliceCanvas.width, sliceHeight
+      );
+
+      const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.98);
+      if (pagesAdded > 0) pdf.addPage();
+      pdf.addImage(sliceData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      pagesAdded++;
+    }
+
+    currentY = cleanCutY;
+  }
+
+  return pagesAdded;
+};
+
+/**
  * Professional Word to PDF conversion with accurate formatting preservation
  */
 export const convertWordToPdf = async (file: File): Promise<Blob> => {
-  await ensureMammoth();
   await ensureJsPdf();
   await ensureHtml2canvas();
   console.log('Starting high-fidelity Word to PDF conversion for:', file.name);
 
   try {
     const arrayBuffer = await file.arrayBuffer();
+    const pdf = new _jsPDF('p', 'mm', 'a4');
+    let addedPages = 0;
 
-    const mammoth = _mammoth;
-    // 1. Extract HTML structure using mammoth with image support
-    const htmlResult = await mammoth.convertToHtml(
-      { arrayBuffer },
-      {
-        convertImage: mammoth.images.imgElement((image: any) => {
-          return image.read("base64").then((imageBuffer: string) => {
-            return {
-              src: `data:${image.contentType};base64,${imageBuffer}`
-            };
-          });
-        })
-      }
-    );
-
-    const rawHtml = htmlResult.value || '';
-    const cleanedHtml = cleanWordHtmlAndMojibake(rawHtml);
-    const safeHtml = sanitizeHtml(cleanedHtml);
-
-    // If DOM is available, render with high-DPI HTML2Canvas for 1:1 Word layout fidelity
     if (typeof document !== 'undefined') {
-      const renderContainer = document.createElement('div');
-      renderContainer.id = 'word-pdf-staging-container';
-      renderContainer.style.position = 'fixed';
-      renderContainer.style.left = '-9999px';
-      renderContainer.style.top = '0';
-      renderContainer.style.width = '800px'; // standard A4 display width
-      renderContainer.style.minHeight = '1130px';
-      renderContainer.style.padding = '48px 56px';
-      renderContainer.style.boxSizing = 'border-box';
-      renderContainer.style.backgroundColor = '#FFFFFF';
-      renderContainer.style.color = '#0f172a';
-      renderContainer.style.fontFamily = "'Inter', 'Calibri', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif";
-      renderContainer.style.fontSize = '13.5px';
-      renderContainer.style.lineHeight = '1.42';
-      renderContainer.style.letterSpacing = 'normal';
-      renderContainer.style.wordBreak = 'break-word';
-      (renderContainer.style as any).webkitFontSmoothing = 'antialiased';
+      // ── STRATEGY 1: DOCX-PREVIEW (Primary OpenXML Layout Engine) ──
+      // Parses native OpenXML docx styling, tables, column widths, font sizes, margins, alignments
+      let docxRenderSuccess = false;
+      const docxContainer = document.createElement('div');
+      docxContainer.id = 'docx-preview-staging';
+      docxContainer.style.position = 'fixed';
+      docxContainer.style.left = '-9999px';
+      docxContainer.style.top = '0';
+      docxContainer.style.width = '794px'; // standard A4 96 DPI width
+      docxContainer.style.backgroundColor = '#FFFFFF';
+      docxContainer.style.color = '#0f172a';
+      docxContainer.style.fontFamily = "'Inter', 'Calibri', 'Segoe UI', -apple-system, Roboto, sans-serif";
+      (docxContainer.style as any).webkitFontSmoothing = 'antialiased';
 
-      // Insert styles for headings, lists, tables, and links
-      renderContainer.innerHTML = `
+      // Global style overrides for pristine clean printing
+      const customStyle = document.createElement('style');
+      customStyle.textContent = `
+        #docx-preview-staging .docx-wrapper {
+          background: transparent !important;
+          padding: 0 !important;
+        }
+        #docx-preview-staging .docx-wrapper > section.docx {
+          box-shadow: none !important;
+          margin: 0 auto 0 auto !important;
+          background: #FFFFFF !important;
+          border: none !important;
+          box-sizing: border-box !important;
+        }
+        #docx-preview-staging p {
+          margin-top: 1px !important;
+          margin-bottom: 2.5px !important;
+          line-height: 1.25 !important;
+        }
+        #docx-preview-staging table {
+          border-collapse: collapse !important;
+          margin-top: 2px !important;
+          margin-bottom: 3px !important;
+        }
+        #docx-preview-staging td, #docx-preview-staging th {
+          vertical-align: middle !important;
+          padding: 3px 6px !important;
+          line-height: 1.2 !important;
+        }
+      `;
+      docxContainer.appendChild(customStyle);
+      document.body.appendChild(docxContainer);
+
+      try {
+        const docxPreview = await ensureDocxPreview();
+        await docxPreview.renderAsync(arrayBuffer, docxContainer, docxContainer, {
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          breakPages: true,
+          ignoreLastRenderedPageBreak: false, // Respect Word's native page breaks
+          renderHeaders: true,
+          renderFooters: true,
+        });
+
+        cleanBrowserPrintStampsFromDom(docxContainer);
+
+        const sections = Array.from(docxContainer.querySelectorAll('section.docx')) as HTMLElement[];
+        if (sections.length > 0) {
+          // When Word has multiple pages/sections, each section corresponds to EXACTLY 1 PDF page!
+          if (sections.length > 1) {
+            for (let i = 0; i < sections.length; i++) {
+              const section = sections[i];
+              const sectionCanvas = await _html2canvas(section, {
+                scale: 2.5, // Crisp 240 DPI
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#FFFFFF',
+                windowWidth: 794,
+              });
+
+              const canvasData = sectionCanvas.toDataURL('image/jpeg', 0.98);
+              if (addedPages > 0) pdf.addPage();
+              pdf.addImage(canvasData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+              addedPages++;
+            }
+          } else {
+            // Exactly 1 section
+            const section = sections[0];
+            const sectionCanvas = await _html2canvas(section, {
+              scale: 2.5,
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#FFFFFF',
+              windowWidth: 794,
+            });
+
+            const canvasPageHeight = Math.round(sectionCanvas.width * (297 / 210));
+            // If it fits on 1 page (allow 15% overflow tolerance to avoid 5-line spillover)
+            if (sectionCanvas.height <= canvasPageHeight * 1.15) {
+              const canvasData = sectionCanvas.toDataURL('image/jpeg', 0.98);
+              pdf.addImage(canvasData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+              addedPages = 1;
+            } else {
+              addedPages = paginateCanvasToPdf(sectionCanvas, pdf, 0);
+            }
+          }
+          docxRenderSuccess = addedPages > 0;
+        }
+      } catch (previewErr) {
+        console.warn('docx-preview rendering failed, falling back to mammoth engine:', previewErr);
+      } finally {
+        if (docxContainer.parentNode) {
+          docxContainer.parentNode.removeChild(docxContainer);
+        }
+      }
+
+      if (docxRenderSuccess) {
+        return pdf.output('blob');
+      }
+
+      // ── STRATEGY 2: MAMMOTH HTML WITH SMART PAGINATION (Fallback) ──
+      await ensureMammoth();
+      const mammoth = _mammoth;
+      const htmlResult = await mammoth.convertToHtml(
+        { arrayBuffer },
+        {
+          convertImage: mammoth.images.imgElement((image: any) => {
+            return image.read("base64").then((imageBuffer: string) => {
+              return {
+                src: `data:${image.contentType};base64,${imageBuffer}`
+              };
+            });
+          })
+        }
+      );
+
+      const rawHtml = htmlResult.value || '';
+      const cleanedHtml = cleanWordHtmlAndMojibake(rawHtml);
+      const safeHtml = sanitizeHtml(cleanedHtml);
+
+      const mammothContainer = document.createElement('div');
+      mammothContainer.id = 'word-pdf-staging-container';
+      mammothContainer.style.position = 'fixed';
+      mammothContainer.style.left = '-9999px';
+      mammothContainer.style.top = '0';
+      mammothContainer.style.width = '794px'; // Exact A4 width (96 DPI)
+      mammothContainer.style.minHeight = '1123px'; // Exact A4 height
+      mammothContainer.style.padding = '44px 50px';
+      mammothContainer.style.boxSizing = 'border-box';
+      mammothContainer.style.backgroundColor = '#FFFFFF';
+      mammothContainer.style.color = '#0f172a';
+      mammothContainer.style.fontFamily = "'Inter', 'Calibri', 'Segoe UI', -apple-system, Roboto, sans-serif";
+      mammothContainer.style.fontSize = '11.5px';
+      mammothContainer.style.lineHeight = '1.32';
+      (mammothContainer.style as any).webkitFontSmoothing = 'antialiased';
+
+      mammothContainer.innerHTML = `
         <style>
-          #word-pdf-staging-container h1 { font-size: 20px; font-weight: 800; color: #0f172a; margin: 12px 0 4px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 3px; letter-spacing: -0.01em; }
-          #word-pdf-staging-container h2 { font-size: 16px; font-weight: 700; color: #1e293b; margin: 10px 0 3px 0; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px; }
-          #word-pdf-staging-container h3 { font-size: 14px; font-weight: 700; color: #334155; margin: 8px 0 2px 0; }
-          #word-pdf-staging-container p { margin: 0 0 6px 0; line-height: 1.45; color: #1e293b; }
+          #word-pdf-staging-container h1 { font-size: 15px; font-weight: 700; color: #0f172a; margin: 8px 0 3px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; }
+          #word-pdf-staging-container h2 { font-size: 13.5px; font-weight: 700; color: #1e293b; margin: 6px 0 2px 0; }
+          #word-pdf-staging-container h3 { font-size: 12px; font-weight: 600; color: #334155; margin: 5px 0 2px 0; }
+          #word-pdf-staging-container p { margin: 0 0 4px 0; line-height: 1.35; color: #1e293b; }
           #word-pdf-staging-container strong, #word-pdf-staging-container b { font-weight: 700; color: #0f172a; }
-          #word-pdf-staging-container ul, #word-pdf-staging-container ol { margin: 4px 0 8px 0; padding-left: 20px; }
-          #word-pdf-staging-container li { margin-bottom: 3px; line-height: 1.4; color: #1e293b; }
-          #word-pdf-staging-container table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
-          #word-pdf-staging-container th, #word-pdf-staging-container td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; }
+          #word-pdf-staging-container ul, #word-pdf-staging-container ol { margin: 4px 0 6px 0; padding-left: 18px; }
+          #word-pdf-staging-container li { margin-bottom: 2px; line-height: 1.32; color: #1e293b; }
+          #word-pdf-staging-container table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 10.5px; line-height: 1.25; }
+          #word-pdf-staging-container th, #word-pdf-staging-container td { border: 1px solid #94a3b8; padding: 4px 6px; text-align: left; vertical-align: middle; }
+          #word-pdf-staging-container th { background-color: #f8fafc; font-weight: 600; }
           #word-pdf-staging-container a { color: #2563eb; text-decoration: underline; word-break: break-all; }
           #word-pdf-staging-container img { max-width: 100%; height: auto; display: inline-block; margin: 4px 0; }
         </style>
         <div>${safeHtml}</div>
       `;
 
-      document.body.appendChild(renderContainer);
+      cleanBrowserPrintStampsFromDom(mammothContainer);
+      document.body.appendChild(mammothContainer);
 
       try {
-        const canvas = await _html2canvas(renderContainer, {
-          scale: 3.0, // Ultra High-DPI 300 DPI print quality
+        const canvas = await _html2canvas(mammothContainer, {
+          scale: 2.5,
           useCORS: true,
           logging: false,
           backgroundColor: '#FFFFFF',
-          windowWidth: 800
+          windowWidth: 794,
         });
 
-        const imgWidth = 210; // A4 mm
-        const imgHeight = 297; // A4 mm
         const canvasPageHeight = Math.round(canvas.width * (297 / 210));
-        const totalCanvasHeight = canvas.height;
-        const rawPages = Math.max(1, Math.ceil(totalCanvasHeight / canvasPageHeight));
-
-        const pdf = new _jsPDF('p', 'mm', 'a4');
-        let addedPages = 0;
-
-        for (let page = 0; page < rawPages; page++) {
-          const srcY = page * canvasPageHeight;
-          const sliceHeight = Math.min(canvasPageHeight, totalCanvasHeight - srcY);
-
-          if (sliceHeight <= 0) break;
-
-          // Create slice canvas
-          const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = canvasPageHeight;
-          const sliceCtx = sliceCanvas.getContext('2d');
-
-          if (sliceCtx) {
-            sliceCtx.fillStyle = '#FFFFFF';
-            sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-            sliceCtx.drawImage(
-              canvas,
-              0, srcY, canvas.width, sliceHeight,
-              0, 0, sliceCanvas.width, sliceHeight
-            );
-
-            // Check if page slice has actual content or is just trailing whitespace
-            if (page > 0) {
-              const pixelData = sliceCtx.getImageData(0, 0, sliceCanvas.width, Math.min(sliceHeight, sliceCanvas.height)).data;
-              let hasContent = false;
-              for (let i = 0; i < pixelData.length; i += 64) {
-                // If any pixel is not pure white
-                if (pixelData[i] < 248 || pixelData[i + 1] < 248 || pixelData[i + 2] < 248) {
-                  hasContent = true;
-                  break;
-                }
-              }
-              if (!hasContent) continue; // Skip blank trailing page
-            }
-
-            const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.98);
-            if (addedPages > 0) pdf.addPage();
-            pdf.addImage(sliceData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-            addedPages++;
-          }
+        if (canvas.height <= canvasPageHeight * 1.15) {
+          const canvasData = canvas.toDataURL('image/jpeg', 0.98);
+          pdf.addImage(canvasData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+          addedPages = 1;
+        } else {
+          addedPages = paginateCanvasToPdf(canvas, pdf, addedPages);
         }
-
-        if (addedPages === 0) {
-          // Fallback if all slices somehow skipped
-          const sliceData = canvas.toDataURL('image/jpeg', 0.98);
-          pdf.addImage(sliceData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-        }
-
-        return pdf.output('blob');
       } finally {
-        if (renderContainer.parentNode) {
-          renderContainer.parentNode.removeChild(renderContainer);
+        if (mammothContainer.parentNode) {
+          mammothContainer.parentNode.removeChild(mammothContainer);
         }
+      }
+
+      if (addedPages > 0) {
+        return pdf.output('blob');
       }
     }
 
     // Fallback if no DOM available
-    const pdf = new _jsPDF('p', 'mm', 'a4');
-    const lines = pdf.splitTextToSize(cleanedHtml.replace(/<[^>]*>/g, ' '), 170);
+    await ensureMammoth();
+    const htmlResult = await _mammoth.convertToHtml({ arrayBuffer });
+    const cleanedHtml = cleanWordHtmlAndMojibake(htmlResult.value || '');
+    const plainText = cleanedHtml.replace(/<[^>]*>/g, ' ');
+    const lines = pdf.splitTextToSize(plainText, 170);
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(11);
+    pdf.setFontSize(10.5);
     let y = 20;
     for (const line of lines) {
       if (y > 275) {
@@ -1910,7 +2471,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
         y = 20;
       }
       pdf.text(line, 20, y);
-      y += 6;
+      y += 5.5;
     }
     return pdf.output('blob');
 

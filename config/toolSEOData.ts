@@ -704,7 +704,7 @@ const toolSEOData: Record<string, ToolSEOData> = {
   },
 
   "/summarizer-qa": {
-    intro: "Summarize PDF with AI and ask questions from your document instantly. LAK PDF AI Summarizer reads your PDF content and generates a concise summary with key points. Ask follow-up questions to extract specific information. Perfect for long research papers, reports, legal documents, and textbooks. Instead of reading 50 pages, get the main points in seconds and then drill down into specific topics.",
+    intro: "Summarize PDF and documents with AI and ask questions from your document instantly. LAK PDF AI Summary reads your document content and generates a concise summary covering all main topics with key points. Ask follow-up questions to extract specific information. Perfect for long research papers, reports, legal documents, and textbooks. Instead of reading 50 pages, get the main points in seconds and then drill down into specific topics.",
     howToUse: [
       { step: "Upload your PDF", detail: "Select a PDF to summarize. Text is extracted from all pages." },
       { step: "Get AI summary", detail: "AI generates a concise summary with key points." },
@@ -755,7 +755,7 @@ const toolSEOData: Record<string, ToolSEOData> = {
       { question: "Is this free?", answer: "Yes, available for free on LAK PDF." },
     ],
     internalLinks: [
-      { label: "AI Summarizer", to: "/summarizer-qa" },
+      { label: "AI Summary", to: "/summarizer-qa" },
       { label: "AI Interview Generator", to: "/ai-interview-generator" },
       { label: "OCR PDF", to: "/ocr-pdf" },
       { label: "PDF to Text", to: "/pdf-to-text" },
@@ -785,7 +785,7 @@ const toolSEOData: Record<string, ToolSEOData> = {
       { question: "Is this free?", answer: "Yes, completely free." },
     ],
     internalLinks: [
-      { label: "AI Summarizer", to: "/summarizer-qa" },
+      { label: "AI Summary", to: "/summarizer-qa" },
       { label: "AI PDF to MCQ", to: "/ai-pdf-to-mcq" },
       { label: "PDF to Word", to: "/pdf-to-word" },
       { label: "Compress PDF", to: "/compress" },
@@ -905,10 +905,148 @@ const toolSEOData: Record<string, ToolSEOData> = {
     internalLinks: [
       { label: "PDF to Word", to: "/pdf-to-word" },
       { label: "OCR PDF", to: "/ocr-pdf" },
-      { label: "AI Summarizer", to: "/summarizer-qa" },
+      { label: "AI Summary", to: "/summarizer-qa" },
       { label: "Compress PDF", to: "/compress" },
     ],
     lastUpdated: "2026-08-14",
+  },
+
+  "/make-ppt": {
+    intro: "Make PPT online free in seconds with LAK PDF's high-speed Images to PowerPoint converter. Whether you need to turn photo albums into a professional pitch deck, compile project screenshots, or assemble an academic presentation from scanned notes, this tool automatically arranges JPG, PNG, WEBP, and GIF images into cleanly formatted slides. Unlike generic converters that stretch or squash photos, our intelligent bounding-box algorithm preserves the exact native aspect ratio of every portrait, landscape, or square picture. Customize your slides with modern 16:9 widescreen or classic 4:3 standard layouts, arrange 1, 2, or 4 images per slide, select custom background themes, and add slide titles with zero effort. The entire conversion executes locally inside your web browser using client-side Web APIs—meaning zero file uploads to external servers, guaranteed privacy, no watermarks, and no signups or software installation required. Download your fully editable .pptx presentation instantly, ready for Microsoft PowerPoint, Google Slides, Apple Keynote, and LibreOffice Impress.",
+    howToUse: [
+      { step: "Upload Photos", detail: "Click 'Choose Images' or drag and drop JPG, PNG, WEBP, GIF, or SVG pictures from your PC, Mac, or phone." },
+      { step: "Arrange & Organize", detail: "Reorder images easily using arrows, rotate portrait/landscape photos by 90°, and add optional custom slide titles." },
+      { step: "Customize Slide Layout", detail: "Select 16:9 Widescreen or 4:3 Standard format, and choose 1 image per slide, 2 side-by-side, or a 4-photo grid." },
+      { step: "Pick Theme & Margins", detail: "Choose slide background (Crisp White, Dark Slate, or Soft Gray) and select clean presentation margins." },
+      { step: "Convert & Download PPTX", detail: "Click 'Convert to PowerPoint (.pptx)' to generate your presentation in seconds and download it directly." },
+    ],
+    benefits: [
+      { title: "Smart Aspect Ratio Auto-Fit", description: "Evaluates native dimensions of every image to prevent stretching, squishing, or distortion on any screen size.", icon: "target" },
+      { title: "100% Client-Side Privacy", description: "All conversion runs strictly in your local browser sandbox. Your photos are never uploaded or stored on any server.", icon: "shield" },
+      { title: "Multi-Layouts & Grid Modes", description: "Display 1 photo centered, 2 photos side-by-side for comparisons, or 4 photos in an organized 2x2 presentation grid.", icon: "layers" },
+      { title: "Universal PPTX Compatibility", description: "Produces standard .pptx files fully compatible with Microsoft Office 365, PowerPoint, Google Slides, and Apple Keynote.", icon: "download" },
+      { title: "Ultra Fast & Free", description: "Convert dozens of high-resolution images in seconds without daily limits, watermarks, credit cards, or account signups.", icon: "zap" },
+      { title: "High-Resolution Output", description: "Preserves the original sharpness, vibrant colors, and clarity of your high-resolution photos in the output deck.", icon: "check" },
+    ],
+    faqs: [
+      { question: "How does LAK PDF prevent images from getting stretched or squished?", answer: "Most basic converters force images to fill 100% of the slide dimensions, distorting portrait and square pictures. LAK PDF calculates each photo's exact aspect ratio and fits it within an optimal bounding box, perfectly centering it with proportional margins." },
+      { question: "Can I open and edit the downloaded file in Microsoft PowerPoint and Google Slides?", answer: "Yes! The exported presentation is saved in the industry-standard OpenXML (.pptx) format. You can open, edit, animate, and present it in Microsoft PowerPoint, Google Slides, Apple Keynote, and LibreOffice Impress without conversion issues." },
+      { question: "Are my uploaded photos secure and private?", answer: "100% private. Unlike other web converters that transmit your files to cloud servers, LAK PDF processes every image directly in your browser using local JavaScript and Web APIs. Your images never leave your device." },
+      { question: "Can I put multiple photos on a single PowerPoint slide?", answer: "Yes. You can choose between 1 Photo per slide (Full / Centered showcase), 2 Photos per slide (Side-by-side dual layout), or 4 Photos per slide (2x2 grid layout)." },
+      { question: "Can I convert photos from my mobile phone (iPhone or Android)?", answer: "Yes. LAK PDF is fully responsive. You can select photos directly from your mobile camera roll or gallery, convert them to a .pptx presentation, and share immediately via WhatsApp, email, or Google Drive." },
+      { question: "Is there a limit on how many images I can convert to PPT?", answer: "There is no hard limit on image count. You can upload dozens of photos at once. For best performance on lower-powered devices, converting batches of up to 50-100 high-res photos at a time is recommended." },
+      { question: "Can I add slide titles or captions to my photos?", answer: "Yes! You can type custom slide titles or captions for each photo in the interactive organizer before clicking convert, and they will automatically appear styled above your images." },
+      { question: "Does LAK PDF add any watermark to the generated presentation?", answer: "Never. LAK PDF never adds watermarks, branding, or ads to your generated presentation files. You get clean, professional slides ready for client meetings and academic submissions." },
+    ],
+    internalLinks: [
+      { label: "JPG to PDF", to: "/jpg-to-pdf" },
+      { label: "PDF to PowerPoint", to: "/pdf-to-powerpoint" },
+      { label: "PowerPoint to PDF", to: "/powerpoint-to-pdf" },
+      { label: "PDF to Word", to: "/pdf-to-word" },
+      { label: "Compress PDF", to: "/compress" },
+    ],
+    lastUpdated: "2026-09-09",
+  },
+
+  "/img-to-ppt": {
+    intro: "Convert images to PowerPoint (PPTX) online free with LAK PDF. Turn your JPG, PNG, WEBP, and GIF photos into stunning, beautifully aligned presentation slides in seconds. With smart aspect ratio detection, your photos will never stretch or distort. Choose between 16:9 widescreen or 4:3 standard layouts, set 1, 2, or 4 photos per slide, adjust background colors, and add custom slide titles. Everything runs 100% locally in your browser for total privacy and speed without watermarks or signups.",
+    howToUse: [
+      { step: "Upload Photos", detail: "Drag and drop or select multiple JPG, PNG, or WEBP photos to convert." },
+      { step: "Arrange & Edit", detail: "Reorder images, rotate slides, and add optional titles or captions." },
+      { step: "Choose Layout", detail: "Select 16:9 widescreen or 4:3 standard, and pick 1, 2, or 4 images per slide." },
+      { step: "Download PPTX", detail: "Click Convert to PowerPoint and download your editable presentation file instantly." },
+    ],
+    benefits: [
+      { title: "Zero Distortion", description: "Smart aspect ratio auto-fit keeps every photo perfectly proportioned.", icon: "target" },
+      { title: "100% Private & Free", description: "Converted right inside your web browser. No files are uploaded to any server.", icon: "shield" },
+      { title: "Multi-Layouts", description: "Choose 16:9 Widescreen or 4:3 Standard with single, side-by-side, or 2x2 grid views.", icon: "layers" },
+      { title: "Instant PPTX", description: "Fully compatible with Microsoft PowerPoint, Google Slides, Apple Keynote, and LibreOffice.", icon: "download" },
+    ],
+    faqs: [
+      { question: "Can I open the generated PPTX in Microsoft PowerPoint and Google Slides?", answer: "Yes! The exported presentation is a standard .pptx file that opens seamlessly in Microsoft PowerPoint, Google Slides, Keynote, and LibreOffice Impress." },
+      { question: "Will my images lose quality or get stretched?", answer: "No. Our intelligent auto-fit algorithm calculates optimal bounding boxes preserving exact aspect ratios, guaranteeing crisp clarity without stretching or cropping." },
+      { question: "Are my uploaded photos safe and private?", answer: "Absolutely. All processing happens entirely inside your browser using client-side Web APIs. Your images are never transmitted or saved to any cloud server." },
+      { question: "Can I customize slide background color and titles?", answer: "Yes, you can choose White, Dark Slate, or Soft Gray backgrounds, and enable slide titles to automatically caption slides with custom names." },
+    ],
+    internalLinks: [
+      { label: "JPG to PDF", to: "/jpg-to-pdf" },
+      { label: "PDF to Word", to: "/pdf-to-word" },
+      { label: "Compress PDF", to: "/compress" },
+      { label: "Merge PDF", to: "/merge" },
+    ],
+    lastUpdated: "2026-09-09",
+  },
+
+  "/passport-photo-maker": {
+    intro: "Create official passport size photos online for free in seconds with LAK PDF's high-precision Passport Photo Maker. Whether you need standard 3.5 × 4.5 cm photos for Indian Passports, UPSC, SSC, Railways, Banking, and State PSC forms, or 2 × 2 inch photos for US Visa (DS-160) and Green Cards, our smart biometric face alignment guide helps you position your eyes, head, and chin perfectly. Customize background colors to pure studio white, light blue, or soft gray, apply scissor cutting lines, and arrange multiple photos on standard 4×6 inch photo paper (6 to 8 photos) or A4 sheets (32 photos) with 1-click printable PDF export. For online government job portals that enforce strict upload limits, use our dedicated 20 KB to 50 KB optimizer to guarantee your photo uploads without rejection. All processing happens 100% locally in your web browser—no signups, no watermarks, and complete privacy for your photos.",
+    howToUse: [
+      { step: "Upload Any Photo", detail: "Click 'Select Photo' or drag and drop your selfie or portrait picture from your phone or computer." },
+      { step: "Align Face with Biometric Guide", detail: "Drag the photo so your eyes align with the blue line and your head fits comfortably inside the amber oval." },
+      { step: "Choose Country Standard", detail: "Select from India Passport (3.5×4.5 cm), US Visa (2×2 in), PAN Card (2.5×3.5 cm), or custom dimensions." },
+      { step: "Customize Styling", detail: "Pick your background color (White, Light Blue, or Light Gray) and choose optional scissor cutting borders." },
+      { step: "Download Single or Print Sheet", detail: "Download standalone 300 DPI photos, 20-50 KB exam-optimized files, or full 4x6 / A4 printable sheets." },
+    ],
+    benefits: [
+      { title: "Biometric Face & Eye Guide", description: "Interactive overlay ensures your head height, eye level, and chin position comply with official standards.", icon: "eye" },
+      { title: "100% Client-Side Privacy", description: "Every transformation happens in your browser canvas. Your personal portrait is never uploaded to any server.", icon: "shield" },
+      { title: "Indian & Global Standards", description: "Pre-configured presets for India Passport, UPSC, SSC, PAN Card, US Visa (2x2), Schengen Visa, and Canada.", icon: "globe" },
+      { title: "Printable 4x6 & A4 Sheets", description: "Instantly arrange 6, 8, or 32 photos with dashed scissor cutting guides ready for local photo lab or home printing.", icon: "layers" },
+      { title: "Govt Exam Optimizer (20-50 KB)", description: "1-Click compression guarantees file size between 20 KB and 50 KB required by UPSC, SSC, and state portals.", icon: "target" },
+      { title: "High-Resolution 300 DPI", description: "Outputs crisp, studio-quality 300 DPI high-resolution JPEG, PNG, and print-ready PDF files.", icon: "download" },
+    ],
+    faqs: [
+      { question: "What is the standard passport photo size in India?", answer: "The official Indian passport and government exam (UPSC, SSC, State PSC) photo size is 35 mm × 45 mm (3.5 cm × 4.5 cm). The face should occupy 70% to 80% of the photograph with a clear white or light background." },
+      { question: "How do I make a 20 KB to 50 KB photo for UPSC / SSC online forms?", answer: "Simply upload your photo, align your face, and click 'Govt Form (20–50 KB)'. LAK PDF automatically calculates optimal compression to guarantee the file size falls precisely between 20 KB and 50 KB while maintaining facial sharpness." },
+      { question: "How many passport photos fit on a 4x6 inch photo paper?", answer: "A standard 4×6 inch (10 × 15 cm) photo sheet fits 6 to 8 passport photos (3.5 × 4.5 cm) with balanced margins and scissor cutting dashed lines." },
+      { question: "Can I print the generated sheet at any local photo studio?", answer: "Yes! Download the 4×6 inch JPG or A4 Printable PDF, transfer it to your phone or pen drive, and ask any photo studio to print on 4×6 photo paper (or print at home at 100% actual size)." },
+      { question: "Can I use a phone selfie for my passport photo?", answer: "Yes. Stand 1–2 meters away from a plain white or light wall, facing a window with bright daylight. Take a straight-facing photo with both ears visible and a neutral expression, then crop and align it using our biometric guide." },
+      { question: "Are my photos uploaded or stored on your servers?", answer: "Never. All image cropping, biometric overlays, sheet tiling, and compression execute 100% client-side inside your browser. Your photos never leave your device." },
+      { question: "What is the US Visa photo specification?", answer: "US Visas (DS-160, Tourist, Student, H-1B) and Green Cards require a 2 × 2 inch (51 mm × 51 mm, 600 × 600 px at 300 DPI) square photo on a plain white background." },
+      { question: "Does LAK PDF charge any money or put watermarks on passport photos?", answer: "No. LAK PDF is 100% free with no watermarks, no limits, and no account sign-up required." },
+    ],
+    internalLinks: [
+      { label: "Compress Image to 50KB", to: "/advance-compress-img" },
+      { label: "Compress Image", to: "/compress-img" },
+      { label: "JPG to PDF", to: "/jpg-to-pdf" },
+      { label: "Compress PDF", to: "/compress" },
+      { label: "Make PPT from Images", to: "/make-ppt" },
+    ],
+    lastUpdated: "2026-09-09",
+  },
+
+  "/redact-pdf": {
+    intro: "Redact PDF online for free with LAK PDF's high-security permanent redaction engine. Permanently blackout, whiteout, and erase confidential information including Aadhaar numbers, PAN cards, bank account details, telephone numbers, home addresses, and signatures from your PDF files. Unlike basic PDF viewers that only overlay a black graphic on top of the text—leaving the confidential text copyable and searchable—LAK PDF uses true pixel-level sanitization. Redacted areas are permanently baked into high-resolution 300 DPI pixels, completely eliminating the underlying character codes from the file's binary stream. Use our interactive canvas to draw custom redaction boxes, or search keywords across all pages with 1-click 'Redact All Matches'. You can also scrub document metadata (author names, software tags, creation dates) for complete anonymity. All processing happens 100% locally in your web browser—no signups, no watermarks, and zero file uploads to external servers.",
+    howToUse: [
+      { step: "Upload Your PDF", detail: "Click 'Select PDF File' or drag and drop your document into the secure browser viewer." },
+      { step: "Choose Redaction Style", detail: "Select between solid Blackout (pure black) or Whiteout (pure white) redaction boxes." },
+      { step: "Draw or Search to Redact", detail: "Click and drag over sensitive areas with your cursor, or use keyword search to find and blackout all occurrences instantly." },
+      { step: "Scrub Metadata (Optional)", detail: "Keep 'Scrub Metadata' checked to automatically delete author names, creator tags, and modification timestamps." },
+      { step: "Download Redacted PDF", detail: "Click 'Apply & Download Redacted PDF' to download your permanently sanitized, unrecoverable document." },
+    ],
+    benefits: [
+      { title: "True Pixel Sanitization", description: "Bakes blackout boxes directly into 300 DPI image pixels so confidential text cannot be copied, selected, or recovered.", icon: "shield" },
+      { title: "100% Client-Side Privacy", description: "All document redaction runs locally in your browser memory. Sensitive bank and identity files never leave your computer.", icon: "lock" },
+      { title: "Search & Auto-Redact", description: "Search for specific keywords, employee names, or account numbers and blackout every match across all pages in 1 click.", icon: "target" },
+      { title: "Metadata Scrubbing", description: "Erases hidden document metadata (author, company, software, creation dates) for maximum privacy and anonymity.", icon: "eye" },
+      { title: "Blackout & Whiteout", description: "Choose solid black boxes for official redactions or clean whiteout boxes for seamless document editing.", icon: "layers" },
+      { title: "Universal PDF Compatibility", description: "Generated sanitized PDFs open cleanly in Adobe Acrobat, Google Chrome, Apple Preview, and mobile PDF viewers.", icon: "check" },
+    ],
+    faqs: [
+      { question: "Can someone remove the black boxes and see my hidden text?", answer: "No! LAK PDF uses true permanent pixel redaction. The underlying text characters and vector paths in redacted regions are physically destroyed and replaced with solid pixels during rendering. No PDF viewer, text selector, or inspector can recover the redacted data." },
+      { question: "How does LAK PDF differ from drawing black shapes in other editors?", answer: "Most standard PDF editors only add a black shape on top of the text without removing the text stream, meaning anyone can press Ctrl+A, copy the text, and paste it into a text file. LAK PDF bakes the redaction into the pixel layer, eliminating the text completely." },
+      { question: "Can I redact sensitive keywords across multiple pages automatically?", answer: "Yes. Type any keyword, phone number, or name into the Search bar, and click 'Redact All'. The tool will locate every match across all pages and create redaction boxes automatically." },
+      { question: "What is metadata scrubbing in PDF redaction?", answer: "PDF files often contain hidden metadata such as the author's real name, operating system, software used, and edit timestamps. LAK PDF's metadata scrubbing feature erases all these details for complete anonymity." },
+      { question: "Are my confidential files uploaded to any server?", answer: "Never. All processing is 100% client-side using WebAssembly and HTML5 Canvas inside your browser. Your sensitive files never leave your device." },
+      { question: "Is this redaction tool free to use?", answer: "Yes, LAK PDF Redact is 100% free with no file size limits, no watermarks, and no sign-up required." },
+    ],
+    internalLinks: [
+      { label: "Protect PDF", to: "/protect" },
+      { label: "Sign PDF Online", to: "/sign-pdf" },
+      { label: "PDF Editor", to: "/pdf-editor" },
+      { label: "Compress PDF", to: "/compress" },
+      { label: "Passport Photo Maker", to: "/passport-photo-maker" },
+    ],
+    lastUpdated: "2026-09-09",
   },
 };
 

@@ -48,7 +48,7 @@ const toolSeeds: ToolGuideSeed[] = [
   { name: "OCR PDF", path: "/ocr-pdf", category: "PDF Tools", tags: ["ocr", "extract text", "scan"], actionLabel: "Extract Text" },
   { name: "Compare PDF", path: "/compare-pdf", category: "PDF Tools", tags: ["compare", "differences", "pdf"], actionLabel: "Compare PDF" },
   { name: "Delete Pages", path: "/delete-page", category: "PDF Core", tags: ["delete pages", "remove", "pdf"], actionLabel: "Delete Pages" },
-  { name: "AI Summarizer", path: "/summarizer-qa", category: "AI Tools", tags: ["summary", "qa", "ai"], actionLabel: "Generate Summary" },
+  { name: "AI Summary", path: "/summarizer-qa", category: "AI Tools", tags: ["summary", "qa", "ai"], actionLabel: "Generate Summary" },
   { name: "Detect Duplicates", path: "/detect-duplicates", category: "PDF Core", tags: ["duplicates", "cleanup", "pdf"], actionLabel: "Detect Duplicates" },
   { name: "AI PDF to MCQ", path: "/ai-pdf-to-mcq", category: "AI Tools", tags: ["mcq", "questions", "exam"], actionLabel: "Generate MCQs" },
   { name: "PDF Editor", path: "/pdf-editor", category: "PDF Tools", tags: ["edit", "annotate", "pdf"], actionLabel: "Open PDF Editor" },

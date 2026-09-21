@@ -231,6 +231,9 @@ class ApiKeyManager {
       console.warn(
         `[AI KeyPool] Key ${entry.masked} (${entry.provider}) invalid or expired (${statusCode}). Disabled for 24h. Auto-switched to backup key.`
       );
+    } else if (statusCode === 400) {
+      // Bad Request (e.g. invalid parameter/payload): not an API key issue, do not cooldown
+      return;
     } else {
       // General error: brief 5s cooldown
       entry.cooldownUntil = now + 5_000;
@@ -356,20 +359,27 @@ export async function askAI(prompt, options = {}) {
 
   const maxOutputTokens = clampOutputTokens(options.maxOutputTokens);
   const requireJson = Boolean(options.requireJson);
-  const systemPrompt = typeof options.systemPrompt === "string" ? options.systemPrompt : "";
-  const userPrompt = typeof options.userPrompt === "string" ? options.userPrompt : prompt;
+  const systemPrompt = typeof options.systemPrompt === "string" ? options.systemPrompt.trim() : "";
+  const userPrompt =
+    typeof options.userPrompt === "string" && options.userPrompt.trim()
+      ? options.userPrompt.trim()
+      : typeof prompt === "string"
+        ? prompt.trim()
+        : "";
   const temperature = clampTemperature(options.temperature ?? 0.7);
   const customApiKey = String(options.apiKey || "").trim();
   const stop = Array.isArray(options.stop)
     ? options.stop.map((s) => String(s || "").trim()).filter(Boolean).slice(0, 4)
     : [];
 
+  const effectiveUserContent = userPrompt || (typeof prompt === "string" ? prompt.trim() : "") || "Please respond to this request.";
+
   /** @type {import("openai/resources/chat/completions").ChatCompletionMessageParam[]} */
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
   }
-  messages.push({ role: "user", content: userPrompt });
+  messages.push({ role: "user", content: effectiveUserContent });
 
   // 1. If user supplied their own custom API key (from frontend modal), try it first with highest priority
   if (customApiKey) {

@@ -610,8 +610,10 @@ const GlobalErrorHandler: React.FC<{ children: React.ReactNode }> = ({ children 
       const handleUnhandledError = (event: ErrorEvent) => {
         const errorMessage = event.message || event.error?.message || '';
         const errorStack = event.error?.stack || '';
+        const target = event.target as any;
+        const targetSrc = String(target?.src || target?.href || event.filename || '');
 
-        // Suppress AdSense and third-party ad-related errors
+        // Suppress AdSense, third-party ad-related, ad-blockers (ERR_BLOCKED_BY_CLIENT) and script errors
         const isAdError =
           errorMessage.includes('adsbygoogle') ||
           errorMessage.includes('googlesyndication') ||
@@ -622,21 +624,23 @@ const GlobalErrorHandler: React.FC<{ children: React.ReactNode }> = ({ children 
           errorMessage.includes('gpt') ||
           errorMessage.includes('google_ads') ||
           errorStack.includes('pagead') ||
-          errorStack.includes('adservice');
+          errorStack.includes('adservice') ||
+          targetSrc.includes('pagead') ||
+          targetSrc.includes('googlesyndication') ||
+          targetSrc.includes('doubleclick') ||
+          (!event.error && (!errorMessage || errorMessage === 'Script error.'));
 
         if (isAdError) {
           // Silently suppress ad-related errors
-          console.debug('[GlobalErrorHandler] Ad-related error suppressed:', errorMessage);
           event.preventDefault();
           event.stopPropagation();
           return false;
         }
 
-        // Log app-specific errors for debugging
-        console.error('[GlobalErrorHandler] Unhandled error:', event.error);
-
-        // TODO: Send to error tracking service (Sentry, LogRocket, etc.)
-        // trackError(event.error);
+        // Only log app-specific errors for debugging
+        if (event.error || errorMessage) {
+          console.error('[GlobalErrorHandler] Unhandled error:', event.error || errorMessage);
+        }
       };
 
       const handleUnhandledRejection = (event: PromiseRejectionEvent) => {

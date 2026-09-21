@@ -2077,7 +2077,10 @@ app.post(["/api/ai/ask", "/api/ask"], async (req, res) => {
     res.setHeader("X-SystemPrompt-Truncated", "1");
   }
 
-  const rawUserPrompt = typeof req.body?.userPrompt === "string" ? req.body.userPrompt : "";
+  const rawUserPrompt =
+    typeof req.body?.userPrompt === "string" && req.body.userPrompt.trim()
+      ? req.body.userPrompt.trim()
+      : prompt;
   const userPrompt = rawUserPrompt.slice(0, MAX_USER_PROMPT_CHARS);
   if (rawUserPrompt.length > MAX_USER_PROMPT_CHARS) {
     res.setHeader("X-UserPrompt-Truncated", "1");

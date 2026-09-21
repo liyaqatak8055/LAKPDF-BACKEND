@@ -774,6 +774,9 @@ Produce the summary with clean markdown formatting (headings, bold points, bulle
     text: string,
     fileName?: string
   ): Promise<StructuredSummaryData> {
+    if (!text || text.trim().length === 0) {
+      throw new Error("No readable text found in this document to summarize.");
+    }
     const maxTextChars = 9000;
     const documentExcerpt = text.slice(0, maxTextChars);
 

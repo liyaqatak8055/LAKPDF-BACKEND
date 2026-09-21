@@ -4,6 +4,7 @@ import OpenAI from "openai";
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "openrouter").trim().toLowerCase();
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 const DEEPINFRA_BASE_URL = "https://api.deepinfra.com/v1/openai";
 
 const DEFAULT_GPT_MODEL = process.env.AI_DEFAULT_MODEL || process.env.OPENROUTER_DEFAULT_MODEL || "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
@@ -20,12 +21,20 @@ const OPENROUTER_FALLBACK_MODELS = String(
   .map((value) => value.trim())
   .filter(Boolean);
 
-// Free models on Groq (ultra fast inference)
+// Free models on Groq (ultra fast inference, 14,400 free requests/day)
 const GROQ_FREE_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768",
-  "gemma2-9b-it",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3.8-27b",
+  "groq/compound-mini",
+  "groq/compound",
+];
+
+// Free models on Google Gemini (1,500 free requests/day + 1M tokens/min via Google AI Studio)
+const GEMINI_FREE_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.5-flash-lite",
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,6 +79,7 @@ class ApiKeyManager {
   reloadKeys() {
     const openrouterKeys = new Set();
     const groqKeys = new Set();
+    const geminiKeys = new Set();
     const deepinfraKeys = new Set();
 
     // 1. OPENROUTER_API_KEYS (comma, semicolon, pipe, or newline separated)
@@ -93,7 +103,7 @@ class ApiKeyManager {
       }
     }
 
-    // Groq keys
+    // Groq keys (14,400 requests/day free tier)
     if (process.env.GROQ_API_KEYS) {
       process.env.GROQ_API_KEYS.split(/[,;\n|]/).forEach((k) => {
         const clean = k.trim();
@@ -107,6 +117,22 @@ class ApiKeyManager {
     for (let i = 1; i <= 20; i++) {
       const key = process.env[`GROQ_API_KEY_${i}`];
       if (key && key.trim()) groqKeys.add(key.trim());
+    }
+
+    // Gemini keys (1,500 requests/day free tier via Google AI Studio)
+    if (process.env.GEMINI_API_KEYS) {
+      process.env.GEMINI_API_KEYS.split(/[,;\n|]/).forEach((k) => {
+        const clean = k.trim();
+        if (clean && !clean.includes("REDACTED") && !clean.includes("your_")) geminiKeys.add(clean);
+      });
+    }
+    if (process.env.GEMINI_API_KEY) {
+      const clean = process.env.GEMINI_API_KEY.trim();
+      if (clean && !clean.includes("REDACTED") && !clean.includes("your_")) geminiKeys.add(clean);
+    }
+    for (let i = 1; i <= 20; i++) {
+      const key = process.env[`GEMINI_API_KEY_${i}`];
+      if (key && key.trim()) geminiKeys.add(key.trim());
     }
 
     // DeepInfra keys
@@ -160,6 +186,24 @@ class ApiKeyManager {
       );
     }
 
+    let gemIdx = 1;
+    for (const key of geminiKeys) {
+      const existing = existingMap.get(key);
+      newPool.push(
+        existing || {
+          id: `gemini_${gemIdx++}`,
+          provider: "gemini",
+          key,
+          masked: this.maskKey(key),
+          baseURL: GEMINI_BASE_URL,
+          cooldownUntil: 0,
+          consecutiveFails: 0,
+          totalSuccesses: 0,
+          lastUsedAt: 0,
+        }
+      );
+    }
+
     let diIdx = 1;
     for (const key of deepinfraKeys) {
       const existing = existingMap.get(key);
@@ -180,7 +224,7 @@ class ApiKeyManager {
 
     this.keyPool = newPool;
     console.log(
-      `[AI KeyPool] Initialized with ${this.keyPool.length} keys (OpenRouter: ${openrouterKeys.size}, Groq: ${groqKeys.size}, DeepInfra: ${deepinfraKeys.size})`
+      `[AI KeyPool] Initialized with ${this.keyPool.length} keys (OpenRouter: ${openrouterKeys.size}, Groq: ${groqKeys.size}, Gemini: ${geminiKeys.size}, DeepInfra: ${deepinfraKeys.size})`
     );
   }
 
@@ -381,44 +425,149 @@ export async function askAI(prompt, options = {}) {
   }
   messages.push({ role: "user", content: effectiveUserContent });
 
+  let lastError = null;
+
   // 1. If user supplied their own custom API key (from frontend modal), try it first with highest priority
   if (customApiKey) {
+    let customBaseURL = OPENROUTER_BASE_URL;
+    let customDefaultModel = gptModel;
+    let customProvider = "openrouter-custom";
+
+    if (customApiKey.startsWith("gsk_")) {
+      customBaseURL = GROQ_BASE_URL;
+      customProvider = "groq-custom";
+      if (!gptModel || gptModel.includes("nemotron") || gptModel.includes("nex-agi") || gptModel.includes("llama")) {
+        customDefaultModel = "openai/gpt-oss-120b";
+      }
+    } else if (customApiKey.startsWith("AIza") || customApiKey.startsWith("AQ.")) {
+      customBaseURL = GEMINI_BASE_URL;
+      customProvider = "gemini-custom";
+      if (!gptModel || gptModel.includes("nemotron") || gptModel.includes("nex-agi") || gptModel.includes("oss") || gptModel.includes("llama")) {
+        customDefaultModel = "gemini-2.5-flash";
+      }
+    }
+
     const userClient = new OpenAI({
-      baseURL: OPENROUTER_BASE_URL,
+      baseURL: customBaseURL,
       apiKey: customApiKey,
     });
     try {
-      const text = await callOpenAICompatible(userClient, gptModel, messages, maxOutputTokens, {
+      const text = await callOpenAICompatible(userClient, customDefaultModel, messages, maxOutputTokens, {
         requireJson,
         temperature,
         stop,
       });
-      return { provider: "openrouter-custom", model: gptModel, text };
+      return { provider: customProvider, model: customDefaultModel, text };
     } catch (err) {
       console.warn(`[AI CustomKey] User API key failed (${err?.message || err}). Falling back to system multi-key pool.`);
     }
   }
 
-  // 2. Multi-Model candidate chain (Priority order)
+  const wantsGemini = gptModel.startsWith("gemini");
+  const groqKeys = keyManager.getAvailableKeys("groq");
+  const geminiKeys = keyManager.getAvailableKeys("gemini");
+
+  // Helper function to try Groq
+  const tryGroq = async () => {
+    if (groqKeys.length === 0) return null;
+    for (const groqModel of GROQ_FREE_MODELS) {
+      for (const groqKeyEntry of groqKeys) {
+        const groqClient = new OpenAI({
+          baseURL: groqKeyEntry.baseURL,
+          apiKey: groqKeyEntry.key,
+        });
+
+        try {
+          const text = await callOpenAICompatible(groqClient, groqModel, messages, maxOutputTokens, {
+            requireJson,
+            temperature,
+            stop,
+          });
+
+          keyManager.reportSuccess(groqKeyEntry.key);
+          return {
+            provider: "groq",
+            model: groqModel,
+            text,
+            keyUsed: groqKeyEntry.masked,
+          };
+        } catch (err) {
+          lastError = err;
+          console.error(`[AI Groq Error] Model ${groqModel}:`, err?.message || err, err?.status || err?.statusCode);
+          const statusCode = toNumber(err?.status || err?.statusCode || 500);
+          keyManager.reportFailure(groqKeyEntry.key, statusCode);
+        }
+      }
+    }
+    return null;
+  };
+
+  // Helper function to try Gemini
+  const tryGemini = async () => {
+    if (geminiKeys.length === 0) return null;
+    const modelsToTry = gptModel.startsWith("gemini")
+      ? [gptModel, ...GEMINI_FREE_MODELS.filter((m) => m !== gptModel)]
+      : GEMINI_FREE_MODELS;
+
+    for (const geminiModel of modelsToTry) {
+      for (const geminiKeyEntry of geminiKeys) {
+        const geminiClient = new OpenAI({
+          baseURL: geminiKeyEntry.baseURL,
+          apiKey: geminiKeyEntry.key,
+        });
+
+        try {
+          const text = await callOpenAICompatible(geminiClient, geminiModel, messages, maxOutputTokens, {
+            requireJson,
+            temperature,
+            stop,
+          });
+
+          keyManager.reportSuccess(geminiKeyEntry.key);
+          return {
+            provider: "gemini",
+            model: geminiModel,
+            text,
+            keyUsed: geminiKeyEntry.masked,
+          };
+        } catch (err) {
+          lastError = err;
+          console.error(`[AI Gemini Error] Model ${geminiModel}:`, err?.message || err, err?.status || err?.statusCode);
+          const statusCode = toNumber(err?.status || err?.statusCode || 500);
+          keyManager.reportFailure(geminiKeyEntry.key, statusCode);
+        }
+      }
+    }
+    return null;
+  };
+
+  // 2. Execute with Primary & Backup Failover
+  if (wantsGemini || AI_PROVIDER === "gemini") {
+    // Gemini primary, Groq backup
+    const geminiResult = await tryGemini();
+    if (geminiResult) return geminiResult;
+    console.info("[AI Failover] Gemini failed or exhausted, failing over to Groq...");
+    const groqResult = await tryGroq();
+    if (groqResult) return groqResult;
+  } else {
+    // Groq primary (14,400 req/day), Gemini backup (1,500 req/day)
+    const groqResult = await tryGroq();
+    if (groqResult) return groqResult;
+    console.info("[AI Failover] Groq quota/keys exhausted, seamlessly failing over to Google Gemini backup...");
+    const geminiResult = await tryGemini();
+    if (geminiResult) return geminiResult;
+  }
+
+  // 4. Multi-Model candidate chain on OpenRouter
   const modelCandidates = [
     ...new Set([gptModel, DEFAULT_GPT_MODEL, ...OPENROUTER_FALLBACK_MODELS]),
   ].filter((m) => m && m !== "nex-agi/nex-n2.5-pro:free").slice(0, 3);
 
-  // 3. Multi-Key rotation loop
-  let lastError = null;
   const availableOpenRouterKeys = keyManager.getAvailableKeys("openrouter");
 
-  if (availableOpenRouterKeys.length === 0) {
-    // Check if Groq has available keys
-    const availableGroqKeys = keyManager.getAvailableKeys("groq");
-    if (availableGroqKeys.length === 0) {
-      throw createServiceError("All AI API keys are currently in cooldown. Please wait a few seconds.", 429);
-    }
-  }
-
-  // Iterate through model candidates
+  // Iterate through OpenRouter model candidates
   for (const modelCandidate of modelCandidates) {
-    const keysToTry = keyManager.getAvailableKeys("openrouter");
+    const keysToTry = availableOpenRouterKeys;
 
     for (const keyEntry of keysToTry) {
       const client = new OpenAI({
@@ -446,20 +595,17 @@ export async function askAI(prompt, options = {}) {
         const statusCode = toNumber(err?.status || err?.statusCode || 500);
         const retryAfter = toNumber(err?.headers?.["retry-after"] || 0);
 
-        // Report failure to put this key in cooldown and transparently switch to the NEXT key in the pool!
+        // Report failure to put this key in cooldown and switch to NEXT key
         keyManager.reportFailure(keyEntry.key, statusCode, retryAfter);
-
-        // If error is 401, 403, 402, 429, continue to next key in pool immediately!
         console.info(
-          `[AI Auto-Failover] Key ${keyEntry.masked} encountered status ${statusCode} on model ${modelCandidate}. Trying next key in pool...`
+          `[AI Auto-Failover] Key ${keyEntry.masked} encountered status ${statusCode} on model ${modelCandidate}. Trying next key...`
         );
       }
     }
   }
 
-  // 4. Provider-level failover: If all OpenRouter keys failed, try Groq free models if Groq key exists!
-  const groqKeys = keyManager.getAvailableKeys("groq");
-  if (groqKeys.length > 0) {
+  // 5. Fallback to Groq if not tried yet
+  if (groqKeys.length > 0 && AI_PROVIDER !== "groq") {
     console.info("[AI Provider Failover] OpenRouter keys exhausted. Switching to Groq free API pool...");
     for (const groqModel of GROQ_FREE_MODELS) {
       for (const groqKeyEntry of groqKeys) {
@@ -486,6 +632,39 @@ export async function askAI(prompt, options = {}) {
           lastError = err;
           const statusCode = toNumber(err?.status || err?.statusCode || 500);
           keyManager.reportFailure(groqKeyEntry.key, statusCode);
+        }
+      }
+    }
+  }
+
+  // 6. Fallback to Gemini if not tried yet
+  if (geminiKeys.length > 0 && AI_PROVIDER !== "gemini") {
+    console.info("[AI Provider Failover] OpenRouter/Groq keys exhausted. Switching to Google Gemini free API pool...");
+    for (const geminiModel of GEMINI_FREE_MODELS) {
+      for (const geminiKeyEntry of geminiKeys) {
+        const geminiClient = new OpenAI({
+          baseURL: geminiKeyEntry.baseURL,
+          apiKey: geminiKeyEntry.key,
+        });
+
+        try {
+          const text = await callOpenAICompatible(geminiClient, geminiModel, messages, maxOutputTokens, {
+            requireJson,
+            temperature,
+            stop,
+          });
+
+          keyManager.reportSuccess(geminiKeyEntry.key);
+          return {
+            provider: "gemini",
+            model: geminiModel,
+            text,
+            keyUsed: geminiKeyEntry.masked,
+          };
+        } catch (err) {
+          lastError = err;
+          const statusCode = toNumber(err?.status || err?.statusCode || 500);
+          keyManager.reportFailure(geminiKeyEntry.key, statusCode);
         }
       }
     }

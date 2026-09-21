@@ -72,9 +72,11 @@ export const AiApiKeyModal: React.FC<AiApiKeyModalProps> = ({ isOpen, onClose, o
   };
 
   const quickModels = [
-    { label: 'Nex-AGI Mini (Free & Ultra Fast)', id: 'nex-agi/nex-n2.5-mini:free' },
+    { label: 'Groq: Llama 3.3 70B (Fast & Free)', id: 'llama-3.3-70b-versatile' },
+    { label: 'Gemini 1.5 Flash (1500 req/day Free)', id: 'gemini-1.5-flash' },
+    { label: 'Gemini 2.0 Flash (Fast & Free)', id: 'gemini-2.0-flash' },
+    { label: 'Nex-AGI Mini (Free)', id: 'nex-agi/nex-n2.5-mini:free' },
     { label: 'Nemotron 3.5 (Free)', id: 'nvidia/nemotron-3.5-lightning:free' },
-    { label: 'Gemma 4 31B (Free)', id: 'google/gemma-4-31b-it:free' },
     { label: 'GPT-4o Mini', id: 'openai/gpt-4o-mini' },
   ];
 
@@ -88,14 +90,59 @@ export const AiApiKeyModal: React.FC<AiApiKeyModalProps> = ({ isOpen, onClose, o
           </div>
           <div>
             <h4 className="font-semibold text-emerald-950 text-sm sm:text-base flex items-center gap-2">
-              System AI is Active
+              Daily Free AI is Supported
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-200/80 text-emerald-900">
-                Ready to use
+                Active
               </span>
             </h4>
             <p className="text-xs sm:text-sm text-emerald-800/90 mt-1 leading-relaxed">
-              LAK PDF provides built-in free AI processing using OpenRouter. You don't need your own key to use the AI tools!
+              Use your free daily tokens from <strong>Groq (14,400 free requests/day)</strong> or <strong>Google Gemini (1,500 free requests/day)</strong> or <strong>OpenRouter</strong>. Paste any key below — it auto-detects and connects instantly!
             </p>
+          </div>
+        </div>
+
+        {/* Free API Key Providers */}
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Get Free Daily API Keys (No Credit Card Needed):</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <a
+              href="https://console.groq.com/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl border border-slate-200 hover:border-primary-400 bg-slate-50/70 hover:bg-primary-50/40 transition-all flex flex-col justify-between group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-slate-800 group-hover:text-primary-700">Groq Cloud</span>
+                <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-primary-600" />
+              </div>
+              <span className="text-[11px] text-emerald-600 font-medium mt-1">14,400 Free req/day</span>
+            </a>
+
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl border border-slate-200 hover:border-primary-400 bg-slate-50/70 hover:bg-primary-50/40 transition-all flex flex-col justify-between group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-slate-800 group-hover:text-primary-700">Google Gemini</span>
+                <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-primary-600" />
+              </div>
+              <span className="text-[11px] text-emerald-600 font-medium mt-1">1,500 Free req/day</span>
+            </a>
+
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl border border-slate-200 hover:border-primary-400 bg-slate-50/70 hover:bg-primary-50/40 transition-all flex flex-col justify-between group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-slate-800 group-hover:text-primary-700">OpenRouter</span>
+                <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-primary-600" />
+              </div>
+              <span className="text-[11px] text-slate-500 font-medium mt-1">Free Tier Models</span>
+            </a>
           </div>
         </div>
 
@@ -105,26 +152,18 @@ export const AiApiKeyModal: React.FC<AiApiKeyModalProps> = ({ isOpen, onClose, o
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Key className="w-4 h-4 text-primary-500" />
-                Custom OpenRouter API Key (Optional)
+                Paste Your API Key (Groq, Gemini, or OpenRouter)
               </label>
-              <a
-                href="https://openrouter.ai/keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1 font-medium"
-              >
-                Get Free Key <ExternalLink className="w-3 h-3" />
-              </a>
             </div>
             <p className="text-xs text-slate-500 mb-2">
-              If you have your own OpenRouter key, enter it here for unlimited personal rate limits and custom models.
+              Supports <code>gsk_...</code> (Groq), <code>AIzaSy...</code> (Gemini), or <code>sk-or-...</code> (OpenRouter). Auto-detected!
             </p>
             <div className="relative">
               <input
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-v1-..."
+                placeholder="Paste key: gsk_... or AIza... or sk-or-..."
                 className="w-full pr-10 pl-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white outline-none transition-all font-mono"
               />
               <button

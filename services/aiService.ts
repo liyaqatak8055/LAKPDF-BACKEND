@@ -579,13 +579,19 @@ class AIService {
   public async testConnection(apiKey?: string, model?: string): Promise<{ success: boolean; sampleText?: string; error?: string }> {
     try {
       const activeKey = apiKey !== undefined ? apiKey : this.getCustomApiKey();
-      const activeModel = model || this.getCustomModel() || DEFAULT_MODEL;
+      let activeModel = model || this.getCustomModel();
+      if (!activeModel) {
+        if (activeKey?.startsWith('gsk_')) activeModel = 'openai/gpt-oss-120b';
+        else if (activeKey?.startsWith('AIza') || activeKey?.startsWith('AQ.')) activeModel = 'gemini-2.5-flash';
+        else activeModel = DEFAULT_MODEL;
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
       if (activeKey) {
         headers['X-OpenRouter-Key'] = activeKey;
+        headers['X-Custom-API-Key'] = activeKey;
       }
 
       const response = await fetch(API_URL, {
@@ -630,13 +636,19 @@ class AIService {
   ): Promise<{ text: string; json?: any }> {
     const customKey = this.getCustomApiKey();
     const customModel = this.getCustomModel();
-    const modelToUse = options.gptModel || customModel || DEFAULT_MODEL;
+    let modelToUse = options.gptModel || customModel;
+    if (!modelToUse) {
+      if (customKey?.startsWith('gsk_')) modelToUse = 'openai/gpt-oss-120b';
+      else if (customKey?.startsWith('AIza') || customKey?.startsWith('AQ.')) modelToUse = 'gemini-2.5-flash';
+      else modelToUse = DEFAULT_MODEL;
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
     if (customKey) {
       headers['X-OpenRouter-Key'] = customKey;
+      headers['X-Custom-API-Key'] = customKey;
     }
 
     const payload: Record<string, any> = {

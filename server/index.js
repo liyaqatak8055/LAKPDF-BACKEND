@@ -54,7 +54,7 @@ const AUTH_FAIL_MAX_PER_IP = Math.max(5, Number(process.env.AUTH_FAIL_MAX_PER_IP
 const AUTH_FAIL_MAX_PER_EMAIL_IP = Math.max(3, Number(process.env.AUTH_FAIL_MAX_PER_EMAIL_IP || 6));
 const ALLOWED_AI_MODELS = String(
   process.env.ALLOWED_AI_MODELS ||
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,openrouter/free,nex-agi/nex-n2.5-mini:free,nvidia/nemotron-3.5-lightning:free,google/gemma-4-26b-a4b-it:free,openai/gpt-4o-mini"
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,openrouter/free,nex-agi/nex-n2.5-mini:free,nvidia/nemotron-3.5-lightning:free,google/gemma-4-26b-a4b-it:free,openai/gpt-4o-mini,openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b,groq/compound,groq/compound-mini,llama-3.3-70b-versatile,llama-3.1-8b-instant,gemini-1.5-flash,gemini-2.0-flash,gemini-2.5-flash"
 )
   .split(",")
   .map((v) => v.trim())

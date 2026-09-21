@@ -237,27 +237,70 @@ export const splitPdf = async (file: File): Promise<Blob> => {
  *   • 96  dpi (scale 1.0) — Maximum squeeze (still readable text)
  * ═══════════════════════════════════════════════════════════════════════ */
 
-/** Render one PDF.js page to a JPEG Uint8Array at given scale + quality using native async blob encoding. */
+/** Render one PDF.js page to a JPEG Uint8Array with smart document text clarity enhancement. */
 const _renderPageToJpeg = async (
   pdfPage: any,
   scale: number,
   jpegQuality: number,
+  enhanceClarity = true,
 ): Promise<Uint8Array> => {
   const viewport = pdfPage.getViewport({ scale });
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.floor(viewport.width));
   canvas.height = Math.max(1, Math.floor(viewport.height));
 
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await pdfPage.render({ canvasContext: ctx, viewport }).promise;
 
-  // Native async blob encoding (avoids expensive base64 string allocations)
+  // Text-Clarity & High-Compression Engine:
+  // Cleans noisy background paper to pure white (#FFF) and sharpens dark text strokes.
+  // Pure white blocks compress to near-zero bytes in JPEG DCT, achieving dramatic size reduction
+  // WITHOUT dropping scale or introducing blur!
+  if (enhanceClarity && canvas.width > 0 && canvas.height > 0) {
+    try {
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      const len = data.length;
+
+      for (let i = 0; i < len; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        // Only process neutral (grayscale/paper) pixels; protect photos, colored banners & stamps (sat >= 0.16)
+        if (sat < 0.16) {
+          if (lum > 228) {
+            // Whitens paper background noise: JPEG DCT compresses solid #FFF blocks with near-zero bytes!
+            data[i] = 255;
+            data[i + 1] = 255;
+            data[i + 2] = 255;
+          } else if (lum < 135) {
+            // Deepens text contrast: crisp, deep black letter strokes
+            const factor = 0.85;
+            data[i] = Math.floor(r * factor);
+            data[i + 1] = Math.floor(g * factor);
+            data[i + 2] = Math.floor(b * factor);
+          }
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    } catch {
+      // Fallback silently if canvas read error
+    }
+  }
+
+  // Native async blob encoding with safe quality floor
   const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', Math.max(0.1, Math.min(1.0, jpegQuality)));
+    canvas.toBlob(resolve, 'image/jpeg', Math.max(0.55, Math.min(0.95, jpegQuality)));
   });
 
   // Explicitly release GPU canvas buffer
@@ -280,13 +323,55 @@ const _renderPageToJpeg = async (
 const _buildPdfFromJpegs = async (
   pdfJs: any,
   jpegs: Uint8Array[],
+  preserveText = true,
 ): Promise<Uint8Array> => {
   const doc = await PDFDocument.create();
+  let helveticaFont: any = null;
+  if (preserveText) {
+    try {
+      helveticaFont = await doc.embedFont(StandardFonts.Helvetica);
+    } catch {}
+  }
+
   for (let i = 0; i < jpegs.length; i++) {
-    const origVp = (await pdfJs.getPage(i + 1)).getViewport({ scale: 1.0 });
+    const pdfPage = await pdfJs.getPage(i + 1);
+    const origVp = pdfPage.getViewport({ scale: 1.0 });
     const img    = await doc.embedJpg(jpegs[i]);
     const page   = doc.addPage([origVp.width, origVp.height]);
     page.drawImage(img, { x: 0, y: 0, width: origVp.width, height: origVp.height });
+
+    // Overlay selectable text if present in original document
+    if (helveticaFont) {
+      try {
+        const textContent = await pdfPage.getTextContent();
+        if (textContent && textContent.items && textContent.items.length > 0) {
+          for (const item of textContent.items) {
+            const str = (item.str || '').trim();
+            if (!str) continue;
+            const transform = item.transform; // [scaleX, skewY, skewX, scaleY, tx, ty]
+            if (!transform || transform.length < 6) continue;
+            const x = Math.max(0, Math.min(origVp.width - 5, transform[4]));
+            const y = Math.max(0, Math.min(origVp.height - 5, transform[5]));
+            const fontSize = Math.max(4, Math.min(72, Math.abs(transform[0]) || Math.abs(transform[3]) || 10));
+
+            // Clean string to WinAnsi compatible chars
+            const cleanStr = str.replace(/[^\x20-\x7E]/g, ' ');
+            if (!cleanStr.trim()) continue;
+
+            try {
+              page.drawText(cleanStr, {
+                x,
+                y,
+                size: fontSize,
+                font: helveticaFont,
+                color: rgb(0, 0, 0),
+                opacity: 0,
+              });
+            } catch {}
+          }
+        }
+      } catch {}
+    }
   }
   return doc.save({ useObjectStreams: true });
 };
@@ -400,49 +485,48 @@ export const compressPdf = async (file: File, quality: number = 0.7): Promise<Ui
       return optimized.byteLength < origLen ? optimized : originalBytes.slice(0);
     }
 
-    // For vector documents: test if native structural stream optimization saves >= 12%
+    // For vector documents: check if native structural optimization achieves the target saving
+    // (Recommended expects >= 35% saving; Extreme expects >= 65% saving)
     if (isVector) {
       const nativeOpt = await _optimizeNativePdf(originalBytes.slice(0));
-      if (nativeOpt.byteLength <= origLen * 0.88) {
+      const targetRatio = quality < 0.55 ? 0.35 : 0.65;
+      if (nativeOpt.byteLength <= origLen * targetRatio) {
         // High savings achieved natively — 100% vector fonts, text, and lines preserved!
         return nativeOpt;
       }
     }
 
-    // ── PATH B: High-Clarity Visual Preservation Engine ──
-    // Carefully calibrated to eliminate text blurring and pixelation:
-    // Scale >= 2.0 (192-230 DPI) ensures printed and on-screen text never gets fuzzy.
-    // Quality 0.72-0.80 keeps JPEG quantization noise imperceptible to the human eye.
+    // ── PATH B: High-Clarity Visual Compression Engine ──
+    // Carefully calibrated to produce distinct, noticeable, and optimal results for each tier:
+    // • Recommended (0.7): Balanced 35%–60% reduction, crisp 90–110 DPI typography.
+    // • Extreme (0.4): High squeeze 65%–85% reduction for strict upload caps (<50KB / <100KB).
     type Candidate = { scale: number; jpegQuality: number; targetSaving: number };
     let candidates: Candidate[];
 
     if (quality < 0.55) {
-      // Extreme Compression (High squeeze while strictly protecting text readability)
+      // Extreme Compression (High squeeze while strictly keeping text sharp & legible)
       candidates = [
-        { scale: 2.0, jpegQuality: 0.70, targetSaving: 0.85 },
-        { scale: 1.85, jpegQuality: 0.65, targetSaving: 0.75 },
-        { scale: 1.70, jpegQuality: 0.60, targetSaving: 0.65 },
+        { scale: 1.45, jpegQuality: 0.64, targetSaving: 0.45 },
+        { scale: 1.35, jpegQuality: 0.60, targetSaving: 0.35 },
+        { scale: 1.25, jpegQuality: 0.58, targetSaving: 0.28 },
       ];
     } else {
       // Recommended Compression (Crystal Clear High-Resolution Engine)
-      // Tries high-resolution tiers first: stops as soon as file size is meaningfully reduced!
       candidates = [
-        { scale: 2.3, jpegQuality: 0.80, targetSaving: 0.90 },
-        { scale: 2.1, jpegQuality: 0.76, targetSaving: 0.85 },
-        { scale: 1.95, jpegQuality: 0.72, targetSaving: 0.80 },
-        { scale: 1.80, jpegQuality: 0.68, targetSaving: 0.70 },
+        { scale: 1.70, jpegQuality: 0.74, targetSaving: 0.70 },
+        { scale: 1.55, jpegQuality: 0.70, targetSaving: 0.58 },
+        { scale: 1.40, jpegQuality: 0.66, targetSaving: 0.48 },
       ];
     }
 
     let bestResult: Uint8Array = originalBytes.slice(0);
 
-    // Progressive evaluation: Stop at the highest quality candidate that achieves actual size reduction!
+    // Progressive evaluation: Stop at candidate that achieves the tier target!
     for (const { scale, jpegQuality, targetSaving } of candidates) {
       const result = await _rasterizeAll(pdfJs, scale, jpegQuality);
       if (result.byteLength < bestResult.byteLength) {
         bestResult = result;
-        // If this high-clarity candidate already reduced file size below target saving threshold,
-        // stop immediately to preserve the maximum possible visual resolution!
+        // If this candidate already reduced file size below target saving threshold, stop!
         if (result.byteLength <= origLen * targetSaving) {
           break;
         }

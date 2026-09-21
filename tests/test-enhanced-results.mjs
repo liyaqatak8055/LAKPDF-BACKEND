@@ -10,8 +10,9 @@ async function testInterviewGenerator() {
     if (msg.type() === 'error') console.log('PAGE ERROR:', msg.text());
   });
 
-  console.log('2. Navigating to http://localhost:5173/ai-interview-generator ...');
-  await page.goto('http://localhost:5173/ai-interview-generator', { waitUntil: 'networkidle' });
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  console.log(`2. Navigating to ${baseUrl}/ai-interview-generator ...`);
+  await page.goto(`${baseUrl}/ai-interview-generator`, { waitUntil: 'networkidle' });
 
   // 3. Click sample resume button
   const sampleBtn = page.locator('button:has-text("Frontend Fresher")').first();

@@ -73,7 +73,7 @@ const getToolLabel = (tool: string) => {
     watermark: 'Watermark PDF',
     'organize-pdf': 'Organize PDF',
     'ocr-pdf': 'OCR PDF',
-    'scan-pdf': 'Scan to PDF',
+    'scan-pdf': 'Scan Document',
     'sign-pdf': 'Sign PDF',
     'crop-pdf': 'Crop PDF',
   };

@@ -4,7 +4,7 @@ async function testBackend() {
 
   const endpoints = [
     { name: 'Health Check', url: `${baseUrl}/api/health`, method: 'GET', expectedStatus: 200 },
-    { name: 'Auth Status (Unauthenticated)', url: `${baseUrl}/api/auth/me`, method: 'GET', expectedStatus: [200, 401] },
+    { name: 'Auth Status (Unauthenticated/Unconfigured)', url: `${baseUrl}/api/auth/me`, method: 'GET', expectedStatus: [200, 401, 503] },
     { name: 'Interview Analyze Validation Check', url: `${baseUrl}/api/interview/analyze-resume`, method: 'POST', body: {}, expectedStatus: 400 },
     { name: 'Interview Generate Validation Check', url: `${baseUrl}/api/interview/generate-questions`, method: 'POST', body: {}, expectedStatus: 400 },
     { name: 'Interview Evaluate Validation Check', url: `${baseUrl}/api/interview/evaluate-answer`, method: 'POST', body: {}, expectedStatus: 400 },

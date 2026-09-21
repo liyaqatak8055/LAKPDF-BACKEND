@@ -185,14 +185,71 @@ export const compressImages = async (
   return results;
 };
 
+export interface TargetCompressionOptions {
+  outputFormat?: 'image/jpeg' | 'image/webp';
+  targetDimension?: { width: number; height: number };
+  enableEdgeClarity?: boolean;
+}
+
 /**
- * Attempts to compress an image to be under a specific target size in KB.
- * Uses binary search on quality.
+ * Smart Edge-Threshold Clarity filter.
+ * Enhances contrast only on distinct high-contrast edges (text, facial contours, fine lines),
+ * while completely ignoring flat background noise, skin tones, and smooth gradients.
+ */
+const applySmartEdgeClarity = (
+  canvas: HTMLCanvasElement, 
+  amount: number = 0.28, 
+  threshold: number = 7
+) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx || canvas.width < 40 || canvas.height < 40) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  const copy = new Uint8ClampedArray(d);
+
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const center = copy[idx + c];
+        const neighborAvg = (
+          copy[idx - 4 + c] +
+          copy[idx + 4 + c] +
+          copy[idx - w * 4 + c] +
+          copy[idx + w * 4 + c]
+        ) / 4;
+        const diff = center - neighborAvg;
+        // Only sharpen real edges (text characters, geometric outlines)
+        if (Math.abs(diff) > threshold) {
+          d[idx + c] = Math.max(0, Math.min(255, center + diff * amount));
+        }
+      }
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+};
+
+/**
+ * Resolution-First smart compression algorithm.
+ * Preserves maximum dimensions to eliminate blur/softness,
+ * supports Portal Presets (Passport 350x450, Signature 300x120),
+ * and enhances edge sharpness for crisp text.
  */
 export const compressImageToTarget = async (
   file: File,
-  targetKB: number
+  targetKB: number,
+  outputFormatOrOptions: 'image/jpeg' | 'image/webp' | TargetCompressionOptions = 'image/jpeg'
 ): Promise<Blob> => {
+  const options: TargetCompressionOptions = typeof outputFormatOrOptions === 'string'
+    ? { outputFormat: outputFormatOrOptions }
+    : outputFormatOrOptions;
+
+  const outputFormat = options.outputFormat || 'image/jpeg';
+  const targetDimension = options.targetDimension;
+  const enableEdgeClarity = options.enableEdgeClarity !== false;
+
   const targetBytes = Math.max(8 * 1024, Math.floor(targetKB * 1024));
 
   const img = new Image();
@@ -207,17 +264,25 @@ export const compressImageToTarget = async (
   await loadPromise;
   URL.revokeObjectURL(objectUrl);
 
+  const origW = img.naturalWidth || img.width;
+  const origH = img.naturalHeight || img.height;
+
   const baseCanvas = document.createElement('canvas');
-  baseCanvas.width = img.width;
-  baseCanvas.height = img.height;
+  baseCanvas.width = origW;
+  baseCanvas.height = origH;
   const baseCtx = baseCanvas.getContext('2d');
   if (!baseCtx) {
     throw new Error('Canvas context failed');
   }
-  baseCtx.fillStyle = '#FFFFFF';
-  baseCtx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
+
+  // Draw white background for JPEG to handle PNG transparency cleanly
+  if (outputFormat === 'image/jpeg') {
+    baseCtx.fillStyle = '#FFFFFF';
+    baseCtx.fillRect(0, 0, origW, origH);
+  }
   baseCtx.drawImage(img, 0, 0);
 
+  // Progressive high-quality bicubic downsampling (zero artificial noise or pixelation)
   const resizeProgressively = (source: HTMLCanvasElement, targetW: number, targetH: number): HTMLCanvasElement => {
     const tw = Math.max(1, Math.floor(targetW));
     const th = Math.max(1, Math.floor(targetH));
@@ -255,157 +320,192 @@ export const compressImageToTarget = async (
     return currentCanvas;
   };
 
-  const applySubtleSharpen = (canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx || canvas.width < 20 || canvas.height < 20) return;
-    const src = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const out = ctx.createImageData(src);
-    const data = src.data;
-    const outData = out.data;
-    const w = canvas.width;
-    const h = canvas.height;
-    const amount = 0.25;
+  const encodeBlob = (canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> => {
+    return new Promise((resolve) => canvas.toBlob(resolve, outputFormat, quality));
+  };
 
-    const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  // 1. SPECIFIC PORTAL DIMENSION PRESET (Passport, Signature, Square)
+  if (targetDimension && targetDimension.width > 0 && targetDimension.height > 0) {
+    const tw = targetDimension.width;
+    const th = targetDimension.height;
 
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const i = (y * w + x) * 4;
-        const top = i - w * 4;
-        const bottom = i + w * 4;
-        const left = i - 4;
-        const right = i + 4;
+    const targetAspect = tw / th;
+    const origAspect = origW / origH;
+    let drawW = tw;
+    let drawH = th;
+    let drawX = 0;
+    let drawY = 0;
 
-        for (let c = 0; c < 3; c++) {
-          const center = data[i + c];
-          const blur = (
-            data[top + c] +
-            data[bottom + c] +
-            data[left + c] +
-            data[right + c] +
-            center * 4
-          ) / 8;
-          outData[i + c] = clamp(center + (center - blur) * amount);
-        }
-        outData[i + 3] = data[i + 3];
+    // For signatures: contain on pure white background so no signature strokes are cropped
+    // For photo IDs/passports: center-cover so face/body remains perfectly natural without distortion
+    const isSignature = tw === 300 && th === 120;
+    if (isSignature) {
+      if (origAspect > targetAspect) {
+        drawW = tw;
+        drawH = Math.max(1, Math.round(tw / origAspect));
+        drawY = Math.round((th - drawH) / 2);
+      } else {
+        drawH = th;
+        drawW = Math.max(1, Math.round(th * origAspect));
+        drawX = Math.round((tw - drawW) / 2);
+      }
+    } else {
+      if (origAspect > targetAspect) {
+        drawH = th;
+        drawW = Math.max(1, Math.round(th * origAspect));
+        drawX = Math.round((tw - drawW) / 2);
+      } else {
+        drawW = tw;
+        drawH = Math.max(1, Math.round(tw / origAspect));
+        drawY = Math.round((th - drawH) / 2);
       }
     }
 
-    for (let x = 0; x < w; x++) {
-      const topI = x * 4;
-      const bottomI = ((h - 1) * w + x) * 4;
-      outData[topI] = data[topI];
-      outData[topI + 1] = data[topI + 1];
-      outData[topI + 2] = data[topI + 2];
-      outData[topI + 3] = data[topI + 3];
-      outData[bottomI] = data[bottomI];
-      outData[bottomI + 1] = data[bottomI + 1];
-      outData[bottomI + 2] = data[bottomI + 2];
-      outData[bottomI + 3] = data[bottomI + 3];
+    const fittedCanvas = document.createElement('canvas');
+    fittedCanvas.width = tw;
+    fittedCanvas.height = th;
+    const fittedCtx = fittedCanvas.getContext('2d');
+    if (!fittedCtx) throw new Error('Failed to create canvas context');
+
+    fittedCtx.fillStyle = '#FFFFFF';
+    fittedCtx.fillRect(0, 0, tw, th);
+    fittedCtx.imageSmoothingEnabled = true;
+    fittedCtx.imageSmoothingQuality = 'high';
+    fittedCtx.drawImage(baseCanvas, drawX, drawY, drawW, drawH);
+
+    if (enableEdgeClarity) {
+      applySmartEdgeClarity(fittedCanvas);
     }
 
-    for (let y = 0; y < h; y++) {
-      const leftI = (y * w) * 4;
-      const rightI = (y * w + (w - 1)) * 4;
-      outData[leftI] = data[leftI];
-      outData[leftI + 1] = data[leftI + 1];
-      outData[leftI + 2] = data[leftI + 2];
-      outData[leftI + 3] = data[leftI + 3];
-      outData[rightI] = data[rightI];
-      outData[rightI + 1] = data[rightI + 1];
-      outData[rightI + 2] = data[rightI + 2];
-      outData[rightI + 3] = data[rightI + 3];
-    }
+    let low = 0.40;
+    let high = 0.95;
+    let bestBlob: Blob | null = null;
 
-    ctx.putImageData(out, 0, 0);
-  };
-
-  const encodeJpeg = async (canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> => {
-    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-  };
-
-  const shouldUseSharpen = targetKB <= 120;
-  const scaleLevels = [1, 0.95, 0.9, 0.85, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48, 0.42, 0.36, 0.3, 0.24];
-  const minDimension = targetKB <= 20 ? 320 : targetKB <= 50 ? 420 : 520;
-  const minQuality = targetKB <= 20 ? 0.3 : 0.35;
-  const maxQuality = 0.95;
-
-  let bestFit: CompressionCandidate | null = null;
-  let bestOverall: CompressionCandidate | null = null;
-
-  for (const scale of scaleLevels) {
-    const width = Math.max(1, Math.floor(img.width * scale));
-    const height = Math.max(1, Math.floor(img.height * scale));
-    if (Math.min(width, height) < minDimension && scale < 1) continue;
-
-    const candidateCanvas = resizeProgressively(baseCanvas, width, height);
-    if (shouldUseSharpen && scale <= 0.85) {
-      applySubtleSharpen(candidateCanvas);
-    }
-
-    let low = minQuality;
-    let high = maxQuality;
-    let localBestFit: CompressionCandidate | null = null;
-    let localClosest: CompressionCandidate | null = null;
-
-    for (let i = 0; i < 12; i++) {
+    for (let step = 0; step < 9; step++) {
       const q = (low + high) / 2;
-      const blob = await encodeJpeg(candidateCanvas, q);
+      const blob = await encodeBlob(fittedCanvas, q);
       if (!blob) break;
-      const candidate: CompressionCandidate = { blob, quality: q, scale, width: candidateCanvas.width, height: candidateCanvas.height };
-
-      if (!localClosest || Math.abs(blob.size - targetBytes) < Math.abs(localClosest.blob.size - targetBytes)) {
-        localClosest = candidate;
-      }
 
       if (blob.size <= targetBytes) {
-        localBestFit = candidate;
+        bestBlob = blob;
         low = q;
       } else {
         high = q;
       }
     }
 
-    if (!localBestFit) {
-      const fallbackBlob = await encodeJpeg(candidateCanvas, minQuality);
-      if (fallbackBlob) {
-        localClosest = {
-          blob: fallbackBlob,
-          quality: minQuality,
-          scale,
-          width: candidateCanvas.width,
-          height: candidateCanvas.height
-        };
+    const finalBlob = bestBlob || (await encodeBlob(fittedCanvas, 0.50)) || new Blob();
+    (finalBlob as any).width = tw;
+    (finalBlob as any).height = th;
+    (finalBlob as any).format = outputFormat;
+    baseCanvas.width = 0;
+    baseCanvas.height = 0;
+    return finalBlob;
+  }
+
+  // 2. AUTO RESOLUTION-FIRST STRATEGY (Maximum dimensions)
+  const minAcceptableQ = outputFormat === 'image/webp' ? 0.44 : 0.46;
+  const scales = [
+    1.0, 0.96, 0.92, 0.88, 0.84, 0.80, 0.76, 0.72, 0.68, 0.64,
+    0.60, 0.58, 0.55, 0.52, 0.49, 0.46, 0.43, 0.40, 0.37, 0.34, 0.30
+  ];
+
+  interface Candidate {
+    blob: Blob;
+    w: number;
+    h: number;
+    quality: number;
+    scale: number;
+    sizeKB: number;
+  }
+
+  let chosenCandidate: Candidate | null = null;
+  let fallbackCandidate: Candidate | null = null;
+
+  for (const scale of scales) {
+    const w = Math.max(1, Math.round(origW * scale));
+    const h = Math.max(1, Math.round(origH * scale));
+
+    const canvas = scale === 1.0 ? baseCanvas : resizeProgressively(baseCanvas, w, h);
+    if (scale <= 0.85 && enableEdgeClarity) {
+      applySmartEdgeClarity(canvas);
+    }
+
+    let low = minAcceptableQ;
+    let high = 0.92;
+    let bestLocalBlob: Blob | null = null;
+    let bestLocalQ: number | null = null;
+
+    for (let step = 0; step < 9; step++) {
+      const q = (low + high) / 2;
+      const blob = await encodeBlob(canvas, q);
+      if (!blob) break;
+
+      if (blob.size <= targetBytes) {
+        bestLocalBlob = blob;
+        bestLocalQ = q;
+        low = q; // Try higher quality
+      } else {
+        high = q; // Reduce quality to fit
+      }
+
+      if (!fallbackCandidate || Math.abs(blob.size - targetBytes) < Math.abs(fallbackCandidate.blob.size - targetBytes)) {
+        fallbackCandidate = { blob, w, h, quality: q, scale, sizeKB: blob.size / 1024 };
       }
     }
 
-    if (localBestFit) {
-      if (
-        !bestFit ||
-        localBestFit.scale > bestFit.scale ||
-        (localBestFit.scale === bestFit.scale && localBestFit.quality > bestFit.quality) ||
-        (localBestFit.scale === bestFit.scale && Math.abs(localBestFit.quality - bestFit.quality) < 0.02 && localBestFit.blob.size > bestFit.blob.size)
-      ) {
-        bestFit = localBestFit;
-      }
-    }
-
-    if (localClosest) {
-      if (
-        !bestOverall ||
-        Math.abs(localClosest.blob.size - targetBytes) < Math.abs(bestOverall.blob.size - targetBytes) ||
-        (Math.abs(localClosest.blob.size - targetBytes) === Math.abs(bestOverall.blob.size - targetBytes) && localClosest.scale > bestOverall.scale)
-      ) {
-        bestOverall = localClosest;
-      }
-    }
-
-    if (bestFit && bestFit.scale >= 0.9) {
+    // If this resolution achieves target size with quality >= minAcceptableQ:
+    // SELECT IT IMMEDIATELY! This gives maximum possible resolution and sharpness!
+    if (bestLocalBlob && bestLocalQ !== null && bestLocalQ >= minAcceptableQ) {
+      chosenCandidate = {
+        blob: bestLocalBlob,
+        w,
+        h,
+        quality: bestLocalQ,
+        scale,
+        sizeKB: bestLocalBlob.size / 1024,
+      };
       break;
     }
   }
 
-  const finalBlob = bestFit ? bestFit.blob : bestOverall ? bestOverall.blob : (await encodeJpeg(baseCanvas, minQuality)) || new Blob();
+  // If even at lowest scales no candidate hit >= minAcceptableQ, test down to 0.35 quality
+  if (!chosenCandidate) {
+    const smallestW = Math.max(1, Math.round(origW * 0.30));
+    const smallestH = Math.max(1, Math.round(origH * 0.30));
+    const smallestCanvas = resizeProgressively(baseCanvas, smallestW, smallestH);
+    if (enableEdgeClarity) {
+      applySmartEdgeClarity(smallestCanvas);
+    }
+    let low = 0.35;
+    let high = 0.55;
+    for (let step = 0; step < 6; step++) {
+      const q = (low + high) / 2;
+      const b = await encodeBlob(smallestCanvas, q);
+      if (b && b.size <= targetBytes) {
+        chosenCandidate = {
+          blob: b,
+          w: smallestW,
+          h: smallestH,
+          quality: q,
+          scale: 0.30,
+          sizeKB: b.size / 1024,
+        };
+        low = q;
+      } else {
+        high = q;
+      }
+    }
+  }
+
+  const finalBlob = chosenCandidate ? chosenCandidate.blob : (fallbackCandidate?.blob || (await encodeBlob(baseCanvas, 0.70)) || new Blob());
+  const finalW = chosenCandidate ? chosenCandidate.w : (fallbackCandidate?.w || origW);
+  const finalH = chosenCandidate ? chosenCandidate.h : (fallbackCandidate?.h || origH);
+
+  (finalBlob as any).width = finalW;
+  (finalBlob as any).height = finalH;
+  (finalBlob as any).format = outputFormat;
+
   baseCanvas.width = 0;
   baseCanvas.height = 0;
   return finalBlob;
@@ -413,18 +513,22 @@ export const compressImageToTarget = async (
 
 export const compressImagesToTarget = async (
   files: File[],
-  targetKB: number
+  targetKB: number,
+  outputFormatOrOptions: 'image/jpeg' | 'image/webp' | TargetCompressionOptions = 'image/jpeg'
 ): Promise<CompressedImage[]> => {
   const results: CompressedImage[] = [];
 
   for (const file of files) {
     try {
-      const blob = await compressImageToTarget(file, targetKB);
+      const blob = await compressImageToTarget(file, targetKB, outputFormatOrOptions);
       results.push({
         file,
         compressedBlob: blob,
         originalSize: file.size,
-        compressedSize: blob.size
+        compressedSize: blob.size,
+        width: (blob as any).width,
+        height: (blob as any).height,
+        format: (blob as any).format || (typeof outputFormatOrOptions === 'string' ? outputFormatOrOptions : outputFormatOrOptions.outputFormat || 'image/jpeg'),
       });
     } catch (e) {
       console.error(`Failed to compress ${file.name}`, e);

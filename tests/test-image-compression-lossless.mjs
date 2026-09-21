@@ -8,8 +8,9 @@ async function testLosslessImageCompression() {
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  console.log('2. Navigating to http://localhost:5173/compress-img ...');
-  await page.goto('http://localhost:5173/compress-img', { waitUntil: 'networkidle' });
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  console.log(`2. Navigating to ${baseUrl}/compress-img ...`);
+  await page.goto(`${baseUrl}/compress-img`, { waitUntil: 'networkidle' });
 
   // 3. Generate a rich synthetic test image using Canvas in the browser
   console.log('3. Generating test image with exact dimensions (1200 x 800)...');

@@ -3,8 +3,6 @@ import { Helmet } from "react-helmet-async";
 import {
   Upload,
   FileText,
-  Menu,
-  Grid3X3,
   Hand,
   Type,
   Eraser,
@@ -17,6 +15,7 @@ import {
   ZoomIn,
   ZoomOut,
   Check,
+  Download,
   PanelLeft,
   Bold,
   Italic,
@@ -31,12 +30,18 @@ import {
   Unlock,
   Trash2,
   Replace,
+  RotateCcw,
+  Undo2,
+  Redo2,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { pdfjs } from "../services/pdfService";
 import { useEditorState } from "../components/pdf-editor/hooks/useEditorState";
 import { PdfViewer, type ActiveEditorTool } from "../components/pdf-editor/PdfViewer";
 import { PageThumbnails } from "../components/pdf-editor/PageThumbnails";
+import { DocumentFlowEditor } from "../components/pdf-editor/DocumentFlowEditor";
 import { PdfAnnotationType, PdfFitMode, type PdfAnnotation } from "../types/pdfEditor";
 import { setLatestDownload } from "../utils/downloadCenter";
 import { ToolSEOContent } from "../components/ToolSEOContent";
@@ -51,21 +56,29 @@ const hexToRgb = (hexValue: string) => {
 };
 
 const clampZoom = (z: number) => Math.max(0.4, Math.min(3, z));
+const formatFileSize = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return "0 KB";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
 const textFonts = ["Arial", "Times New Roman", "Courier New", "Verdana"] as const;
 
-const getPdfFontByStyle = (style: { fontFamily?: string; fontWeight?: string; fontStyle?: string }) => {
+const getPdfFontByStyle = (style: { fontFamily?: string; fontWeight?: string | number; fontStyle?: string }) => {
   const family = (style.fontFamily || "Arial").toLowerCase();
-  const isBold = style.fontWeight === "bold";
-  const isItalic = style.fontStyle === "italic";
+  const weightStr = String(style.fontWeight || "").toLowerCase();
+  const isBold = weightStr.includes("bold") || weightStr === "700" || weightStr === "800" || weightStr === "900";
+  const isItalic = String(style.fontStyle || "").toLowerCase().includes("italic") || String(style.fontStyle || "").toLowerCase().includes("oblique");
 
-  if (family.includes("times")) {
+  if (family.includes("times") || family.includes("serif") || family.includes("georgia")) {
     if (isBold && isItalic) return StandardFonts.TimesRomanBoldItalic;
     if (isBold) return StandardFonts.TimesRomanBold;
     if (isItalic) return StandardFonts.TimesRomanItalic;
     return StandardFonts.TimesRoman;
   }
 
-  if (family.includes("courier")) {
+  if (family.includes("courier") || family.includes("mono")) {
     if (isBold && isItalic) return StandardFonts.CourierBoldOblique;
     if (isBold) return StandardFonts.CourierBold;
     if (isItalic) return StandardFonts.CourierOblique;
@@ -109,6 +122,7 @@ const PdfEditor: React.FC = () => {
   const [shapeType, setShapeType] = useState<"rectangle" | "ellipse">("rectangle");
   const [pendingImageSrc, setPendingImageSrc] = useState<string | null>(null);
   const [editorTab, setEditorTab] = useState<EditorTab>("annotate");
+  const [workspaceMode, setWorkspaceMode] = useState<"flow" | "canvas">("canvas");
   const [isPreparing, setIsPreparing] = useState(false);
   const [notice, setNotice] = useState("");
   const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>([]);
@@ -341,10 +355,11 @@ const PdfEditor: React.FC = () => {
         if (!page) continue;
         const pageHeight = page.getHeight();
         const bounds = annotation.bounds || { x: 0, y: 0, width: 100, height: 40 };
-        const x = bounds.x;
-        const width = Math.max(1, bounds.width);
-        const height = Math.max(1, bounds.height);
-        const y = pageHeight - bounds.y - height;
+        const scaleFactor = Number((annotation.data as any)?.canvasScale) || 1;
+        const x = bounds.x / scaleFactor;
+        const width = Math.max(1, bounds.width / scaleFactor);
+        const height = Math.max(1, bounds.height / scaleFactor);
+        const y = pageHeight - ((bounds.y + bounds.height) / scaleFactor);
         const style = annotation.style || {};
 
         if (annotation.type === PdfAnnotationType.TEXT) {
@@ -355,9 +370,9 @@ const PdfEditor: React.FC = () => {
           const fillColor = style.fillColor;
           if (fillColor && fillColor !== "transparent") {
             page.drawRectangle({
-              x: x - 1,
+              x: x - 2,
               y: y - 1,
-              width: width + 2,
+              width: width + 4,
               height: height + 2,
               color: hexToRgb(fillColor || "#FFFFFF"),
               opacity: style.opacity ?? 1,
@@ -370,7 +385,7 @@ const PdfEditor: React.FC = () => {
             font = await pdfDoc.embedFont(fontKey);
             embeddedFonts.set(fontKey, font);
           }
-          const fontSize = style.fontSize || 16;
+          const fontSize = (style.fontSize || 16) / scaleFactor;
           const lines = text.split("\n");
           const maxLineWidth = Math.max(...lines.map((line) => font.widthOfTextAtSize(line || " ", fontSize)));
           const align = style.textAlign || "left";
@@ -380,11 +395,11 @@ const PdfEditor: React.FC = () => {
               : align === "right"
                 ? x + Math.max(0, width - maxLineWidth)
                 : x;
-          const lineHeight = fontSize * 1.25;
+          const lineHeight = fontSize * 1.22;
           lines.forEach((line, index) => {
             page.drawText(line || " ", {
               x: drawX,
-              y: y + Math.max(2, height - lineHeight * (index + 1) + 2),
+              y: y + Math.max(1, height - lineHeight * (index + 0.82)),
               size: fontSize,
               font,
               color: hexToRgb(style.textColor || "#111827"),
@@ -624,22 +639,29 @@ const PdfEditor: React.FC = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [document, selectedAnnotations, clipboard]);
 
-  const toolButton = (tool: ActiveEditorTool, label: string, icon: React.ReactNode, action?: () => void) => (
-    <button
-      type="button"
-      key={tool + label}
-      onClick={() => {
-        setTool(tool);
-        action?.();
-      }}
-      className={`h-14 min-w-[74px] border-r border-slate-200 px-3 text-xs font-medium transition ${activeTool === tool ? "bg-white text-[#3d54f5]" : "bg-[#f4f4f7] text-slate-600 hover:bg-white"
+  const toolButton = (tool: ActiveEditorTool, label: string, icon: React.ReactNode, action?: () => void) => {
+    const isActive = activeTool === tool;
+    return (
+      <button
+        type="button"
+        key={tool + label}
+        onClick={() => {
+          setTool(tool);
+          action?.();
+        }}
+        className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition-all select-none ${
+          isActive
+            ? "bg-primary-600 text-white shadow-sm shadow-primary-500/25 ring-1 ring-primary-500/30 font-bold"
+            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80"
         }`}
-      aria-pressed={activeTool === tool}
-    >
-      <span className="mx-auto mb-1 block w-fit">{icon}</span>
-      <span className="block whitespace-nowrap">{label}</span>
-    </button>
-  );
+        aria-pressed={isActive}
+        title={label}
+      >
+        <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">{icon}</span>
+        <span className="whitespace-nowrap">{label}</span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -661,94 +683,191 @@ const PdfEditor: React.FC = () => {
         <meta name="twitter:image" content="https://lakpdf.com/og-image.png" />
       </Helmet>
 
-      <div className="min-h-[calc(100vh-4rem)] bg-[#ececf2]">
+      <div className="min-h-[calc(100vh-4rem)] bg-slate-100/70 dark:bg-dark-bg transition-colors">
         <h1 className="sr-only">Edit PDF Online Free</h1>
         <input ref={imagePickerRef} type="file" accept="image/*" className="hidden" onChange={onImagePickInput} />
         <input ref={replacePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onReplaceInput} />
 
-        {document && (
-          <header className="sticky top-16 z-40 border-b border-slate-300 bg-white/95 backdrop-blur">
-            <div className="h-24 border-b border-slate-200 px-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button className="rounded-md border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" type="button" aria-label="Menu">
-                  <Menu className="h-6 w-6" />
-                </button>
-                <div className="text-5xl leading-none text-red-600">❤</div>
-                <div className="text-5xl font-extrabold tracking-tight text-slate-900">LAK PDF</div>
-              </div>
-              <button className="rounded-md border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" type="button" aria-label="More">
-                <Grid3X3 className="h-6 w-6" />
-              </button>
-              <button
-                type="button"
-                onClick={() => replacePdfRef.current?.click()}
-                className="ml-2 inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <Replace className="h-4 w-4" />
-                Replace PDF
-              </button>
-            </div>
-
-            <div className="h-20 flex items-center border-b border-slate-200 bg-[#f4f4f7]">
-              <div className="px-5">
-                <div className="inline-flex rounded-full bg-[#4b4d5a] p-1 text-sm text-white">
-                  <button
-                    type="button"
-                    onClick={() => setEditorTab("annotate")}
-                    className={`rounded-full px-4 py-1.5 ${editorTab === "annotate" ? "bg-white text-slate-800" : "text-white"}`}
-                  >
-                    Annotate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditorTab("edit")}
-                    className={`rounded-full px-4 py-1.5 ${editorTab === "edit" ? "bg-white text-slate-800" : "text-white"}`}
-                  >
-                    Edit
-                  </button>
+        {document && workspaceMode === "flow" && document.file ? (
+          <DocumentFlowEditor
+            file={document.file}
+            fileName={document.fileName}
+            onSwitchToCanvas={() => setWorkspaceMode("canvas")}
+          />
+        ) : (
+          <>
+            {document && (
+              <header className="sticky top-16 z-40 border-b border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xs">
+            {/* Top Studio Bar */}
+            <div className="h-16 px-4 sm:px-6 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/60">
+              {/* Document Meta Info */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center text-white shadow-sm shadow-primary-500/20 flex-shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-800 dark:text-white truncate max-w-[160px] sm:max-w-xs md:max-w-sm">
+                      {document.fileName || document.file?.name || "Document.pdf"}
+                    </span>
+                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300 border border-primary-100 dark:border-primary-900/40">
+                      Studio
+                    </span>
+                  </div>
+                  <div className="text-[12px] text-slate-400 dark:text-slate-500 flex items-center gap-2 font-medium">
+                    <span>{document.totalPages} {document.totalPages === 1 ? "page" : "pages"}</span>
+                    <span>•</span>
+                    <span>{formatFileSize(document.fileSize)}</span>
+                    <span className="hidden md:inline">•</span>
+                    <span className="hidden md:inline text-emerald-600 dark:text-emerald-400 font-medium items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1" />Auto-saved
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex overflow-x-auto border-l border-slate-300">
-                {toolButton("move", "Move", <Hand className="h-5 w-5" />)}
-                {toolButton("addText", "Add Text", <Type className="h-5 w-5" />)}
-                {toolButton("editText", "Edit Text", <Type className="h-5 w-5" />)}
-                {toolButton("image", "Image", <ImagePlus className="h-5 w-5" />, () => {
-                  if (!pendingImageSrc) requestImagePick();
-                })}
-                {toolButton("draw", "Pencil", <Pencil className="h-5 w-5" />)}
-                {toolButton("highlight", "Highlight", <Highlighter className="h-5 w-5" />)}
-                {toolButton("shape", shapeType === "rectangle" ? "Rect" : "Ellipse", <Shapes className="h-5 w-5" />, () => {
-                  if (activeTool === "shape") {
-                    setShapeType((prev) => (prev === "rectangle" ? "ellipse" : "rectangle"));
-                  }
-                })}
-                {toolButton("erase", "Eraser", <Eraser className="h-5 w-5" />)}
+              {/* Center Quick History Controls */}
+              <div className="hidden lg:flex items-center gap-1 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60">
                 <button
                   type="button"
-                  onClick={toggleThumbnails}
-                  className={`h-14 min-w-[74px] border-r border-slate-200 px-3 text-xs font-medium transition ${showThumbnails ? "bg-white text-[#3d54f5]" : "bg-[#f4f4f7] text-slate-600 hover:bg-white"
-                    }`}
+                  onClick={undo}
+                  disabled={!canUndo}
+                  className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                  title="Undo (Ctrl+Z)"
                 >
-                  <span className="mx-auto mb-1 block w-fit"><PanelLeft className="h-5 w-5" /></span>
-                  <span className="block whitespace-nowrap">Pages</span>
+                  <Undo2 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={redo}
+                  disabled={!canRedo}
+                  className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                  title="Redo (Ctrl+Y)"
+                >
+                  <Redo2 className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Right Action Buttons */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceMode("flow")}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition cursor-pointer"
+                  title="Switch to Word Flow Mode for natural reflowable text editing"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Word Mode</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => replacePdfRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 transition cursor-pointer"
+                  title="Change Document"
+                >
+                  <Replace className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  <span className="hidden sm:inline">Replace PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resetEditor}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer"
+                  title="Close & Clear"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">Reset</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={markDone}
+                  disabled={busy}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-primary-600 via-primary-700 to-indigo-600 hover:from-primary-700 hover:to-indigo-700 shadow-md shadow-primary-600/20 active:scale-98 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {busy ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      <span>Export PDF</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
 
+            {/* Studio Tools Bar */}
+            <div className="py-2.5 px-4 sm:px-6 bg-slate-50/90 dark:bg-slate-900/90 flex items-center justify-between gap-3 overflow-x-auto border-b border-slate-200/60 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap">
+                {/* Navigation Tools */}
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+                  {toolButton("move", "Pan", <Hand className="h-4 w-4" />)}
+                </div>
+
+                <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
+
+                {/* Markup Tools */}
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+                  {toolButton("addText", "Text", <Type className="h-4 w-4" />)}
+                  {toolButton("draw", "Draw", <Pencil className="h-4 w-4" />)}
+                  {toolButton("highlight", "Highlight", <Highlighter className="h-4 w-4" />)}
+                  {toolButton("shape", shapeType === "rectangle" ? "Rectangle" : "Ellipse", <Shapes className="h-4 w-4" />, () => {
+                    if (activeTool === "shape") {
+                      setShapeType((prev) => (prev === "rectangle" ? "ellipse" : "rectangle"));
+                    }
+                  })}
+                  {toolButton("image", "Image", <ImagePlus className="h-4 w-4" />, () => {
+                    if (!pendingImageSrc) requestImagePick();
+                  })}
+                </div>
+
+                <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
+
+                {/* Cleanup Tools */}
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+                  {toolButton("erase", "Erase", <Eraser className="h-4 w-4" />)}
+                </div>
+              </div>
+
+              {/* Right Pages Sidebar Toggle */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleThumbnails}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${
+                    showThumbnails
+                      ? "bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-950/60 dark:text-primary-300 dark:border-primary-800"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700"
+                  }`}
+                  title="Toggle Page Thumbnails"
+                >
+                  <PanelLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Thumbnails</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contextual Text Inspector */}
             {selectedTextAnnotation && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 border-b border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 sm:px-6 py-2 backdrop-blur-md">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Text Props</span>
+                <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
                 <button
                   type="button"
                   onClick={() => setTool("editText")}
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  Text mode
+                  Edit Content
                 </button>
                 <select
                   value={selectedTextAnnotation.style.fontFamily || "Arial"}
                   onChange={(e) => updateSelectedTextStyle({ fontFamily: e.target.value })}
-                  className="h-9 rounded border border-slate-300 bg-white px-2 text-sm text-slate-700"
+                  className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   {textFonts.map((font) => (
                     <option key={font} value={font}>
@@ -756,103 +875,113 @@ const PdfEditor: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  min={8}
-                  max={120}
-                  value={selectedTextAnnotation.style.fontSize || 16}
-                  onChange={(e) => {
-                    const next = Number(e.target.value || 16);
-                    if (!Number.isFinite(next)) return;
-                    updateSelectedTextStyle({ fontSize: Math.max(8, Math.min(120, next)) });
-                  }}
-                  className="h-9 w-20 rounded border border-slate-300 bg-white px-2 text-sm text-slate-700"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSelectedTextStyle({
-                      fontWeight: selectedTextAnnotation.style.fontWeight === "bold" ? "normal" : "bold",
-                    })
-                  }
-                  className={`rounded border px-2 py-2 ${selectedTextAnnotation.style.fontWeight === "bold"
-                    ? "border-[#3d54f5] bg-[#eef1ff] text-[#2d45da]"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  title="Bold"
-                >
-                  <Bold className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSelectedTextStyle({
-                      fontStyle: selectedTextAnnotation.style.fontStyle === "italic" ? "normal" : "italic",
-                    })
-                  }
-                  className={`rounded border px-2 py-2 ${selectedTextAnnotation.style.fontStyle === "italic"
-                    ? "border-[#3d54f5] bg-[#eef1ff] text-[#2d45da]"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  title="Italic"
-                >
-                  <Italic className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSelectedTextStyle({
-                      textDecoration: selectedTextAnnotation.style.textDecoration === "underline" ? "none" : "underline",
-                    })
-                  }
-                  className={`rounded border px-2 py-2 ${selectedTextAnnotation.style.textDecoration === "underline"
-                    ? "border-[#3d54f5] bg-[#eef1ff] text-[#2d45da]"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  title="Underline"
-                >
-                  <Underline className="h-4 w-4" />
-                </button>
-                <input
-                  type="color"
-                  value={selectedTextAnnotation.style.textColor || "#111827"}
-                  onChange={(e) => updateSelectedTextStyle({ textColor: e.target.value })}
-                  className="h-9 w-10 rounded border border-slate-300 bg-white p-1"
-                  title="Text color"
-                />
-                <button
-                  type="button"
-                  onClick={() => updateSelectedTextStyle({ textAlign: "left" })}
-                  className={`rounded border px-2 py-2 ${(selectedTextAnnotation.style.textAlign || "left") === "left"
-                    ? "border-[#3d54f5] bg-[#eef1ff] text-[#2d45da]"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  title="Align left"
-                >
-                  <AlignLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateSelectedTextStyle({ textAlign: "center" })}
-                  className={`rounded border px-2 py-2 ${selectedTextAnnotation.style.textAlign === "center"
-                    ? "border-[#3d54f5] bg-[#eef1ff] text-[#2d45da]"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  title="Align center"
-                >
-                  <AlignCenter className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateSelectedTextStyle({ textAlign: "right" })}
-                  className={`rounded border px-2 py-2 ${selectedTextAnnotation.style.textAlign === "right"
-                    ? "border-[#3d54f5] bg-[#eef1ff] text-[#2d45da]"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  title="Align right"
-                >
-                  <AlignRight className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <input
+                    type="number"
+                    min={8}
+                    max={120}
+                    value={selectedTextAnnotation.style.fontSize || 16}
+                    onChange={(e) => {
+                      const next = Number(e.target.value || 16);
+                      if (!Number.isFinite(next)) return;
+                      updateSelectedTextStyle({ fontSize: Math.max(8, Math.min(120, next)) });
+                    }}
+                    className="h-7 w-12 bg-transparent text-center text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-slate-400 pr-1.5 font-medium">px</span>
+                </div>
+                <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateSelectedTextStyle({
+                        fontWeight: selectedTextAnnotation.style.fontWeight === "bold" ? "normal" : "bold",
+                      })
+                    }
+                    className={`p-1.5 rounded-md transition ${selectedTextAnnotation.style.fontWeight === "bold"
+                      ? "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs font-bold"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      }`}
+                    title="Bold"
+                  >
+                    <Bold className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateSelectedTextStyle({
+                        fontStyle: selectedTextAnnotation.style.fontStyle === "italic" ? "normal" : "italic",
+                      })
+                    }
+                    className={`p-1.5 rounded-md transition ${selectedTextAnnotation.style.fontStyle === "italic"
+                      ? "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      }`}
+                    title="Italic"
+                  >
+                    <Italic className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateSelectedTextStyle({
+                        textDecoration: selectedTextAnnotation.style.textDecoration === "underline" ? "none" : "underline",
+                      })
+                    }
+                    className={`p-1.5 rounded-md transition ${selectedTextAnnotation.style.textDecoration === "underline"
+                      ? "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      }`}
+                    title="Underline"
+                  >
+                    <Underline className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-400 font-medium">Color:</span>
+                  <input
+                    type="color"
+                    value={selectedTextAnnotation.style.textColor || "#111827"}
+                    onChange={(e) => updateSelectedTextStyle({ textColor: e.target.value })}
+                    className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white"
+                    title="Text color"
+                  />
+                </div>
+                <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => updateSelectedTextStyle({ textAlign: "left" })}
+                    className={`p-1.5 rounded-md transition ${(selectedTextAnnotation.style.textAlign || "left") === "left"
+                      ? "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      }`}
+                    title="Align left"
+                  >
+                    <AlignLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSelectedTextStyle({ textAlign: "center" })}
+                    className={`p-1.5 rounded-md transition ${selectedTextAnnotation.style.textAlign === "center"
+                      ? "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      }`}
+                    title="Align center"
+                  >
+                    <AlignCenter className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSelectedTextStyle({ textAlign: "right" })}
+                    className={`p-1.5 rounded-md transition ${selectedTextAnnotation.style.textAlign === "right"
+                      ? "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      }`}
+                    title="Align right"
+                  >
+                    <AlignRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -860,218 +989,305 @@ const PdfEditor: React.FC = () => {
                     deleteAnnotation(selectedTextAnnotation.id);
                     clearSelection();
                   }}
-                  className="ml-2 rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                  className="ml-auto inline-flex items-center gap-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
                 >
-                  Delete text
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
                 </button>
               </div>
             )}
 
+            {/* Contextual Shapes / Multi-Selection Inspector */}
             {selectedAnnotations.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-[#f8f9ff] px-4 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{selectedAnnotations.length} selected</span>
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900/95 px-4 sm:px-6 py-2 backdrop-blur-md text-xs">
+                <span className="px-2 py-0.5 rounded-md font-bold text-[11px] bg-primary-100 text-primary-700 dark:bg-primary-950 dark:text-primary-300">
+                  {selectedAnnotations.length} {selectedAnnotations.length === 1 ? "item" : "items"} selected
+                </span>
+                <div className="h-4 w-px bg-slate-300 dark:bg-slate-700" />
                 <button
                   type="button"
                   onClick={copySelected}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
                 >
-                  <Copy className="h-4 w-4" />
+                  <Copy className="h-3.5 w-3.5" />
                   Copy
                 </button>
                 <button
                   type="button"
                   onClick={pasteClipboard}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
                 >
-                  <ClipboardPaste className="h-4 w-4" />
+                  <ClipboardPaste className="h-3.5 w-3.5" />
                   Paste
                 </button>
                 <button
                   type="button"
                   onClick={duplicateSelected}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
                 >
-                  <Copy className="h-4 w-4" />
+                  <Copy className="h-3.5 w-3.5" />
                   Duplicate
                 </button>
                 <button
                   type="button"
                   onClick={bringSelectedToFront}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
                 >
-                  <Layers className="h-4 w-4" />
-                  Bring front
+                  <Layers className="h-3.5 w-3.5" />
+                  Bring Front
                 </button>
                 <button
                   type="button"
                   onClick={sendSelectedToBack}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
                 >
-                  <Layers className="h-4 w-4" />
-                  Send back
+                  <Layers className="h-3.5 w-3.5" />
+                  Send Back
                 </button>
                 <button
                   type="button"
                   onClick={toggleLockSelected}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
                 >
-                  {selectedAnnotations.every((a) => a.data?.locked) ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                  {selectedAnnotations.every((a) => a.data?.locked) ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                   {selectedAnnotations.every((a) => a.data?.locked) ? "Unlock" : "Lock"}
                 </button>
                 <button
                   type="button"
                   onClick={deleteSelected}
-                  className="inline-flex items-center gap-1 rounded border border-red-300 px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50"
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-red-600 dark:text-red-400 hover:bg-red-100 cursor-pointer"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                   Delete
                 </button>
-                <div className="mx-2 h-6 w-px bg-slate-200" />
-                <label className="text-xs text-slate-600">Stroke</label>
-                <input
-                  type="color"
-                  value={selectedAnnotations[0]?.style.strokeColor || "#2563eb"}
-                  onChange={(e) => updateSelectedStyle({ strokeColor: e.target.value })}
-                  className="h-8 w-9 rounded border border-slate-300 p-1"
-                />
-                <label className="text-xs text-slate-600">Fill</label>
-                <input
-                  type="color"
-                  value={(selectedAnnotations[0]?.style.fillColor && selectedAnnotations[0]?.style.fillColor !== "transparent")
-                    ? selectedAnnotations[0].style.fillColor
-                    : "#ffffff"}
-                  onChange={(e) => updateSelectedStyle({ fillColor: e.target.value })}
-                  className="h-8 w-9 rounded border border-slate-300 p-1"
-                />
-                <label className="text-xs text-slate-600">Width</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={selectedAnnotations[0]?.style.strokeWidth || 1}
-                  onChange={(e) => updateSelectedStyle({ strokeWidth: Number(e.target.value) })}
-                />
-                <label className="text-xs text-slate-600">Opacity</label>
-                <input
-                  type="range"
-                  min={0.1}
-                  max={1}
-                  step={0.05}
-                  value={selectedAnnotations[0]?.style.opacity ?? 1}
-                  onChange={(e) => updateSelectedStyle({ opacity: Number(e.target.value) })}
-                />
+                <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-500">Stroke</span>
+                  <input
+                    type="color"
+                    value={selectedAnnotations[0]?.style.strokeColor || "#2563eb"}
+                    onChange={(e) => updateSelectedStyle({ strokeColor: e.target.value })}
+                    className="h-6 w-6 rounded border border-slate-300 dark:border-slate-600 p-0.5 cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-500">Fill</span>
+                  <input
+                    type="color"
+                    value={(selectedAnnotations[0]?.style.fillColor && selectedAnnotations[0]?.style.fillColor !== "transparent")
+                      ? selectedAnnotations[0].style.fillColor
+                      : "#ffffff"}
+                    onChange={(e) => updateSelectedStyle({ fillColor: e.target.value })}
+                    className="h-6 w-6 rounded border border-slate-300 dark:border-slate-600 p-0.5 cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-500">Width</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={selectedAnnotations[0]?.style.strokeWidth || 1}
+                    onChange={(e) => updateSelectedStyle({ strokeWidth: Number(e.target.value) })}
+                    className="w-16 accent-primary-600 cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-500">Opacity</span>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    value={selectedAnnotations[0]?.style.opacity ?? 1}
+                    onChange={(e) => updateSelectedStyle({ opacity: Number(e.target.value) })}
+                    className="w-16 accent-primary-600 cursor-pointer"
+                  />
+                </div>
               </div>
             )}
           </header>
         )}
 
-        <div className={document ? "mx-auto max-w-[1800px] px-4 py-5 pb-40" : "mx-auto max-w-3xl px-4 py-16"}>
+        <div className={document ? "mx-auto max-w-[1800px] px-3 sm:px-6 py-5 pb-36" : "mx-auto max-w-3xl px-4 py-16"}>
           {(error || notice) && (
             <div className="mb-4 space-y-2">
-              {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-              {notice && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</div>}
+              {error && <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-700 dark:text-red-300 font-medium shadow-2xs">{error}</div>}
+              {notice && <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300 font-medium shadow-2xs">{notice}</div>}
             </div>
           )}
 
           {!document ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 text-center shadow-sm">
-              <FileText className="mx-auto mb-4 h-11 w-11 text-slate-400" />
-              <p className="text-slate-700 text-2xl font-semibold">Select PDF</p>
-              <p className="mt-2 text-slate-500">Upload one PDF to open editor tools.</p>
-              <div className="mt-8 flex justify-center">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#3557f0] px-6 py-3 text-base font-semibold text-white hover:bg-[#2d49cd]">
-                  <Upload className="h-4 w-4" />
-                  Select PDF
-                  <input type="file" accept="application/pdf" className="hidden" onChange={onFileInput} />
-                </label>
+            <div className="max-w-2xl mx-auto py-8 sm:py-12 px-4">
+              <div className="rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-8 sm:p-14 text-center shadow-lg shadow-slate-100 dark:shadow-none hover:border-primary-400 dark:hover:border-primary-600 transition-all duration-300">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-primary-500/25">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  Edit PDF Document
+                </h2>
+                <p className="mt-3 text-slate-500 dark:text-slate-400 text-sm sm:text-base max-w-md mx-auto">
+                  Add text annotations, draw shapes, highlight sections, and insert images directly in your browser.
+                </p>
+
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-primary-600 via-primary-700 to-indigo-600 px-7 py-3.5 text-sm font-bold text-white shadow-md shadow-primary-600/20 hover:from-primary-700 hover:to-indigo-700 active:scale-98 transition">
+                    <Upload className="h-4 w-4" />
+                    <span>Choose PDF File</span>
+                    <input type="file" accept="application/pdf" className="hidden" onChange={onFileInput} />
+                  </label>
+                </div>
+
+                {/* Features Pill Badges */}
+                <div className="mt-10 pt-8 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">100% Private & In-Browser</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">No Signup or Limits</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Instant High-Res Export</span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-[16px_1fr] gap-3">
-              <div className="rounded-full bg-slate-300/80 shadow-inner" />
-              <div className="rounded-xl border border-slate-300 bg-white/70 shadow-sm overflow-hidden">
-                <div className="grid min-h-[76vh] grid-cols-12">
-                  {showThumbnails && (
-                    <aside className="col-span-2 border-r border-slate-200 bg-slate-50 p-3 overflow-y-auto">
-                      <PageThumbnails document={document} currentPage={document.currentPage} onPageSelect={handlePageSelect} />
-                    </aside>
+            <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 shadow-sm overflow-hidden">
+              <div className="grid min-h-[76vh] grid-cols-12">
+                {showThumbnails && (
+                  <aside className="col-span-12 sm:col-span-3 lg:col-span-2 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 overflow-y-auto">
+                    <PageThumbnails document={document} currentPage={document.currentPage} onPageSelect={handlePageSelect} />
+                  </aside>
+                )}
+                <div className={showThumbnails ? "col-span-12 sm:col-span-9 lg:col-span-10 bg-slate-100 dark:bg-slate-950/60" : "col-span-12 bg-slate-100 dark:bg-slate-950/60"}>
+                  {busy ? (
+                    <div className="flex h-full items-center justify-center py-20 text-slate-600 dark:text-slate-400">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-sm font-medium">Preparing editor...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <PdfViewer
+                      document={document}
+                      activeTool={activeTool}
+                      shapeType={shapeType}
+                      pendingImageSrc={pendingImageSrc}
+                      selectedAnnotation={selectedAnnotation}
+                      selectedAnnotationIds={selectedAnnotationIds}
+                      zoom={zoom}
+                      fitMode={fitMode as PdfFitMode}
+                      onAnnotationAdd={addAnnotation}
+                      onAnnotationSelect={selectSingleAnnotation}
+                      onAnnotationToggleSelect={toggleAnnotationSelection}
+                      onAnnotationUpdate={updateAnnotation}
+                      onAnnotationBulkUpdate={bulkUpdateAnnotations}
+                      onAnnotationDelete={deleteAnnotation}
+                      onRequestToolChange={setTool}
+                      onRequestImagePick={requestImagePick}
+                      onConsumePendingImage={() => {
+                        setPendingImageSrc(null);
+                        setNotice("");
+                      }}
+                      onZoomChange={setZoom}
+                      onFitModeChange={(mode) => setFitMode(mode as PdfFitMode)}
+                      onPageChange={handlePageSelect}
+                    />
                   )}
-                  <div className={showThumbnails ? "col-span-10 bg-[#e7e7ed]" : "col-span-12 bg-[#e7e7ed]"}>
-                    {busy ? (
-                      <div className="flex h-full items-center justify-center py-20 text-slate-600">Preparing editor...</div>
-                    ) : (
-                      <PdfViewer
-                        document={document}
-                        activeTool={activeTool}
-                        shapeType={shapeType}
-                        pendingImageSrc={pendingImageSrc}
-                        selectedAnnotation={selectedAnnotation}
-                        selectedAnnotationIds={selectedAnnotationIds}
-                        zoom={zoom}
-                        fitMode={fitMode as PdfFitMode}
-                        onAnnotationAdd={addAnnotation}
-                        onAnnotationSelect={selectSingleAnnotation}
-                        onAnnotationToggleSelect={toggleAnnotationSelection}
-                        onAnnotationUpdate={updateAnnotation}
-                        onAnnotationBulkUpdate={bulkUpdateAnnotations}
-                        onAnnotationDelete={deleteAnnotation}
-                        onRequestToolChange={setTool}
-                        onRequestImagePick={requestImagePick}
-                        onConsumePendingImage={() => {
-                          setPendingImageSrc(null);
-                          setNotice("");
-                        }}
-                        onZoomChange={setZoom}
-                        onFitModeChange={(mode) => setFitMode(mode as PdfFitMode)}
-                        onPageChange={handlePageSelect}
-                      />
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* Floating Bottom Canvas Dock */}
         {document && (
-          <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2">
-            <div className="flex items-center gap-3 rounded-xl bg-[#454855] px-4 py-3 text-white shadow-2xl">
-              <button className="rounded border border-white/20 p-1.5 hover:bg-white/10" onClick={() => changePage(-1)} type="button">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <div className="min-w-[92px] text-center text-xl font-semibold">
-                {document.currentPage} / {document.totalPages}
+          <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2">
+            <div className="flex items-center gap-2 sm:gap-3 rounded-2xl bg-slate-900/90 dark:bg-slate-950/90 px-4 py-2.5 text-white shadow-2xl backdrop-blur-md border border-white/10 ring-1 ring-black/20">
+              {/* Page Navigator */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => changePage(-1)}
+                  disabled={document.currentPage <= 1}
+                  className="rounded-lg p-1.5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="px-2 text-center text-xs font-semibold tracking-wide text-slate-200 min-w-[70px]">
+                  {document.currentPage} / {document.totalPages}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => changePage(1)}
+                  disabled={document.currentPage >= document.totalPages}
+                  className="rounded-lg p-1.5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                  title="Next Page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
-              <button className="rounded border border-white/20 p-1.5 hover:bg-white/10" onClick={() => changePage(1)} type="button">
-                <ChevronRight className="h-4 w-4" />
-              </button>
 
-              <div className="mx-1 h-8 w-px bg-white/20" />
+              <div className="h-5 w-px bg-white/15" />
 
-              <button className="rounded border border-white/20 p-1.5 hover:bg-white/10" onClick={() => setZoom(clampZoom(zoom - 0.1))} type="button">
-                <ZoomOut className="h-4 w-4" />
-              </button>
-              <div className="min-w-[70px] text-center text-lg font-semibold">{Math.round(zoom * 100)}%</div>
-              <button className="rounded border border-white/20 p-1.5 hover:bg-white/10" onClick={() => setZoom(clampZoom(zoom + 0.1))} type="button">
-                <ZoomIn className="h-4 w-4" />
-              </button>
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setZoom(clampZoom(zoom - 0.1))}
+                  className="rounded-lg p-1.5 hover:bg-white/10 transition cursor-pointer"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoom(1)}
+                  className="px-2 text-center text-xs font-semibold text-slate-200 hover:text-white min-w-[48px] rounded hover:bg-white/10 py-1 transition cursor-pointer"
+                  title="Reset to 100%"
+                >
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoom(clampZoom(zoom + 0.1))}
+                  className="rounded-lg p-1.5 hover:bg-white/10 transition cursor-pointer"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+              </div>
 
-              <div className="mx-1 h-8 w-px bg-white/20" />
+              <div className="h-5 w-px bg-white/15" />
 
+              {/* Quick Undo / Redo in dock */}
               <button
                 type="button"
-                onClick={markDone}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#f88d8d] px-4 py-2 font-semibold text-white hover:bg-[#ef7f7f]"
+                onClick={undo}
+                disabled={!canUndo}
+                className="rounded-lg p-1.5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                title="Undo (Ctrl+Z)"
               >
-                <Check className="h-4 w-4" />
-                Save changes
+                <Undo2 className="h-4 w-4" />
               </button>
-
-              <button type="button" onClick={undo} disabled={!canUndo} className="rounded border border-white/20 px-2 py-1 disabled:opacity-40 hover:bg-white/10">Undo</button>
-              <button type="button" onClick={redo} disabled={!canRedo} className="rounded border border-white/20 px-2 py-1 disabled:opacity-40 hover:bg-white/10">Redo</button>
-              <button type="button" onClick={resetEditor} className="rounded border border-white/20 px-2 py-1 hover:bg-white/10">Reset</button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                className="rounded-lg p-1.5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
       <ToolSEOContent toolKey="/pdf-editor" />

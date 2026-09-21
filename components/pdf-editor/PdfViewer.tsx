@@ -93,6 +93,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     fontFamily: string;
     fontWeight?: string | number;
     fontStyle?: string;
+    bgColor?: string;
     isModified: boolean;
   }>>([]);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
@@ -117,6 +118,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   } | null>(null);
   const [textEditor, setTextEditor] = useState<{ id: string; value: string } | null>(null);
   const textEditorRef = useRef<{ id: string; value: string } | null>(null);
+  const annotationsRef = useRef(document.annotations);
+  annotationsRef.current = document.annotations;
 
   const pageAnnotations = document.annotations.filter((a) => a.pageNumber === currentPageNum);
 
@@ -161,7 +164,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         // Extract text items from PDF page for real-time natural editing
         try {
           const textContent = await page.getTextContent();
-          const items: Array<{
+          let items: Array<{
             id: string;
             originalStr: string;
             currentStr: string;
@@ -178,6 +181,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
           const styles = (textContent as any).styles || {};
 
+          // Collect raw valid text items
+          const rawRuns: any[] = [];
           textContent.items.forEach((item: any, idx: number) => {
             const str = String(item.str || '');
             if (!str || str.trim().length === 0) return;
@@ -188,29 +193,50 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
             const fontHeight = Math.abs(transform[3] || transform[0] || 12);
             const fontSize = Math.max(9, fontHeight * scale);
-            const x = Math.max(0, vx - 2);
-            const y = Math.max(0, vy - (fontSize * 0.85) - 2);
-            const width = Math.max(20, (item.width ? item.width * scale : str.length * fontSize * 0.55)) + 6;
-            const height = (fontSize * 1.18) + 4;
+            const x = Math.max(0, vx);
+            const y = Math.max(0, vy - (fontSize * 0.88));
+            const width = item.width ? item.width * scale : str.length * fontSize * 0.55;
+            const height = fontSize * 1.15;
 
-            const fontNameLower = String(item.fontName || '').toLowerCase();
+            const realFont = (page.commonObjs as any)?.has?.(item.fontName) ? (page.commonObjs as any).get(item.fontName) : null;
+            const fontNameLower = String(realFont?.name || item.fontName || '').toLowerCase();
             const fontObj = styles[item.fontName];
-            const isBold = fontNameLower.includes('bold') || fontNameLower.includes('black') || fontNameLower.includes('heavy');
-            const isItalic = fontNameLower.includes('italic') || fontNameLower.includes('oblique');
+            const isBold = Boolean(realFont?.bold) || fontNameLower.includes('bold') || fontNameLower.includes('black') || fontNameLower.includes('heavy');
+            const isItalic = Boolean(realFont?.italic) || fontNameLower.includes('italic') || fontNameLower.includes('oblique');
 
-            let fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-            if (fontObj?.fontFamily) {
-              fontFamily = `${fontObj.fontFamily}, system-ui, -apple-system, sans-serif`;
-            } else if (fontNameLower.includes('times') || fontNameLower.includes('serif') || fontNameLower.includes('georgia')) {
-              fontFamily = 'Georgia, "Times New Roman", Times, serif';
-            } else if (fontNameLower.includes('mono') || fontNameLower.includes('courier')) {
-              fontFamily = 'ui-monospace, "Courier New", Courier, monospace';
+            let fontFamily = '"Times New Roman", Times, Georgia, serif';
+            if (fontNameLower.includes('courier') || fontNameLower.includes('mono') || fontObj?.fontFamily === 'monospace') {
+              fontFamily = 'ui-monospace, "Courier New", monospace';
+            } else if (fontNameLower.includes('helvetica') || fontNameLower.includes('arial') || fontNameLower.includes('sans') || fontObj?.fontFamily === 'sans-serif') {
+              fontFamily = 'Arial, Helvetica, -apple-system, sans-serif';
+            } else if (fontNameLower.includes('times') || fontNameLower.includes('serif') || fontObj?.fontFamily === 'serif') {
+              fontFamily = '"Times New Roman", Times, Georgia, serif';
+            } else if (fontObj?.fontFamily) {
+              fontFamily = `${fontObj.fontFamily}, sans-serif`;
             }
 
-            items.push({
-              id: `txt_${pageNum}_${idx}`,
-              originalStr: str,
-              currentStr: str,
+            // Sample background color behind this text from the rendered canvas (above letters)
+            let bgColor = '#FFFFFF';
+            try {
+              const sampleX = Math.max(0, Math.min(canvas.width - 1, Math.round(x + 2)));
+              const sampleY = Math.max(0, Math.min(canvas.height - 1, Math.round(y - 2)));
+              const p = context.getImageData(sampleX, sampleY, 1, 1).data;
+              const lum = (0.299 * p[0]) + (0.587 * p[1]) + (0.114 * p[2]);
+              if (p[3] > 80 && lum >= 170) {
+                if (p[0] >= 240 && p[1] >= 240 && p[2] >= 240) {
+                  bgColor = '#FFFFFF';
+                } else {
+                  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+                  bgColor = `#${toHex(p[0])}${toHex(p[1])}${toHex(p[2])}`;
+                }
+              }
+            } catch {
+              bgColor = '#FFFFFF';
+            }
+
+            rawRuns.push({
+              id: `raw_${pageNum}_${idx}`,
+              str,
               x,
               y,
               width,
@@ -219,8 +245,61 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
               fontFamily,
               fontWeight: isBold ? '700' : '400',
               fontStyle: isItalic ? 'italic' : 'normal',
-              isModified: false,
+              bgColor,
             });
+          });
+
+          // Sort by Y (baseline), then X (horizontal reading order)
+          rawRuns.sort((a, b) => Math.abs(a.y - b.y) <= 3 ? a.x - b.x : a.y - b.y);
+
+          // Merge ONLY tightly spaced glyph fragments that belong to the same word/token
+          const merged: typeof rawRuns = [];
+          for (const run of rawRuns) {
+            const prev = merged[merged.length - 1];
+            const gap = prev ? run.x - (prev.x + prev.width) : 999;
+            const sameBaseline = prev && Math.abs(prev.y - run.y) <= Math.max(2.5, run.height * 0.25);
+            const isGlyphFragment = sameBaseline && run.x >= prev.x && gap <= Math.max(2.0, run.fontSize * 0.16);
+
+            if (isGlyphFragment) {
+              // Tightly spaced glyphs (no space injected, e.g. "Fur" + "k" + "an" -> "Furkan")
+              prev.str = prev.str + run.str;
+              prev.width = (run.x + run.width) - prev.x;
+              prev.height = Math.max(prev.height, run.height);
+              if (run.bgColor && run.bgColor !== '#FFFFFF') {
+                prev.bgColor = run.bgColor;
+              }
+            } else {
+              merged.push({ ...run });
+            }
+          }
+
+          const existingPageAnnotations = annotationsRef.current.filter(
+            (a) => a.pageNumber === pageNum && a.data?.isExistingText
+          );
+
+          items = merged.map((m, idx) => {
+            const itemId = `txt_${pageNum}_${idx}`;
+            const existingAnno = existingPageAnnotations.find(
+              (a) => a.data?.textItemId === itemId || a.id === `edited_${itemId}`
+            );
+            const currentStr = existingAnno && existingAnno.data?.text ? String(existingAnno.data.text) : m.str;
+            const isModified = Boolean(existingAnno && currentStr !== m.str);
+
+            return {
+              id: itemId,
+              originalStr: m.str,
+              currentStr,
+              x: Math.max(0, m.x - 2),
+              y: Math.max(0, m.y - 1),
+              width: m.width + 4,
+              height: m.height + 2,
+              fontSize: m.fontSize,
+              fontFamily: m.fontFamily,
+              fontWeight: m.fontWeight,
+              fontStyle: m.fontStyle,
+              bgColor: m.bgColor || '#FFFFFF',
+              isModified,
+            };
           });
 
           setPageTextItems(items);
@@ -714,6 +793,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const renderAnnotation = (annotation: PdfAnnotation) => {
+    // Skip duplicate rendering of in-place edited PDF text runs (managed cleanly by pageTextItems)
+    if (annotation.data?.isExistingText) {
+      return null;
+    }
+
     const isSelected = selectedAnnotationIds.includes(annotation.id) || selectedAnnotation?.id === annotation.id;
     const isEditingText = textEditor?.id === annotation.id && annotation.type === PdfAnnotationType.TEXT;
     const showOutline = annotation.type !== PdfAnnotationType.TEXT
@@ -921,9 +1005,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             onMouseLeave={resetInteraction}
           >
             {/* Interactive Extracted Text Layer for 1-Click Natural Editing */}
-            {(activeTool === 'editText' || activeTool === 'move') && pageTextItems.map((item) => {
+            {(activeTool === 'editText' || activeTool === 'move' || activeTool === 'addText') && pageTextItems.map((item) => {
               const isEditing = activeEditingId === item.id;
               const isModified = item.currentStr !== item.originalStr;
+
+              const textCharCount = Math.max(item.currentStr.length, item.originalStr.length);
+              const approxCharWidth = item.fontSize * 0.65;
+              const activeWidth = isEditing
+                ? Math.max(item.width + 28, Math.ceil(textCharCount * approxCharWidth) + 36)
+                : Math.max(item.width + 4, Math.ceil(textCharCount * approxCharWidth) + 8);
 
               return (
                 <div
@@ -932,12 +1022,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                     position: 'absolute',
                     left: item.x,
                     top: item.y,
-                    minWidth: Math.max(24, item.width),
+                    width: isEditing ? activeWidth : undefined,
+                    minWidth: isEditing ? activeWidth : Math.max(20, item.width),
                     minHeight: item.height,
-                    zIndex: isEditing ? 30 : isModified ? 15 : 2,
-                    backgroundColor: isEditing || isModified ? '#FFFFFF' : 'transparent',
+                    zIndex: isEditing ? 40 : isModified ? 15 : 2,
+                    backgroundColor: isEditing || isModified ? (item.bgColor || '#FFFFFF') : 'transparent',
+                    boxShadow: isEditing
+                      ? '0 0 0 2px #3557f0, 0 4px 12px rgba(53, 87, 240, 0.15)'
+                      : 'none',
+                    borderRadius: isEditing ? 4 : 0,
                   }}
-                  className="cursor-text select-none"
+                  className={`cursor-text select-none group transition-[box-shadow] ${
+                    !isEditing
+                      ? 'hover:outline hover:outline-1 hover:outline-dashed hover:outline-blue-400 hover:bg-blue-400/10'
+                      : ''
+                  }`}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setActiveEditingId(item.id);
@@ -951,62 +1053,98 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                       onChange={(e) => {
                         const nextVal = e.target.value;
                         setPageTextItems((prev) =>
-                          prev.map((t) => (t.id === item.id ? { ...t, currentStr: nextVal, isModified: true } : t))
+                          prev.map((t) =>
+                            t.id === item.id
+                              ? { ...t, currentStr: nextVal, isModified: nextVal !== t.originalStr }
+                              : t
+                          )
                         );
                       }}
                       onBlur={() => {
                         setActiveEditingId(null);
+                        const annoId = `edited_${item.id}`;
+                        const existingAnno = annotationsRef.current.find((a) => a.id === annoId);
+
                         if (item.currentStr !== item.originalStr) {
-                          onAnnotationAdd({
-                            id: `edited_${item.id}`,
-                            type: 'text' as any,
-                            pageNumber: currentPageNum,
-                            bounds: new DOMRect(item.x, item.y, item.width, item.height),
+                          const renderedLen = item.currentStr.length;
+                          const calculatedWidth = Math.max(item.width, (renderedLen * item.fontSize * 0.62) + 12);
+
+                          const annoData: Partial<PdfAnnotation> = {
+                            bounds: new DOMRect(item.x - 2, item.y - 1, calculatedWidth + 4, item.height + 2),
                             data: {
                               text: item.currentStr,
                               originalText: item.originalStr,
                               isExistingText: true,
+                              textItemId: item.id,
+                              canvasScale: zoom,
+                              bgColor: item.bgColor || '#FFFFFF',
                             },
                             style: {
                               textColor: '#0f172a',
-                              fillColor: '#FFFFFF',
+                              fillColor: item.bgColor || '#FFFFFF',
                               fontSize: Math.round(item.fontSize),
                               fontFamily: item.fontFamily,
                               fontWeight: item.fontWeight ? String(item.fontWeight) : 'normal',
                               fontStyle: item.fontStyle ? String(item.fontStyle) : 'normal',
                             },
-                            createdAt: new Date(),
                             modifiedAt: new Date(),
-                            isVisible: true,
-                            zIndex: 20,
-                          });
+                          };
+
+                          if (existingAnno) {
+                            onAnnotationUpdate(annoId, annoData);
+                          } else {
+                            onAnnotationAdd({
+                              id: annoId,
+                              type: PdfAnnotationType.TEXT,
+                              pageNumber: currentPageNum,
+                              bounds: annoData.bounds!,
+                              data: annoData.data,
+                              style: annoData.style!,
+                              createdAt: new Date(),
+                              modifiedAt: new Date(),
+                              isVisible: true,
+                              zIndex: 20,
+                            });
+                          }
+                        } else if (existingAnno) {
+                          onAnnotationDelete(annoId);
                         }
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.currentTarget.blur();
                         }
+                        if (e.key === 'Escape') {
+                          setPageTextItems((prev) =>
+                            prev.map((t) =>
+                              t.id === item.id ? { ...t, currentStr: t.originalStr, isModified: false } : t
+                            )
+                          );
+                          setActiveEditingId(null);
+                        }
                       }}
-                      className="w-full h-full bg-white text-slate-900 px-0.5 py-0 outline-none border-none"
+                      className="w-full h-full px-1.5 py-0 outline-none border-none text-slate-900"
                       style={{
+                        backgroundColor: item.bgColor || '#FFFFFF',
                         fontSize: item.fontSize,
                         fontFamily: item.fontFamily,
                         fontWeight: item.fontWeight,
                         fontStyle: item.fontStyle,
-                        lineHeight: 1,
+                        lineHeight: 1.1,
                         WebkitFontSmoothing: 'antialiased',
                       }}
                     />
                   ) : (
                     <div
-                      className="w-full h-full px-0.5 py-0 select-none flex items-center bg-transparent"
+                      className="w-full h-full px-1 py-0 select-none flex items-center"
                       style={{
+                        backgroundColor: isModified ? (item.bgColor || '#FFFFFF') : 'transparent',
                         fontSize: item.fontSize,
                         fontFamily: item.fontFamily,
                         fontWeight: item.fontWeight,
                         fontStyle: item.fontStyle,
                         color: isModified ? '#0f172a' : 'transparent',
-                        lineHeight: 1,
+                        lineHeight: 1.1,
                         WebkitFontSmoothing: 'antialiased',
                       }}
                     >

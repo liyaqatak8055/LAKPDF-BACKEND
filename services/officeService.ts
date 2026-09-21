@@ -17,13 +17,18 @@ const ensurePdfjs = async () => {
 // --- docx ---
 let Document: any, Packer: any, Paragraph: any, TextRun: any,
     Table: any, TableRow: any, TableCell: any, PageBreak: any,
-    BorderStyle: any, WidthType: any;
+    BorderStyle: any, WidthType: any, ImageRun: any, AlignmentType: any, UnderlineType: any,
+    VerticalAlign: any;
 const ensureDocx = async () => {
   if (Document) return;
   // @ts-ignore
   const m = await import('docx');
   const docx: any = (m as any).default || m;
-  ({ Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, PageBreak, BorderStyle, WidthType } = docx);
+  ({
+    Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+    PageBreak, BorderStyle, WidthType, ImageRun, AlignmentType, UnderlineType,
+    VerticalAlign
+  } = docx);
 };
 
 // --- pptxgenjs ---
@@ -415,6 +420,278 @@ export const detectPdfScriptProfile = async (file: File): Promise<PdfScriptProfi
 
 // --- PDF to Office Converters ---
 
+// Helper: Convert raw PDF.js image object to PNG bytes
+async function convertPdfImageToPng(imgObj: any): Promise<Uint8Array | null> {
+  if (!imgObj) return null;
+  const w = imgObj.width;
+  const h = imgObj.height;
+  if (!w || !h || w <= 0 || h <= 0) return null;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    if (typeof HTMLImageElement !== 'undefined' && imgObj instanceof HTMLImageElement) {
+      ctx.drawImage(imgObj, 0, 0);
+    } else if (typeof HTMLCanvasElement !== 'undefined' && imgObj instanceof HTMLCanvasElement) {
+      ctx.drawImage(imgObj, 0, 0);
+    } else if (typeof ImageBitmap !== 'undefined' && imgObj instanceof ImageBitmap) {
+      ctx.drawImage(imgObj, 0, 0);
+    } else if (imgObj.bitmap && typeof ctx.drawImage === 'function') {
+      ctx.drawImage(imgObj.bitmap, 0, 0);
+    } else if (imgObj.data) {
+      const imgDataArr = imgObj.data;
+      const imgData = ctx.createImageData(w, h);
+      const smaskArr = imgObj.smask?.data;
+
+      if (imgDataArr.length === w * h * 4) {
+        imgData.data.set(imgDataArr);
+        if (smaskArr && smaskArr.length >= w * h) {
+          for (let i = 0; i < w * h; i++) {
+            imgData.data[i * 4 + 3] = smaskArr[i];
+          }
+        }
+      } else if (imgDataArr.length === w * h * 3) {
+        let src = 0;
+        let dst = 0;
+        for (let i = 0; i < w * h; i++) {
+          imgData.data[dst] = imgDataArr[src];
+          imgData.data[dst + 1] = imgDataArr[src + 1];
+          imgData.data[dst + 2] = imgDataArr[src + 2];
+          imgData.data[dst + 3] = (smaskArr && smaskArr[i] !== undefined) ? smaskArr[i] : 255;
+          src += 3;
+          dst += 4;
+        }
+      } else if (imgDataArr.length === w * h) {
+        let dst = 0;
+        for (let i = 0; i < w * h; i++) {
+          const v = imgDataArr[i];
+          imgData.data[dst] = v;
+          imgData.data[dst + 1] = v;
+          imgData.data[dst + 2] = v;
+          imgData.data[dst + 3] = (smaskArr && smaskArr[i] !== undefined) ? smaskArr[i] : 255;
+          dst += 4;
+        }
+      } else {
+        return null;
+      }
+      ctx.putImageData(imgData, 0, 0);
+    } else {
+      return null;
+    }
+
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) return null;
+    const buffer = await blob.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch (err) {
+    console.warn('convertPdfImageToPng failed:', err);
+    return null;
+  }
+}
+
+interface ExtractedPdfImage {
+  bytes: Uint8Array;
+  x: number;
+  y: number; // in PDF points from top of page
+  width: number;
+  height: number;
+}
+
+// Helper: Extract all embedded raster images (logos, stamps, signatures) from PDF page
+async function extractImagesFromPdfPage(
+  page: any,
+  pageWidth: number,
+  pageHeight: number,
+  pdfjs: any
+): Promise<ExtractedPdfImage[]> {
+  const extracted: ExtractedPdfImage[] = [];
+  try {
+    const operatorList = await page.getOperatorList();
+    const fnArray = operatorList.fnArray || [];
+    const argsArray = operatorList.argsArray || [];
+
+    const OPS = pdfjs?.OPS || (typeof window !== 'undefined' && (window as any).pdfjsLib?.OPS) || {};
+    const opSave = OPS.save ?? 10;
+    const opRestore = OPS.restore ?? 11;
+    const opTransform = OPS.transform ?? 12;
+    const opPaintImage = OPS.paintImageXObject ?? 85;
+    const opPaintInline = OPS.paintInlineImageXObject ?? 86;
+    const opPaintMask = OPS.paintImageMaskXObject ?? 83;
+
+    const matrixStack: number[][] = [];
+    let currentMatrix = [1, 0, 0, 1, 0, 0];
+
+    for (let i = 0; i < fnArray.length; i++) {
+      const fn = fnArray[i];
+      const args = argsArray[i];
+
+      if (fn === opSave) {
+        matrixStack.push([...currentMatrix]);
+      } else if (fn === opRestore) {
+        if (matrixStack.length > 0) {
+          currentMatrix = matrixStack.pop()!;
+        }
+      } else if (fn === opTransform && Array.isArray(args) && args.length >= 6) {
+        const [a1, b1, c1, d1, e1, f1] = currentMatrix;
+        const [a2, b2, c2, d2, e2, f2] = args;
+        currentMatrix = [
+          a1 * a2 + c1 * b2,
+          b1 * a2 + d1 * b2,
+          a1 * c2 + c1 * d2,
+          b1 * c2 + d1 * d2,
+          a1 * e2 + c1 * f2 + e1,
+          b1 * e2 + d1 * f2 + f1,
+        ];
+      } else if (fn === opPaintImage || fn === opPaintInline || fn === opPaintMask) {
+        const objId = args ? args[0] : null;
+        if (!objId || typeof objId !== 'string') continue;
+
+        const scaleX = Math.abs(currentMatrix[0]) || 1;
+        const scaleY = Math.abs(currentMatrix[3]) || 1;
+        const x = currentMatrix[4] || 0;
+        const yBottom = currentMatrix[5] || 0;
+        const yTop = pageHeight - yBottom - scaleY;
+
+        // Skip full-page background scanned images (they are not logos or stamps!)
+        if (scaleX >= pageWidth * 0.70 && scaleY >= pageHeight * 0.70) {
+          continue;
+        }
+
+        const imgObj = await new Promise<any>((resolve) => {
+          try {
+            const pool = (objId.startsWith('g_') && page.commonObjs) ? page.commonObjs : page.objs;
+            if (pool) {
+              if (typeof pool.has === 'function' && pool.has(objId)) {
+                resolve(pool.get(objId));
+              } else {
+                let resolved = false;
+                pool.get(objId, (obj: any) => {
+                  if (!resolved) {
+                    resolved = true;
+                    resolve(obj);
+                  }
+                });
+                setTimeout(() => {
+                  if (!resolved) {
+                    resolved = true;
+                    resolve(null);
+                  }
+                }, 1200);
+              }
+            } else {
+              resolve(null);
+            }
+          } catch {
+            resolve(null);
+          }
+        });
+
+        if (imgObj) {
+          const pngBytes = await convertPdfImageToPng(imgObj);
+          if (pngBytes && pngBytes.length > 0) {
+            extracted.push({
+              bytes: pngBytes,
+              x: Math.max(0, x),
+              y: Math.max(0, yTop),
+              width: Math.max(10, Math.min(pageWidth, scaleX)),
+              height: Math.max(10, Math.min(pageHeight, scaleY)),
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('extractImagesFromPdfPage failed:', err);
+  }
+
+  return extracted.sort((a, b) => a.y - b.y);
+}
+
+// Check if canvas has non-white graphic content (e.g. stamp, signature, logo)
+function hasGraphicContent(
+  canvas: HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  scale: number = 2.0
+): boolean {
+  try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    const sx = Math.max(0, Math.round(x * scale));
+    const sy = Math.max(0, Math.round(y * scale));
+    const sw = Math.min(canvas.width - sx, Math.round(width * scale));
+    const sh = Math.min(canvas.height - sy, Math.round(height * scale));
+    if (sw <= 0 || sh <= 0) return false;
+
+    const imgData = ctx.getImageData(sx, sy, sw, sh);
+    const data = imgData.data;
+    let nonWhitePixels = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      const a = data[i + 3];
+      if (a > 30) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        if (r < 235 || g < 235 || b < 235) {
+          nonWhitePixels++;
+          if (nonWhitePixels > 20) return true;
+        }
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Helper: Crop a region from a rendered canvas to PNG bytes
+async function cropCanvasToPng(
+  sourceCanvas: HTMLCanvasElement,
+  x: number, // in PDF points (scale 1.0)
+  y: number, // in PDF points from top (scale 1.0)
+  width: number,
+  height: number,
+  scale: number = 2.0
+): Promise<Uint8Array | null> {
+  try {
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = Math.max(1, Math.round(width * scale));
+    cropCanvas.height = Math.max(1, Math.round(height * scale));
+    const cropCtx = cropCanvas.getContext('2d');
+    if (!cropCtx) return null;
+
+    cropCtx.drawImage(
+      sourceCanvas,
+      Math.round(x * scale),
+      Math.round(y * scale),
+      Math.round(width * scale),
+      Math.round(height * scale),
+      0,
+      0,
+      cropCanvas.width,
+      cropCanvas.height
+    );
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      cropCanvas.toBlob(resolve, 'image/png');
+    });
+    if (!blob) return null;
+    const buf = await blob.arrayBuffer();
+    return new Uint8Array(buf);
+  } catch (err) {
+    console.warn('cropCanvasToPng failed:', err);
+    return null;
+  }
+}
+
+// --- PDF to Office Converters ---
+
 export const convertPdfToWord = async (
   file: File,
   options: {
@@ -430,22 +707,284 @@ export const convertPdfToWord = async (
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   const documentChildren: DocxElement[] = [];
 
+  const noBorder = { style: BorderStyle?.NONE || 'none', size: 0, color: 'auto' };
+
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     if (options.onProgress) {
-      options.onProgress(pageNum, pdf.numPages, `Converting page ${pageNum} of ${pdf.numPages}...`);
+      options.onProgress(pageNum, pdf.numPages, `Analyzing layout & images on page ${pageNum} of ${pdf.numPages}...`);
     }
 
     const page = await pdf.getPage(pageNum);
-    const textContent = await page.getTextContent();
-    const items = textContent.items as any[];
-    const hasDigitalText = items.length > 0 && items.some((it) => it.str && it.str.trim().length > 0);
+    const viewport = page.getViewport({ scale: 1.0 });
+    const pageWidth = viewport.width || 595;
+    const pageHeight = viewport.height || 842;
+
+    // Render high-resolution page canvas for pristine logo & stamp cropping
+    const scale = 2.0;
+    const pageCanvas = document.createElement('canvas');
+    const pageViewport = page.getViewport({ scale });
+    pageCanvas.width = pageViewport.width;
+    pageCanvas.height = pageViewport.height;
+    const pageCtx = pageCanvas.getContext('2d');
+    if (pageCtx) {
+      pageCtx.fillStyle = '#FFFFFF';
+      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      await page.render({ canvasContext: pageCtx, viewport: pageViewport }).promise;
+    }
+
+    // 1. Extract embedded raster images (logos, company stamps, digital signatures)
+    const images = await extractImagesFromPdfPage(page, pageWidth, pageHeight, pdfjs);
+
+    // 2. Extract digital text items
+    const textContent = await page.getTextContent({ normalizeWhitespace: true });
+    const rawItems = (textContent.items || []).filter(
+      (it: any) => it && typeof it.str === 'string' && it.str.length > 0
+    );
+    const hasDigitalText = rawItems.some((it: any) => it.str.trim().length > 0);
 
     if (hasDigitalText) {
-      const structuredLines = buildStructuredLinesFromTextItems(items);
+      // Map text items into page coordinates (Y measured from top of page)
+      const textItems = rawItems.map((it: any) => {
+        const transform = it.transform || [1, 0, 0, 1, 0, 0];
+        const x = transform[4] || 0;
+        const yBottom = transform[5] || 0;
+        const height = Math.abs(it.height || transform[3] || 12);
+        const width = it.width || Math.max(1, it.str.length * height * 0.52);
+        const yFromTop = pageHeight - yBottom;
+        const fontName = String(it.fontName || '').toLowerCase();
+        const isBold = /bold|black|heavy|medium|b800|b900|semibold|demi/i.test(fontName) || (height >= 14 && it.str.length > 3);
+        const isItalic = /italic|oblique/i.test(fontName);
 
-      // Collect potential tabular rows
+        return {
+          str: it.str,
+          x: Math.max(0, x),
+          y: Math.max(0, yFromTop),
+          width,
+          height,
+          fontSize: Math.round(height),
+          isBold,
+          isItalic,
+          fontName,
+        };
+      });
+
+      // Pre-calculate header threshold and signoff/signer boundaries for accurate item classification
+      const titleCandidate = textItems.find((it) =>
+        /^(TO\s+WHOM\s+IT\s+MAY\s+CONCERN|CERTIFICATE|EXPERIENCE\s+CERTIFICATE|APPOINTMENT\s+LETTER|RELIEVING\s+LETTER|MEMORANDUM|INVOICE)$/i.test(it.str.trim())
+      );
+      const headerThresholdY = titleCandidate ? titleCandidate.y - 8 : pageHeight * 0.28;
+
+      const signoffItem = textItems.find((it) =>
+        /^For\s+|^Sincerely|^Yours\s+faithfully|^Authorized\s+Signatory/i.test(it.str.trim())
+      );
+      const signoffY = signoffItem ? signoffItem.y : -1;
+      const signerItem = textItems.find(
+        (it) => signoffY !== -1 && it.y > signoffY + 120 && /^[A-Z][a-z]+\s+[A-Z][a-z]+/i.test(it.str.trim())
+      );
+      const signerY = signerItem ? signerItem.y : (signoffY !== -1 ? signoffY + 220 : -1);
+
+      // Filter logos vs stamps
+      const isValidLogoImage = (img: ExtractedPdfImage) =>
+        img.width >= 50 && img.height >= 20 && (img.width * img.height) >= 1500;
+
+      const topImages = images.filter((img) => img.y < pageHeight * 0.35 && isValidLogoImage(img));
+      const bottomImages = images.filter((img) => img.y >= pageHeight * 0.48);
+
+      const filteredItems = textItems.filter((it: any) => {
+        const clean = it.str.trim();
+        if (!clean) return false;
+
+        // 1. Drop duplicate 'PROJECTS' in header (it's already part of the ESSAR PROJECTS logo crop)
+        if (clean.toUpperCase() === 'PROJECTS' && it.x > pageWidth * 0.45 && it.y < headerThresholdY) {
+          return false;
+        }
+
+        // 2. Drop OCR noise artifacts between signoff line and signer line (inside stamp region)
+        if (signoffY !== -1 && signerY !== -1 && it.y > signoffY + 15 && it.y < signerY - 10) {
+          return false;
+        }
+
+        return true;
+      });
+
+      // Group items into horizontal line buckets
+      type LineBucket = {
+        avgY: number;
+        height: number;
+        items: typeof filteredItems;
+      };
+      const lineBuckets: LineBucket[] = [];
+      const sortedItems = [...filteredItems].sort((a, b) => a.y - b.y);
+
+      sortedItems.forEach((item) => {
+        const tolerance = Math.max(4.0, item.height * 0.50);
+        const bucket = lineBuckets.find((b) => Math.abs(b.avgY - item.y) <= tolerance);
+        if (bucket) {
+          bucket.items.push(item);
+          bucket.avgY = bucket.items.reduce((s, it) => s + it.y, 0) / bucket.items.length;
+          bucket.height = Math.max(bucket.height, item.height);
+        } else {
+          lineBuckets.push({
+            avgY: item.y,
+            height: item.height,
+            items: [item],
+          });
+        }
+      });
+
+      lineBuckets.sort((a, b) => a.avgY - b.avgY);
+      lineBuckets.forEach((b) => b.items.sort((a, b) => a.x - b.x));
+
+      // --- SECTION 1: HEADER & TWO-COLUMN METADATA ---
+      const headerBuckets = lineBuckets.filter((b) => b.avgY <= headerThresholdY);
+      const remainingBuckets = lineBuckets.filter((b) => b.avgY > headerThresholdY);
+
+      const hasLeftCol = headerBuckets.some((b) => b.items.some((it) => it.x < pageWidth * 0.45));
+      const hasRightCol = headerBuckets.some((b) => b.items.some((it) => it.x >= pageWidth * 0.45));
+      const isTwoColumnHeader = hasLeftCol && hasRightCol && headerBuckets.length >= 2;
+
+      if (isTwoColumnHeader) {
+        const leftParagraphs: any[] = [];
+        const rightParagraphs: any[] = [];
+
+        // Top right logo
+        const topRightLogo = topImages.find((img) => img.x >= pageWidth * 0.40);
+        const topLeftLogo = topImages.find((img) => img.x < pageWidth * 0.40 && isValidLogoImage(img));
+
+        if (topLeftLogo && ImageRun) {
+          const w = Math.min(200, Math.round(topLeftLogo.width));
+          const h = Math.min(75, Math.round(topLeftLogo.height));
+          leftParagraphs.push(
+            new Paragraph({
+              children: [new ImageRun({ data: topLeftLogo.bytes, transformation: { width: w, height: h } })],
+              spacing: { after: 100 },
+            })
+          );
+        }
+
+        if (topRightLogo && ImageRun) {
+          let logoBytes = topRightLogo.bytes;
+          let w = Math.min(220, Math.round(topRightLogo.width));
+          let h = Math.min(80, Math.round(topRightLogo.height));
+
+          if (pageCanvas) {
+            const cropX = Math.max(0, topRightLogo.x - 8);
+            const cropY = Math.max(0, topRightLogo.y - 8);
+            const cropW = Math.min(pageWidth - cropX, topRightLogo.width + 16);
+            const cropH = Math.min(pageHeight - cropY, topRightLogo.height + 36);
+            const crop = await cropCanvasToPng(pageCanvas, cropX, cropY, cropW, cropH, scale);
+            if (crop && crop.length > 0) {
+              logoBytes = crop;
+              w = Math.min(240, Math.round(cropW));
+              h = Math.min(95, Math.round(cropH));
+            }
+          }
+
+          rightParagraphs.push(
+            new Paragraph({
+              alignment: AlignmentType?.RIGHT || 'right',
+              children: [new ImageRun({ data: logoBytes, transformation: { width: w, height: h } })],
+              spacing: { after: 100 },
+            })
+          );
+        }
+
+        headerBuckets.forEach((bucket) => {
+          const leftItems = bucket.items.filter((it) => it.x < pageWidth * 0.45);
+          const rightItems = bucket.items.filter((it) => it.x >= pageWidth * 0.45);
+
+          if (leftItems.length > 0) {
+            const runs = leftItems.map((it, idx) => {
+              const sp = idx > 0 ? ' ' : '';
+              return new TextRun({
+                text: `${sp}${it.str.trim()}`,
+                bold: it.isBold,
+                size: 20, // 10pt
+                font: 'Calibri',
+                color: '1F2937',
+              });
+            });
+            leftParagraphs.push(new Paragraph({ children: runs, spacing: { after: 40, line: 240 } }));
+          }
+
+          if (rightItems.length > 0) {
+            const runs = rightItems.map((it, idx) => {
+              const sp = idx > 0 ? ' ' : '';
+              return new TextRun({
+                text: `${sp}${it.str.trim()}`,
+                bold: it.isBold,
+                size: 19, // 9.5pt
+                font: 'Calibri',
+                color: '374151',
+              });
+            });
+            rightParagraphs.push(
+              new Paragraph({
+                alignment: AlignmentType?.RIGHT || 'right',
+                children: runs,
+                spacing: { after: 30, line: 230 },
+              })
+            );
+          }
+        });
+
+        // Add borderless 2-column header table with bottom vertical alignment on left cell
+        documentChildren.push(
+          new Table({
+            width: { size: 100, type: WidthType?.PERCENTAGE || 'pct' },
+            borders: {
+              top: noBorder,
+              bottom: noBorder,
+              left: noBorder,
+              right: noBorder,
+              insideHorizontal: noBorder,
+              insideVertical: noBorder,
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    width: { size: 48, type: WidthType?.PERCENTAGE || 'pct' },
+                    verticalAlign: VerticalAlign?.BOTTOM || 'bottom',
+                    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
+                    children: leftParagraphs.length > 0 ? leftParagraphs : [new Paragraph({ children: [new TextRun({ text: '' })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 52, type: WidthType?.PERCENTAGE || 'pct' },
+                    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
+                    children: rightParagraphs.length > 0 ? rightParagraphs : [new Paragraph({ children: [new TextRun({ text: '' })] })],
+                  }),
+                ],
+              }),
+            ],
+          })
+        );
+
+        // Gap after header
+        documentChildren.push(new Paragraph({ spacing: { after: 220 }, children: [new TextRun({ text: '' })] }));
+      } else {
+        // If single top logo exists
+        if (topImages.length > 0 && ImageRun) {
+          topImages.forEach((logo) => {
+            const isRight = logo.x > pageWidth * 0.45;
+            const w = Math.min(220, Math.round(logo.width));
+            const h = Math.min(80, Math.round(logo.height));
+            documentChildren.push(
+              new Paragraph({
+                alignment: isRight ? (AlignmentType?.RIGHT || 'right') : (AlignmentType?.LEFT || 'left'),
+                children: [new ImageRun({ data: logo.bytes, transformation: { width: w, height: h } })],
+                spacing: { after: 140 },
+              })
+            );
+          });
+        }
+      }
+
+      // --- SECTION 2: BODY LINES, TITLES, PARAGRAPHS & TABLES ---
+      const linesToProcess = isTwoColumnHeader ? remainingBuckets : lineBuckets;
+
+      // Table row collector
       let tableBuffer: string[][] = [];
-
       const flushTableBuffer = () => {
         if (tableBuffer.length >= 2) {
           const normalized = normalizeTableRows(tableBuffer);
@@ -462,87 +1001,236 @@ export const convertPdfToWord = async (
         tableBuffer = [];
       };
 
-      // Flowing body paragraph buffer
-      const paragraphBuffer: string[] = [];
-      const flushParagraph = () => {
-        if (paragraphBuffer.length > 0) {
-          const merged = paragraphBuffer.join(' ').replace(/\s+/g, ' ').trim();
-          if (merged) {
-            documentChildren.push(new Paragraph({
-              children: [new TextRun({
-                text: merged,
-                size: 22, // 11pt
-                font: 'Calibri',
-                color: '1F2937',
-              })],
-              spacing: { after: 140, line: 276 },
-            }));
-          }
-          paragraphBuffer.length = 0;
+      // Flowing paragraph collector
+      let bodyRunBuffer: any[] = [];
+      const flushBodyParagraph = (align: string = 'left') => {
+        if (bodyRunBuffer.length > 0) {
+          documentChildren.push(
+            new Paragraph({
+              alignment: align === 'center' ? (AlignmentType?.CENTER || 'center') : (AlignmentType?.LEFT || 'left'),
+              children: [...bodyRunBuffer],
+              spacing: { after: 160, line: 276 },
+            })
+          );
+          bodyRunBuffer = [];
         }
       };
 
-      structuredLines.forEach((line) => {
-        const cleanL = cleanText(line.lineText);
-        if (!cleanL) return;
+      // Identify signoff starting point (e.g. "For Essar Projects", "Sincerely", "Regards")
+      let insideSignoffSection = false;
 
-        // 1. Table row detection
-        const isTableLine = shouldTreatAsTableLine(line.cells);
-        if (isTableLine) {
-          flushParagraph();
-          tableBuffer.push(line.cells);
-          return;
+      for (let bIdx = 0; bIdx < linesToProcess.length; bIdx++) {
+        const bucket = linesToProcess[bIdx];
+        const lineText = bucket.items.map((it) => it.str).join(' ').trim();
+        if (!lineText) continue;
+
+        // Only treat as table line if items have genuine multi-column horizontal spacing (> 35pt gap)
+        let isRealTableLine = false;
+        const cells = bucket.items.map((it) => it.str.trim()).filter(Boolean);
+        if (bucket.items.length >= 2) {
+          let colGaps = 0;
+          for (let i = 1; i < bucket.items.length; i++) {
+            const gap = bucket.items[i].x - (bucket.items[i - 1].x + bucket.items[i - 1].width);
+            if (gap > 35) colGaps++;
+          }
+          if (colGaps >= 1 && shouldTreatAsTableLine(cells)) {
+            isRealTableLine = true;
+          }
+        }
+
+        if (isRealTableLine) {
+          flushBodyParagraph();
+          tableBuffer.push(cells);
+          continue;
         }
         flushTableBuffer();
 
-        // 2. Heading detection
-        const isHeading = line.isBold || line.fontSize >= 15 || detectHeadingFromText(cleanL);
-        if (isHeading) {
-          flushParagraph();
-          const headingLevel = line.fontSize >= 20 ? 1 : line.fontSize >= 16 ? 2 : 3;
-          documentChildren.push(createProfessionalHeading(cleanL, headingLevel as 1 | 2 | 3));
-          return;
+        // 1. Centered Document Title detection (ONLY exact match or short centered non-sentence heading)
+        const minX = Math.min(...bucket.items.map((it) => it.x));
+        const maxX = Math.max(...bucket.items.map((it) => it.x + it.width));
+        const lineCenter = (minX + maxX) / 2;
+        const isCenteredLine = Math.abs(lineCenter - pageWidth / 2) < pageWidth * 0.16;
+
+        const trimmedLine = lineText.trim();
+        const isExactTitle = /^(TO\s+WHOM\s+IT\s+MAY\s+CONCERN|CERTIFICATE|EXPERIENCE\s+CERTIFICATE|APPOINTMENT\s+LETTER|RELIEVING\s+LETTER|MEMORANDUM|INVOICE)$/i.test(trimmedLine);
+        const isCenteredHeading =
+          isCenteredLine &&
+          trimmedLine.length < 40 &&
+          (bucket.height >= 14 || bucket.items.every((it) => it.isBold)) &&
+          !/[.,;!?]$/.test(trimmedLine);
+
+        if (isExactTitle || isCenteredHeading) {
+          flushBodyParagraph();
+          documentChildren.push(
+            new Paragraph({
+              alignment: AlignmentType?.CENTER || 'center',
+              spacing: { before: 260, after: 220 },
+              children: [
+                new TextRun({
+                  text: trimmedLine,
+                  bold: true,
+                  size: 24, // 12pt
+                  font: 'Calibri',
+                  underline: { type: UnderlineType?.SINGLE || 'single' },
+                  color: '111827',
+                }),
+              ],
+            })
+          );
+          continue;
         }
 
-        // 3. Bullet / Numbered list item detection
-        const listMatch = detectListFromText(cleanL);
-        if (listMatch) {
-          flushParagraph();
-          documentChildren.push(createProfessionalListItem(listMatch.text, listMatch.type, listMatch.level));
-          return;
+        // 2. Signoff detection (e.g. "For Essar Projects", "Sincerely", "Yours faithfully")
+        if (/^For\s+|^Sincerely|^Yours\s+faithfully|^Authorized\s+Signatory|^With\s+regards|^Regards/i.test(lineText)) {
+          flushBodyParagraph();
+          insideSignoffSection = true;
+          documentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: lineText,
+                  bold: true,
+                  size: 22,
+                  font: 'Calibri',
+                  color: '111827',
+                }),
+              ],
+              spacing: { before: 200, after: 60 },
+            })
+          );
+
+          // Embed high-res intact composite stamp + signature from pageCanvas
+          if (pageCanvas && ImageRun) {
+            const cropX = 60;
+            const cropY = bucket.avgY + bucket.height + 2;
+            const nextBucket = linesToProcess[bIdx + 1];
+            const cropH = nextBucket ? Math.max(60, nextBucket.avgY - cropY - 18) : 145;
+            const cropW = Math.min(160, pageWidth * 0.45);
+
+            if (hasGraphicContent(pageCanvas, cropX, cropY, cropW, cropH, scale)) {
+              const compositeBytes = await cropCanvasToPng(pageCanvas, cropX, cropY, cropW, cropH, scale);
+              if (compositeBytes && compositeBytes.length > 0) {
+                const w = Math.min(160, Math.round(cropW));
+                const h = Math.min(145, Math.round(cropH));
+                documentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new ImageRun({
+                        data: compositeBytes,
+                        transformation: { width: w, height: h },
+                      }),
+                    ],
+                    spacing: { before: 60, after: 60 },
+                  })
+                );
+              }
+            }
+          }
+          continue;
         }
 
-        // 4. Natural body paragraph reflow
-        const endsWithPunctuation = /[.!?:;]$/.test(cleanL.trim());
-        const isShortLine = cleanL.length < 50;
-
-        if (endsWithPunctuation || isShortLine) {
-          paragraphBuffer.push(cleanL);
-          flushParagraph();
-        } else {
-          paragraphBuffer.push(cleanL);
+        // 3. Post-signoff lines (e.g. "Suresh Jain", "Hr Manager")
+        if (insideSignoffSection) {
+          documentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: lineText,
+                  bold: true,
+                  size: 22,
+                  font: 'Calibri',
+                  color: '1F2937',
+                }),
+              ],
+              spacing: { after: 30, line: 240 },
+            })
+          );
+          continue;
         }
-      });
+
+        // 4. Standard body line formatting with inline bold preserved and sub-pixel letter merging
+        bucket.items.forEach((it, itIdx) => {
+          const prevItem = itIdx > 0 ? bucket.items[itIdx - 1] : null;
+          let needSpace = false;
+          if (prevItem) {
+            const gap = it.x - (prevItem.x + prevItem.width);
+            needSpace = gap > 2.5;
+          } else if (bodyRunBuffer.length > 0) {
+            needSpace = true;
+          }
+
+          const sp = needSpace ? ' ' : '';
+          bodyRunBuffer.push(
+            new TextRun({
+              text: `${sp}${it.str.trim()}`,
+              bold: it.isBold,
+              italics: it.isItalic,
+              size: Math.max(20, Math.min(26, it.fontSize * 2)),
+              font: 'Calibri',
+              color: '1F2937',
+            })
+          );
+        });
+
+        // Determine paragraph break: line ends with punctuation or large vertical gap to next line
+        const endsWithPunc = /[.!?:;]$/.test(lineText.trim());
+        const nextBucket = linesToProcess[bIdx + 1];
+        const lineGap = nextBucket ? (nextBucket.avgY - bucket.avgY) : 999;
+        const isParagraphBreak = lineGap > 22 || (endsWithPunc && lineGap > 18);
+
+        if (isParagraphBreak) {
+          flushBodyParagraph();
+        }
+      }
 
       flushTableBuffer();
-      flushParagraph();
+      flushBodyParagraph();
+
+      // If bottom images were not placed in signoff section, append composite crop
+      if (!insideSignoffSection && bottomImages.length > 0 && pageCanvas && ImageRun) {
+        const minX = Math.min(...bottomImages.map((img) => img.x));
+        const maxX = Math.max(...bottomImages.map((img) => img.x + img.width));
+        const minY = Math.min(...bottomImages.map((img) => img.y));
+        const maxY = Math.max(...bottomImages.map((img) => img.y + img.height));
+
+        const cropX = Math.max(0, minX - 10);
+        const cropY = Math.max(0, minY - 10);
+        const cropW = Math.min(pageWidth - cropX, (maxX - minX) + 20);
+        const cropH = Math.min(pageHeight - cropY, (maxY - minY) + 20);
+
+        const compositeBytes = await cropCanvasToPng(pageCanvas, cropX, cropY, cropW, cropH, scale);
+        if (compositeBytes && compositeBytes.length > 0) {
+          const w = Math.min(240, Math.round(cropW));
+          const h = Math.min(140, Math.round(cropH));
+          documentChildren.push(
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: compositeBytes,
+                  transformation: { width: w, height: h },
+                }),
+              ],
+              spacing: { before: 120, after: 120 },
+            })
+          );
+        }
+      }
     } else {
-      // Automatic OCR fallback for scanned pages or image-only pages
+      // Scanned document or image-only page: accurate OCR fallback
       try {
         if (options.onProgress) {
-          options.onProgress(pageNum, pdf.numPages, `Running accurate OCR on page ${pageNum}...`);
+          options.onProgress(pageNum, pdf.numPages, `Running accurate OCR on scanned page ${pageNum}...`);
         }
         const tesseract = await ensureTesseract();
         const worker = await tesseract.createWorker('eng');
-        const viewport = page.getViewport({ scale: 2.5 });
         const canvas = document.createElement('canvas');
-        canvas.width = Math.round(viewport.width);
-        canvas.height = Math.round(viewport.height);
+        canvas.width = Math.round(viewport.width * 2);
+        canvas.height = Math.round(viewport.height * 2);
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: 2.0 }) }).promise;
           const imgBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
           if (imgBlob) {
             const result = await worker.recognize(imgBlob);
@@ -554,15 +1242,19 @@ export const convertPdfToWord = async (
                 if (isHeading) {
                   documentChildren.push(createProfessionalHeading(txt, 2));
                 } else {
-                  documentChildren.push(new Paragraph({
-                    children: [new TextRun({
-                      text: txt,
-                      size: 22,
-                      font: 'Calibri',
-                      color: '1F2937',
-                    })],
-                    spacing: { after: 120, line: 276 },
-                  }));
+                  documentChildren.push(
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: txt,
+                          size: 22,
+                          font: 'Calibri',
+                          color: '1F2937',
+                        }),
+                      ],
+                      spacing: { after: 120, line: 276 },
+                    })
+                  );
                 }
               }
             });
@@ -575,10 +1267,10 @@ export const convertPdfToWord = async (
     }
 
     // Add clean native Word page break between pages
-    if (pageNum < pdf.numPages) {
+    if (pageNum < pdf.numPages && PageBreak) {
       documentChildren.push(
         new Paragraph({
-          children: [PageBreak ? new PageBreak() : new TextRun({ text: '' })],
+          children: [new PageBreak()],
         })
       );
     }
@@ -593,30 +1285,37 @@ export const convertPdfToWord = async (
           run: { font: 'Calibri', size: 22, color: '1F2937' },
         },
       },
-      paragraphStyles: [{
-        id: 'normalPara',
-        name: 'Normal Para',
-        run: { font: 'Calibri', size: 22 },
-        paragraph: { spacing: { line: 276, after: 140 } },
-      }],
+      paragraphStyles: [
+        {
+          id: 'normalPara',
+          name: 'Normal Para',
+          run: { font: 'Calibri', size: 22 },
+          paragraph: { spacing: { line: 276, after: 140 } },
+        },
+      ],
     },
-    sections: [{
-      properties: {
-        page: {
-          margin: {
-            top: 1440,    // 1 inch in twips
-            right: 1440,
-            bottom: 1440,
-            left: 1440,
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: {
+              top: 1080,    // 0.75 inch in twips
+              right: 1080,
+              bottom: 1080,
+              left: 1080,
+            },
           },
         },
+        children:
+          documentChildren.length > 0
+            ? documentChildren
+            : [
+                new Paragraph({
+                  children: [new TextRun({ text: 'Document converted successfully.', size: 22, font: 'Calibri' })],
+                }),
+              ],
       },
-      children: documentChildren.length > 0 ? documentChildren : [
-        new Paragraph({
-          children: [new TextRun({ text: 'Document converted successfully.', size: 22, font: 'Calibri' })]
-        })
-      ],
-    }],
+    ],
   });
 
   const rawBlob = await Packer.toBlob(doc);

@@ -56,7 +56,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     '/page-number': { title: 'Add Page Numbers to PDF | LAK PDF', description: 'Insert page numbers into your PDF with easy position settings.' },
     '/watermark': { title: 'Watermark PDF Online | LAK PDF', description: 'Add text or image watermark to protect and brand PDF files.' },
     '/crop-pdf': { title: 'Crop PDF Online Free | LAK PDF', description: 'Crop PDF margins and remove unwanted white space with precision.' },
-    '/scan-pdf': { title: 'Scan to PDF Online | LAK PDF', description: 'Convert scanned pages and photos into usable PDF documents.' },
+    '/scan-pdf': { title: 'Scan Document Online | LAK PDF', description: 'Convert scanned pages and photos into usable PDF documents.' },
     '/sign-pdf': { title: 'Sign PDF Online Free | LAK PDF', description: 'Add digital signatures to PDF files without complex setup.' },
     '/ocr-pdf': { title: 'OCR PDF Online | LAK PDF', description: 'Extract selectable text from scanned PDFs using OCR.' },
     '/compare-pdf': { title: 'Compare PDF Online | LAK PDF', description: 'Compare two PDF files and highlight differences quickly.' },
@@ -67,11 +67,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     '/ai-interview-generator': { title: 'AI Interview Generator | LAK PDF', description: 'Generate technical and HR interview questions from resume or notes.' },
     '/pdf-editor': { title: 'PDF Editor Online | LAK PDF', description: 'Use normal PDF editor mode to add text, highlights, and shapes directly in your PDF.' },
     '/protect-pdf': { title: 'Protect PDF Online Free | LAK PDF', description: 'Password protect PDF documents with bank-grade encryption in your browser.' },
+    '/unlock-pdf': { title: 'Unlock PDF Online Free | LAK PDF', description: 'Remove password and restrictions from PDF files instantly.' },
+    '/unlock': { title: 'Unlock PDF Online Free | LAK PDF', description: 'Remove password and restrictions from PDF files instantly.' },
     '/pdf-to-text': { title: 'PDF to Text OCR Converter | LAK PDF', description: 'Extract clean selectable text and OCR from scanned PDF documents online.' },
     '/ai-edit-pdf': { title: 'AI PDF Editor Online | LAK PDF', description: 'Edit text, annotate, erase, and highlight PDFs directly with AI-powered OCR.' },
   };
   const seo = toolSeoMap[location.pathname];
-  const showToolBack = isToolRoute(location.pathname);
+  const showToolBack = isToolRoute(location.pathname) && location.pathname !== '/pdf-editor';
   const toolFaqSchema = seo
     ? {
       '@context': 'https://schema.org',
@@ -207,9 +209,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       <header className="sticky top-0 z-50 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md border-b border-slate-200 dark:border-dark-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-16 sm:h-[68px]">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2.5 group">
+            <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group select-none py-1">
               <picture>
                 <source srcSet="/logo-80x80.webp" type="image/webp" />
                 <img
@@ -218,21 +220,25 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   width={40}
                   height={40}
                   decoding="async"
-                  className="w-10 h-10 object-contain animate-heartbeat transition-transform duration-300 group-hover:scale-110"
+                  className="w-[38px] h-[38px] sm:w-[42px] sm:h-[42px] object-contain animate-heartbeat transition-transform duration-300 group-hover:scale-105 drop-shadow-xs"
                 />
               </picture>
-              <span className="font-bold text-xl tracking-tight text-slate-800 dark:text-dark-text-primary">
-                LAK <span className="text-primary-600 dark:text-primary-400">PDF</span>
+              <span
+                className="text-[1.75rem] sm:text-[2.05rem] md:text-[2.25rem] tracking-tight leading-none text-slate-900 dark:text-white flex items-center gap-1 sm:gap-1.5 font-black"
+                style={{ fontFamily: '"Roboto Slab", Georgia, serif', fontWeight: 900 }}
+              >
+                <span className="font-black">LAK</span>
+                <span className="text-primary-600 dark:text-primary-400 font-black">PDF</span>
               </span>
             </Link>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden md:flex items-center gap-0.5 sm:gap-1">
               {navLinks.map((link) => (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === link.path
+                  className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === link.path
                     ? 'text-slate-900 bg-slate-100 dark:text-dark-text-primary dark:bg-dark-hover'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
                     }`}
@@ -242,7 +248,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               ))}
               <Link
                 to="/dashboard"
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/dashboard'
+                className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/dashboard'
                   ? 'text-slate-900 bg-slate-100 dark:text-dark-text-primary dark:bg-dark-hover'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
                   }`}
@@ -337,18 +343,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
             {/* Mobile menu button */}
             <button
-              className="md:hidden p-2 text-slate-600"
+              className="md:hidden p-2 text-slate-700 dark:text-slate-200 hover:text-slate-900 rounded-lg focus:outline-none transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Toggle menu"
             >
-              {isMobileMenuOpen ? <X /> : <Menu />}
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
 
         {/* Mobile Nav */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-16 left-0 w-full max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain bg-white border-b border-slate-200 p-4 pb-8 flex flex-col gap-2 shadow-xl animate-in slide-in-from-top-2 duration-200 z-40">
+          <div className="md:hidden absolute top-full left-0 w-full max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain bg-white dark:bg-dark-surface border-b border-slate-200 dark:border-dark-border p-4 pb-8 flex flex-col gap-2 shadow-xl animate-in slide-in-from-top-2 duration-200 z-40">
             {navLinks.map((link) => (
               <Link
                 key={link.path}

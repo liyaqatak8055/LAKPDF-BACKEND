@@ -9,13 +9,13 @@ test("pdf editor upload and render workflow", async ({ page }) => {
   });
 
   await page.goto("/pdf-editor", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("p", { hasText: "Select PDF" }).first()).toBeVisible();
+  await expect(page.locator("text=Choose PDF File").first()).toBeVisible();
 
   const samplePdf = path.join(process.cwd(), "tmp", "sample.pdf");
   await page.setInputFiles('input[type="file"][accept="application/pdf"]', samplePdf);
 
   await expect(page.locator("canvas")).toBeVisible({ timeout: 25_000 });
-  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible({ timeout: 25_000 });
 
   const criticalErrors = pageErrors.filter(
     (m) =>

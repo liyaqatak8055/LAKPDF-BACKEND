@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('AI Interview Generator Result Section Enhancement Verification', async ({ page }) => {
   // 1. Navigate to tool
-  await page.goto('http://localhost:5173/ai-interview-generator', { waitUntil: 'networkidle' });
+  await page.goto('/ai-interview-generator', { waitUntil: 'networkidle' });
   await expect(page.locator('h1')).toContainText('AI Interview Generator');
 
   // 2. Select a sample resume to trigger generation
@@ -21,7 +21,7 @@ test('AI Interview Generator Result Section Enhancement Verification', async ({ 
 
   // 5. Verify Section 2: Detected Skills
   await expect(page.locator('h3:has-text("Detected Skills")')).toBeVisible();
-  const skillPills = page.locator('div:has(> h3:has-text("Detected Skills")) span.rounded-xl');
+  const skillPills = page.locator('div:has(h3:has-text("Detected Skills")) span.rounded-xl');
   expect(await skillPills.count()).toBeGreaterThan(0);
 
   // 6. Verify Section 11: Practice Progress
@@ -30,7 +30,7 @@ test('AI Interview Generator Result Section Enhancement Verification', async ({ 
 
   // 7. Verify Section 10: Question Filters
   await expect(page.locator('input[placeholder="Search questions..."]')).toBeVisible();
-  await expect(page.locator('button:has-text("All")')).toBeVisible();
+  await expect(page.locator('button:has-text("All")').first()).toBeVisible();
   await expect(page.locator('button:has-text("Technical")')).toBeVisible();
   await expect(page.locator('button:has-text("Projects")')).toBeVisible();
   await expect(page.locator('button:has-text("HR")')).toBeVisible();
@@ -47,7 +47,7 @@ test('AI Interview Generator Result Section Enhancement Verification', async ({ 
   }
 
   // 9. Verify Question Card (Section 4, 5, 7, 12)
-  const firstCard = page.locator('div:has(> div span:has-text("Question 01"))').first();
+  const firstCard = page.locator('div.rounded-3xl:has(span:has-text("Question 01"))').first();
   await expect(firstCard).toBeVisible();
 
   // Verify initial answer is hidden

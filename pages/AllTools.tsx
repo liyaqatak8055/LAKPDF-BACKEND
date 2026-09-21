@@ -40,6 +40,7 @@ import {
   EyeOff,
   IdCard,
   Shield,
+  Unlock,
   FileEdit,
 } from 'lucide-react';
 import { Button } from '../components/Button';
@@ -128,6 +129,16 @@ const AllTools: React.FC = () => {
       to: "/protect-pdf",
       color: "bg-emerald-50",
       category: "pdf-core"
+    },
+    {
+      id: "unlock-pdf",
+      title: "Unlock PDF",
+      description: "Remove passwords and security restrictions from PDF files",
+      iconName: "Unlock",
+      to: "/unlock-pdf",
+      color: "bg-teal-50",
+      category: "pdf-core",
+      popular: true
     },
 
     // Image Tools
@@ -285,7 +296,7 @@ const AllTools: React.FC = () => {
     },
     {
       id: "scan-pdf",
-      title: "Scan to PDF",
+      title: "Scan Document",
       description: "Convert scanned documents to PDF",
       iconName: "Scan",
       to: "/scan-pdf",
@@ -392,7 +403,7 @@ const AllTools: React.FC = () => {
   const iconMap: Record<string, React.ComponentType<any>> = {
     FileText, Scissors, Minimize2, Image, FileImage, RotateCw, Trash2,
     FileType, Presentation, PenTool, Signature, Scan, Hash, Eye, Crop, Zap,
-    Type, LayoutGrid, Sliders, Code, Plus, Unlink, BarChart3, Target, ArrowRight, Grid3X3, Languages, GraduationCap, Briefcase, Lightbulb, Mic, CalendarDays, Brain, Camera, EyeOff, IdCard, Shield, FileEdit
+    Type, LayoutGrid, Sliders, Code, Plus, Unlink, BarChart3, Target, ArrowRight, Grid3X3, Languages, GraduationCap, Briefcase, Lightbulb, Mic, CalendarDays, Brain, Camera, EyeOff, IdCard, Shield, Unlock, FileEdit
   };
 
   const filteredTools = useMemo(() => {

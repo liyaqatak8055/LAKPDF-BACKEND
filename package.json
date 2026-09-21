@@ -11,6 +11,7 @@
     "check:env": "node server/checkEnv.js",
     "check:env:prod": "NODE_ENV=production node server/checkEnv.js",
     "dev:full": "sh -c 'npm run server & npm run dev'",
+    "rundev:full": "npm run dev:full",
     "load:health": "autocannon -c 100 -d 30 http://localhost:8787/api/health",
     "load:ai": "autocannon -c 2 -d 20 -t 60 -m POST -H 'content-type: application/json' -b '{\"prompt\":\"Load test ping\"}' --renderStatusCodes http://localhost:8787/api/ai/ask",
     "security:audit": "npm audit --omit=dev",

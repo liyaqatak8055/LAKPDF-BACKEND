@@ -162,8 +162,8 @@ const ROUTE_SEO: Record<string, RouteSeo> = {
     canonicalPath: "/crop-pdf",
   },
   "/scan-pdf": {
-    title: "Scan to PDF Online | OCR Scanner - LAK PDF",
-    description: "Scan to PDF online and enhance readability with OCR-ready processing.",
+    title: "Scan Document Online | CamScanner-Grade Scanner - LAK PDF",
+    description: "Scan documents online free with camera or photos. Automatic contrast enhancement and high visual fidelity.",
     canonicalPath: "/scan-pdf",
   },
   "/sign-pdf": {
@@ -215,6 +215,16 @@ const ROUTE_SEO: Record<string, RouteSeo> = {
     title: "Protect PDF Online Free | Password Protect PDF - LAK PDF",
     description: "Password protect PDF online free. Add encryption to prevent unauthorized access to your PDF documents.",
     canonicalPath: "/protect-pdf",
+  },
+  "/unlock-pdf": {
+    title: "Unlock PDF Online Free | Remove Password from PDF - LAK PDF",
+    description: "Unlock password-protected PDF files online for free. Remove security restrictions, owner passwords, and permissions instantly. 100% private.",
+    canonicalPath: "/unlock-pdf",
+  },
+  "/unlock": {
+    title: "Unlock PDF Online Free | Remove Password from PDF - LAK PDF",
+    description: "Unlock password-protected PDF files online for free. Remove security restrictions, owner passwords, and permissions instantly.",
+    canonicalPath: "/unlock-pdf",
   },
   "/pdf-to-text": {
     title: "PDF to Text Online Free | OCR Text Extractor - LAK PDF",
@@ -297,6 +307,7 @@ const TOOL_JSON_LD: Record<string, object> = {
   "/ai-pdf-to-mcq": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI PDF to MCQ Generator", "url": "https://lakpdf.com/ai-pdf-to-mcq", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Generate MCQs from PDF with AI for tests, revision and practice." },
   "/ai-interview-generator": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI Interview Question Generator", "url": "https://lakpdf.com/ai-interview-generator", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Generate technical, HR and behavioral interview questions from your resume with AI." },
   "/protect-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Protect PDF Online Free", "url": "https://lakpdf.com/protect-pdf", "applicationCategory": "SecurityApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Password protect PDF documents online free with AES encryption." },
+  "/unlock-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "Unlock PDF Online Free", "url": "https://lakpdf.com/unlock-pdf", "applicationCategory": "SecurityApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Unlock password-protected PDF files online for free and remove encryption restrictions." },
   "/pdf-to-text": { "@context": "https://schema.org", "@type": "WebApplication", "name": "PDF to Text OCR Extractor Free", "url": "https://lakpdf.com/pdf-to-text", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Extract text and run OCR on PDF documents online free." },
   "/ai-edit-pdf": { "@context": "https://schema.org", "@type": "WebApplication", "name": "AI PDF Editor Free", "url": "https://lakpdf.com/ai-edit-pdf", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "Edit, erase and annotate text in PDF files with AI OCR." },
 };
@@ -511,7 +522,7 @@ const CropPdf = createLazyComponent(() =>
   , "Crop PDF");
 const ScanPdf = createLazyComponent(() =>
   import("./pages/ScanPdf").then((m) => ({ default: m.ScanPdf }))
-  , "Scan PDF");
+  , "Scan Document");
 const SignPdf = createLazyComponent(() =>
   import("./pages/SignPdf").then((m) => ({ default: m.SignPdf }))
   , "Sign PDF");
@@ -534,6 +545,9 @@ const DetectDuplicatePages = createLazyComponent(() => import("./pages/DetectDup
 const ProtectPdf = createLazyComponent(() =>
   import("./pages/ProtectPdf").then((m) => ({ default: m.ProtectPdf }))
   , "Protect PDF");
+const UnlockPdf = createLazyComponent(() =>
+  import("./pages/UnlockPdf").then((m) => ({ default: m.UnlockPdf }))
+  , "Unlock PDF");
 const MakePpt = createLazyComponent(() => import("./pages/MakePpt"), "Make PPT");
 const PassportPhotoMaker = createLazyComponent(() => import("./pages/PassportPhotoMaker"), "Passport Photo Maker");
 const RedactPdf = createLazyComponent(() => import("./pages/RedactPdf"), "Redact PDF");
@@ -906,7 +920,7 @@ const App: React.FC = () => {
                 </ErrorBoundary>
               } />
               <Route path="/scan-pdf" element={
-                <ErrorBoundary componentName="Scan to PDF">
+                <ErrorBoundary componentName="Scan Document">
                   <ScanPdf />
                 </ErrorBoundary>
               } />
@@ -943,6 +957,16 @@ const App: React.FC = () => {
               <Route path="/protect" element={
                 <ErrorBoundary componentName="Protect PDF">
                   <ProtectPdf />
+                </ErrorBoundary>
+              } />
+              <Route path="/unlock-pdf" element={
+                <ErrorBoundary componentName="Unlock PDF">
+                  <UnlockPdf />
+                </ErrorBoundary>
+              } />
+              <Route path="/unlock" element={
+                <ErrorBoundary componentName="Unlock PDF">
+                  <UnlockPdf />
                 </ErrorBoundary>
               } />
               <Route path="/summarizer-qa" element={

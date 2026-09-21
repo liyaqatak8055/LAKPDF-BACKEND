@@ -37,3 +37,5 @@ tmp/
 tests/*.png
 tests/*.jpg
 tests/lighthouse-report.json
+test-results/
+*.traineddata

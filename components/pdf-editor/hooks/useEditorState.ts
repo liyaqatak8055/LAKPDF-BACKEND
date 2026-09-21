@@ -21,7 +21,7 @@ const initialState: PdfEditorState = {
   redoStack: [],
   zoom: 1.0,
   fitMode: PdfFitMode.ACTUAL_SIZE,
-  showThumbnails: true,
+  showThumbnails: false,
   showToolbar: true
 };
 

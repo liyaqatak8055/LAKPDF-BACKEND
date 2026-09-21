@@ -1458,6 +1458,72 @@ export const protectPdf = async (file: File, password: string): Promise<Uint8Arr
   return await pdfDoc.save();
 };
 
+/**
+ * Unlocks a password-protected PDF or removes restriction permissions.
+ */
+export const unlockPdf = async (file: File, password?: string): Promise<Uint8Array> => {
+  const arrayBuffer = await file.arrayBuffer();
+
+  // 1. If no password provided or to test if it's just permission-locked:
+  if (!password) {
+    try {
+      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+      return await pdfDoc.save();
+    } catch {
+      // If it fails, a password is required
+      throw new Error('This PDF is protected by an open password. Please enter the password to unlock it.');
+    }
+  }
+
+  // 2. Open via pdfjs with provided password
+  try {
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      password: password,
+    });
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+
+    const newDoc = await PDFDocument.create();
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+
+      await page.render({
+        canvasContext: ctx,
+        viewport: viewport,
+      }).promise;
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+      if (!blob) continue;
+      const imgBuffer = await blob.arrayBuffer();
+      const embeddedImg = await newDoc.embedJpg(imgBuffer);
+
+      const docPage = newDoc.addPage([viewport.width / 2.0, viewport.height / 2.0]);
+      docPage.drawImage(embeddedImg, {
+        x: 0,
+        y: 0,
+        width: viewport.width / 2.0,
+        height: viewport.height / 2.0,
+      });
+    }
+
+    return await newDoc.save();
+  } catch (pdfjsErr: any) {
+    if (pdfjsErr?.name === 'PasswordException' || String(pdfjsErr?.message || '').toLowerCase().includes('password')) {
+      throw new Error('Incorrect password. Please check and try again.');
+    }
+    throw new Error(pdfjsErr?.message || 'Failed to unlock PDF document.');
+  }
+};
+
 export interface PDFFormField {
   name: string;
   type: 'text' | 'checkbox' | 'radio' | 'dropdown' | 'signature' | 'unknown';
@@ -2676,6 +2742,41 @@ export const editPdfImages = async (
 };
 
 /**
+ * Render PDF pages to high-resolution canvases (e.g. for Scan to PDF pipeline)
+ */
+export const renderPdfPagesToCanvases = async (
+  file: File | ArrayBuffer,
+  dpi: number = 300,
+  maxPages: number = 100,
+  onProgress?: (pageNum: number, totalPages: number) => void
+): Promise<{ canvas: HTMLCanvasElement; pageNum: number }[]> => {
+  const buffer = file instanceof File ? await file.arrayBuffer() : file;
+  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  const totalPages = Math.min(pdf.numPages, maxPages);
+  const results: { canvas: HTMLCanvasElement; pageNum: number }[] = [];
+
+  // 72 DPI is base PDF points. Target 300 DPI equivalent scale (clamp to 3.2 for memory safety)
+  const scale = Math.min(3.2, Math.max(1.5, dpi / 72));
+
+  for (let i = 1; i <= totalPages; i++) {
+    onProgress?.(i, totalPages);
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    results.push({ canvas, pageNum: i });
+  }
+
+  return results;
+};
+
+/**
  * Convert images to PDF (scan-like functionality)
  */
 export const imagesToPdfScan = async (
@@ -2686,14 +2787,16 @@ export const imagesToPdfScan = async (
     orientation?: 'auto' | 'portrait' | 'landscape';
     margin?: 'none' | 'small' | 'default';
     skipRasterize?: boolean;
+    ocrTextLayers?: string[];
   } = {}
 ): Promise<Uint8Array> => {
   const {
-    quality = 0.8,
+    quality = 0.88,
     format = 'a4',
     orientation = 'auto',
     margin = 'default',
-    skipRasterize = false
+    skipRasterize = false,
+    ocrTextLayers = []
   } = options;
   const pdfDoc = await PDFDocument.create();
 
@@ -2718,7 +2821,7 @@ export const imagesToPdfScan = async (
 
   const rasterizeImage = async (file: File, targetQuality: number) => {
     const img = await loadImageElement(file);
-    const maxWidth = targetQuality >= 0.9 ? 2600 : targetQuality >= 0.8 ? 2200 : 1600;
+    const maxWidth = targetQuality >= 0.9 ? 2800 : targetQuality >= 0.8 ? 2400 : 1800;
     const scale = img.width > maxWidth ? maxWidth / img.width : 1;
     const width = Math.round(img.width * scale);
     const height = Math.round(img.height * scale);
@@ -2750,7 +2853,8 @@ export const imagesToPdfScan = async (
     default: 24
   };
 
-  for (const imageFile of imageFiles) {
+  for (let idx = 0; idx < imageFiles.length; idx++) {
+    const imageFile = imageFiles[idx];
     let embeddedImage;
     try {
       if (skipRasterize) {
@@ -2820,6 +2924,34 @@ export const imagesToPdfScan = async (
       width: imageWidth,
       height: imageHeight
     });
+
+    // Optional invisible OCR layer for searchable & selectable text without altering visual appearance
+    const ocrText = ocrTextLayers[idx];
+    if (ocrText && ocrText.trim()) {
+      try {
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const lines = ocrText.split('\n').filter((l) => l.trim().length > 0);
+        const fontSize = 8;
+        const lineHeight = 10;
+        let cursorY = pageHeight - y - 10;
+
+        for (const line of lines) {
+          if (cursorY < y + 10) break;
+          // Render completely invisible text overlay (opacity 0)
+          page.drawText(line.slice(0, 120), {
+            x: Math.max(x, 15),
+            y: cursorY,
+            size: fontSize,
+            font,
+            color: rgb(1, 1, 1),
+            opacity: 0
+          });
+          cursorY -= lineHeight;
+        }
+      } catch (ocrErr) {
+        console.warn('OCR layer embedding skipped for page', idx + 1, ocrErr);
+      }
+    }
   }
 
   return await pdfDoc.save();

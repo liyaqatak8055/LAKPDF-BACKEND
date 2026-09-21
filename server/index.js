@@ -1752,7 +1752,7 @@ app.get("/api/admin/tools", async (req, res) => {
     { id: "compress", name: "Compress PDF", route: "/compress", category: "Core PDF", defaultStatus: "operational", usageCount: getMetricCount("process_compress") || 3890 },
     { id: "split", name: "Split PDF", route: "/split", category: "Core PDF", defaultStatus: "operational", usageCount: getMetricCount("process_split") || 950 },
     { id: "pdf-editor", name: "PDF Editor", route: "/pdf-editor", category: "Edit & Annotate", defaultStatus: "operational", usageCount: getMetricCount("process_editor") || 2150 },
-    { id: "scan-pdf", name: "Scan to PDF", route: "/scan-pdf", category: "Scan & Camera", defaultStatus: "operational", usageCount: getMetricCount("process_scan") || 1640 },
+    { id: "scan-pdf", name: "Scan Document", route: "/scan-pdf", category: "Scan & Camera", defaultStatus: "operational", usageCount: getMetricCount("process_scan") || 1640 },
     { id: "sign-pdf", name: "Sign PDF", route: "/sign-pdf", category: "Security", defaultStatus: "operational", usageCount: getMetricCount("process_sign") || 1180 },
     { id: "img-to-pdf", name: "JPG/PNG to PDF", route: "/img-to-pdf", category: "Convert", defaultStatus: "operational", usageCount: getMetricCount("process_img_to_pdf") || 2760 },
     { id: "pdf-to-img", name: "PDF to JPG", route: "/pdf-to-img", category: "Convert", defaultStatus: "operational", usageCount: getMetricCount("process_pdf_to_img") || 1890 },

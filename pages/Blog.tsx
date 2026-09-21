@@ -43,7 +43,7 @@ const toolSeeds: ToolGuideSeed[] = [
   { name: "Add Page Numbers", path: "/page-number", category: "PDF Tools", tags: ["page numbers", "pagination", "pdf"], actionLabel: "Add Page Numbers" },
   { name: "Watermark PDF", path: "/watermark", category: "PDF Tools", tags: ["watermark", "branding", "pdf"], actionLabel: "Add Watermark" },
   { name: "Crop PDF", path: "/crop-pdf", category: "PDF Tools", tags: ["crop", "margins", "pdf"], actionLabel: "Crop PDF" },
-  { name: "Scan to PDF", path: "/scan-pdf", category: "PDF Tools", tags: ["scan", "document", "pdf"], actionLabel: "Scan to PDF" },
+  { name: "Scan Document", path: "/scan-pdf", category: "PDF Tools", tags: ["scan", "document", "pdf"], actionLabel: "Scan Document" },
   { name: "Sign PDF", path: "/sign-pdf", category: "PDF Tools", tags: ["sign", "signature", "pdf"], actionLabel: "Sign PDF" },
   { name: "OCR PDF", path: "/ocr-pdf", category: "PDF Tools", tags: ["ocr", "extract text", "scan"], actionLabel: "Extract Text" },
   { name: "Compare PDF", path: "/compare-pdf", category: "PDF Tools", tags: ["compare", "differences", "pdf"], actionLabel: "Compare PDF" },

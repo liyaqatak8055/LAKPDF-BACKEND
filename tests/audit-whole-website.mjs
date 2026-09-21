@@ -36,6 +36,7 @@ const ROUTES_TO_AUDIT = [
   '/compare-pdf',
   '/delete-page',
   '/protect-pdf',
+  '/unlock-pdf',
   '/summarizer-qa',
   '/ai-pdf-to-mcq',
   '/ai-interview-generator',
@@ -77,7 +78,8 @@ async function runAudit() {
 
   let auditedCount = 0;
   for (const route of ROUTES_TO_AUDIT) {
-    const fullUrl = `http://localhost:5173${route}`;
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const fullUrl = `${baseUrl}${route}`;
     try {
       const res = await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
       if (!res || res.status() >= 400) {

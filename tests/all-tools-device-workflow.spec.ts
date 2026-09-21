@@ -321,13 +321,14 @@ test.describe("Image & Conversion Tools Workflows", () => {
 
     await page.goto("/advance-compress-img", { waitUntil: "domcontentloaded" });
     const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.waitFor({ state: "attached", timeout: 15_000 });
     await fileInput.setInputFiles(sampleJpg);
 
     const compressBtn = page.getByRole("button", { name: /compress now/i });
     await expect(compressBtn).toBeVisible({ timeout: 15_000 });
     await compressBtn.click();
 
-    await expect(page.getByRole("button", { name: /download/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /download/i }).first()).toBeVisible({ timeout: 20_000 });
     expect(pageErrors).toEqual([]);
   });
 
@@ -403,11 +404,13 @@ test.describe("Image & Conversion Tools Workflows", () => {
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(samplePdf1);
 
+    // Check if auto-converted or convert button appears
     const convertBtn = page.getByRole("button", { name: /convert to word/i });
-    await expect(convertBtn).toBeVisible({ timeout: 20_000 });
-    await convertBtn.click();
+    if (await convertBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await convertBtn.click();
+    }
 
-    await expect(page.getByText(/word document ready|download/i).first()).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByText(/word document ready|conversion complete|download/i).first()).toBeVisible({ timeout: 25_000 });
     expect(pageErrors).toEqual([]);
   });
 

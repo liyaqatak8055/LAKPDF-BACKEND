@@ -51,6 +51,7 @@ const toolPaths = [
   "/pdf-editor",
   "/ai-interview-generator",
   "/protect-pdf",
+  "/unlock-pdf",
   "/pdf-to-text",
   "/ai-edit-pdf",
 ];

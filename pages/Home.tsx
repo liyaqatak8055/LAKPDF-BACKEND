@@ -278,7 +278,7 @@ const allTools: ToolItem[] = [
     },
     {
       id: "scan-pdf",
-      title: "Scan to PDF",
+      title: "Scan Document",
       description: "Convert scanned documents to PDF",
       iconName: "Scan",
       to: "/scan-pdf",

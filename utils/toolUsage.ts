@@ -28,7 +28,7 @@ const TOOL_TITLE_MAP: Record<string, string> = {
   '/page-number': 'Add Page Numbers',
   '/watermark': 'Watermark PDF',
   '/crop-pdf': 'Crop PDF',
-  '/scan-pdf': 'Scan to PDF',
+  '/scan-pdf': 'Scan Document',
   '/sign-pdf': 'Sign PDF',
   '/ocr-pdf': 'OCR PDF',
   '/compare-pdf': 'Compare PDF',

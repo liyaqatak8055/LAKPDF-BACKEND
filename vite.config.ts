@@ -155,6 +155,8 @@ export default defineConfig(({ mode }) => {
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || `http://localhost:${Number.isFinite(backendPort) ? backendPort : 8787}`;
   const isHttps = process.env.HTTPS === 'true' || process.env.VITE_HTTPS === 'true';
 
+  const cspHeader = `default-src 'self'; ${isHttps ? 'upgrade-insecure-requests; ' : ''}script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';`;
+
   return {
     server: {
       port: 3000,
@@ -162,7 +164,7 @@ export default defineConfig(({ mode }) => {
       middlewareMode: false,
       fs: { strict: false },
       headers: {
-        'Content-Security-Policy': "default-src 'self'; upgrade-insecure-requests; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';",
+        'Content-Security-Policy': cspHeader,
         'Permissions-Policy': "camera=(self), microphone=(), geolocation=()",
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
@@ -176,7 +178,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
       headers: {
-        'Content-Security-Policy': "default-src 'self'; upgrade-insecure-requests; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';",
+        'Content-Security-Policy': cspHeader,
         'Permissions-Policy': "camera=(self), microphone=(), geolocation=()",
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
@@ -466,8 +468,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes('utils/analytics')) return 'util-analytics';
 
 
-            // ── google-auth — only on login flow ──────────────────────────────
-            if (id.includes('google-auth-library') || id.includes('gaxios') || id.includes('gtoken')) return 'vendor-google-auth';
             // ── axios — deferred ──────────────────────────────────────────────
             if (id.includes('/axios/')) return 'vendor-axios';
 

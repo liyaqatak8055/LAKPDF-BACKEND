@@ -710,6 +710,32 @@ class AIService {
   }
 
   /**
+   * Extract high-precision text and details from document page images using server-side Gemini Vision OCR
+   */
+  public async extractTextWithVision(images: string[], documentName?: string): Promise<string> {
+    const url = `${API_BASE_URL}/ai/vision-ocr`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images, documentName }),
+    });
+
+    if (!response.ok) {
+      let errMessage = `Vision OCR Error (${response.status})`;
+      try {
+        const errJson = await response.json();
+        if (errJson?.error) errMessage = errJson.error;
+      } catch {
+        // fallback
+      }
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    return String(data?.text || '').trim();
+  }
+
+  /**
    * Generate Summary of PDF content
    */
   public async generateSummary(text: string, options: SummaryOptions): Promise<string> {
@@ -804,106 +830,67 @@ Produce the summary with clean markdown formatting (headings, bold points, bulle
     const maxTextChars = 9000;
     const documentExcerpt = text.slice(0, maxTextChars);
 
-    const prompt = `You are LakPDF AI Summary Engine.
+    const prompt = `You are LakPDF AI Summary Engine, designed to generate ultra-scannable, highly professional executive summaries like Smallpdf.
 
-Your job is to analyze the provided PDF content and create a
-short, accurate, easy-to-scan summary.
+Analyze the provided document content and produce a crisp, high-impact structured summary.
 
-IMPORTANT RULES:
+CRITICAL FORMATTING INSTRUCTIONS:
 
-1. Use ONLY information present in the provided document.
-2. Never invent, assume, or add information that is not present.
-3. Preserve important names, numbers, dates, fees, requirements,
-   definitions, conditions and terminology.
-4. Remove unnecessary repetition, examples that are not important,
-   long explanations, decorative text and irrelevant content.
-5. The result must be significantly shorter than the original document.
-6. Write in simple, clear language.
-7. Prefer short sentences.
-8. Each summary point should normally be 1–2 sentences.
-9. Do not create a point if the document does not contain useful
-   information for that point.
-10. Do not force a fixed number of points.
-11. Generate 4–8 important points depending on document length.
-12. Identify the document type before creating the summary.
-13. Adapt the summary points to the document type.
-14. Preserve the document's original terminology when necessary.
-15. Do not provide medical, legal, financial or academic claims
-    beyond what the document itself states.
+1. ENTITY EXTRACTION OVER NARRATIVE ESSAYS:
+   - For official letters, allotment orders, forms, certificates, invoices, admissions, resumes, and notices:
+     Extract discrete, high-value fields as distinct items rather than writing long descriptive paragraphs.
+     NEVER combine multiple major facts into a single paragraph!
+     Separate them into individual, clean Key-Value pairs:
+     • Issued by: [Issuing authority or board]
+     • Candidate / Person: [Full name]
+     • Roll No / Application No: [Number]
+     • Allotted Institute: [Full college/institution name]
+     • Course: [Course / program name]
+     • Reporting Date: [Exact deadline / date]
 
-DOCUMENT TYPE OPTIONS:
+   - FOR IDENTITY CARDS & PERSONAL DOCUMENTS (Aadhaar Card, PAN Card, Voter ID, Driving License, Passport):
+     ALWAYS extract these critical fields whenever present:
+     • Full Name: [Full name in English and vernacular script if available]
+     • Father's / Guardian's Name: [Complete name / D/O / S/O / W/O]
+     • Date of Birth: [DOB in DD/MM/YYYY format]
+     • Gender: [Gender]
+     • Identification Number: [Aadhaar number / PAN / ID number with exact digits]
+     • VID / Virtual ID: [VID if present]
+     • Address: [EXACT, COMPLETE address including Care of, Village/Street, Post, Tehsil, District, State, and 6-digit PIN code. NEVER omit or garble any address lines]
+     • Issuing Authority: [e.g. UIDAI, Govt of India, Income Tax Dept]
 
-- academic
-- syllabus
-- study_notes
-- research_paper
-- resume
-- business
-- report
-- legal
-- policy
-- form
-- invoice
-- manual
-- article
-- book_chapter
-- general
+2. FOR GENERAL ARTICLES, REPORTS, PAPERS, OR POLICIES:
+   - Keep each heading short and specific (1–3 words, e.g. "Primary Objective", "Key Finding", "Eligibility", "Next Steps").
+   - Keep the text concise, direct, and factual (under 15–20 words per point). Avoid filler words, passive voice, and redundant introductions.
 
-OUTPUT REQUIREMENT:
+3. SUMMARY ITEMS COUNT:
+   - Generate 5 to 9 focused bullet points. Every point must convey distinct, useful information.
 
-Return ONLY valid JSON.
+4. TITLE RULES:
+   - Create a clean, specific title ending with "Summary" (e.g. "Provisional Allotment Letter Summary", "Financial Q3 Report Summary").
+   - Do NOT use generic titles like "PDF Summary" or "Document Summary".
 
-Use this exact structure:
+5. SUGGESTED QUESTIONS:
+   - Provide EXACTLY 3 crisp, natural follow-up questions that a user would likely ask about this specific document.
+   - Questions must be short (under 14 words), highly relevant, and directly answerable from the document.
 
-{
-  "title": "",
-  "document_type": "",
-  "summary": [
-    {
-      "heading": "",
-      "text": ""
-    }
-  ],
-  "suggested_questions": []
-}
-
-TITLE RULES:
-
-Create a short title based on the actual document.
-Do not use generic titles such as "PDF Summary" if a meaningful
-document title can be identified.
-
-SUMMARY RULES:
-
-- Select only the most important information.
-- Use 4–8 points.
-- Keep heading short: 2–6 words.
-- Keep text concise.
-- Preserve important numbers, dates, fees and requirements.
-- Combine closely related information where appropriate.
-- Avoid repeating the title.
-
-SUGGESTED QUESTIONS:
-
-Generate 2–4 questions that a user would naturally ask after
-reading the summary.
-
-Questions must be directly answerable from the document.
-
-Do not create questions about information that is absent.
-
-If useful questions cannot be generated, return an empty array.
-
-QUALITY CHECK BEFORE OUTPUT:
-
-- Is every statement supported by the document?
-- Is the summary shorter than the source?
-- Are the most important facts included?
-- Are numbers and requirements preserved?
-- Are there any repeated points?
-- Are suggested questions actually answerable from the document?
-- Is the JSON valid?
-Return JSON only.
+6. OUTPUT FORMAT:
+   Return ONLY valid JSON with this exact structure:
+   {
+     "title": "Document Specific Title Summary",
+     "document_type": "form | letter | academic | report | invoice | policy | resume | general",
+     "summary": [
+       {
+         "heading": "Field or Topic Name",
+         "text": "Precise value or concise factual statement"
+       }
+     ],
+     "suggested_questions": [
+       "Short question 1?",
+       "Short question 2?",
+       "Short question 3?"
+     ]
+   }
 
 --- DOCUMENT CONTENT ---
 ${documentExcerpt}
@@ -911,7 +898,7 @@ ${documentExcerpt}
 
     const res = await this.callAPI(prompt, {
       featureType: 'summary',
-      temperature: 0.2,
+      temperature: 0.15,
       maxTokens: 2200,
       requireJson: true,
     });
@@ -920,9 +907,12 @@ ${documentExcerpt}
 
     if (res.json && typeof res.json === 'object') {
       const j = res.json;
-      const title =
-        String(j.title || '').trim() ||
-        (fileName ? `${fileName.replace(/\.[^/.]+$/, '')} Summary` : 'Document Summary');
+      let title = String(j.title || '').trim();
+      if (!title) {
+        title = fileName ? `${fileName.replace(/\.[^/.]+$/, '')} Summary` : 'Document Summary';
+      } else if (!/summary$/i.test(title)) {
+        title = `${title} Summary`;
+      }
       const document_type = String(j.document_type || 'general').trim();
 
       const rawItems = Array.isArray(j.summary)
@@ -950,7 +940,8 @@ ${documentExcerpt}
         : [];
       const suggestedQuestions: string[] = rawQuestions
         .map((q: any) => String(q).trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .slice(0, 3);
 
       if (bullets.length > 0) {
         const formattedMarkdown =

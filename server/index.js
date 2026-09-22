@@ -68,13 +68,54 @@ const ALLOWED_ORIGINS = parseOrigins(process.env.ALLOWED_ORIGINS || "");
 const EXTRA_ALLOWED_ORIGINS = parseOrigins(process.env.EXTRA_ALLOWED_ORIGINS || "");
 const DEFAULT_LOCAL_ORIGINS = [
   "http://localhost:3000",
-  "http://127.0.0.1:3000",
+  "https://localhost:3000",
+  "http://localhost:3001",
+  "https://localhost:3001",
+  "http://localhost:3002",
+  "https://localhost:3002",
   "http://localhost:5173",
-  "http://127.0.0.1:5173",
+  "https://localhost:5173",
+  "http://localhost:5174",
+  "https://localhost:5174",
   "http://localhost:4173",
+  "https://localhost:4173",
+  "http://127.0.0.1:3000",
+  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "https://127.0.0.1:3001",
+  "http://127.0.0.1:3002",
+  "https://127.0.0.1:3002",
+  "http://127.0.0.1:5173",
+  "https://127.0.0.1:5173",
   "http://127.0.0.1:4173",
+  "https://127.0.0.1:4173",
 ];
-const ALLOWED_ORIGIN_SET = new Set([...ALLOWED_ORIGINS, ...EXTRA_ALLOWED_ORIGINS, ...DEFAULT_LOCAL_ORIGINS]);
+const PROD_ALLOWED_ORIGINS = new Set([...ALLOWED_ORIGINS, ...EXTRA_ALLOWED_ORIGINS]);
+const ALLOWED_ORIGIN_SET = new Set([
+  ...ALLOWED_ORIGINS,
+  ...EXTRA_ALLOWED_ORIGINS,
+  ...(IS_PRODUCTION ? [] : DEFAULT_LOCAL_ORIGINS),
+]);
+
+const isDevLocalOrigin = (origin) => {
+  try {
+    const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "[::1]" ||
+      host.endsWith(".local") ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)
+    );
+  } catch {
+    return false;
+  }
+};
+
 const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || "").trim();
 const RATE_LIMIT_STORE = String(process.env.RATE_LIMIT_STORE || "memory").trim().toLowerCase();
 
@@ -85,7 +126,7 @@ if (IS_PRODUCTION) {
   if (!selectedProviderKey) {
     throw new Error(`Provider API key is required in production for AI_PROVIDER=${AI_PROVIDER}.`);
   }
-  if (ALLOWED_ORIGIN_SET.size === 0) {
+  if (PROD_ALLOWED_ORIGINS.size === 0) {
     throw new Error("ALLOWED_ORIGINS is required in production for strict CORS.");
   }
   if (!authStore.isAuthConfigured()) {
@@ -121,11 +162,25 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const normalizedOrigin = String(origin || "").trim().replace(/\/+$/, "");
-      if (ALLOWED_ORIGIN_SET.size === 0) {
-        if (IS_PRODUCTION) return callback(new Error("CORS blocked"));
+
+      // In non-production, automatically permit any local or LAN origin on any port
+      if (!IS_PRODUCTION && isDevLocalOrigin(normalizedOrigin)) {
         return callback(null, true);
       }
-      if (ALLOWED_ORIGIN_SET.has(normalizedOrigin)) return callback(null, true);
+
+      if (ALLOWED_ORIGIN_SET.has(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      if (ALLOWED_ORIGIN_SET.size === 0 && !IS_PRODUCTION) {
+        return callback(null, true);
+      }
+
+      if (!IS_PRODUCTION) {
+        console.warn(`[CORS] Allowing unlisted origin in development: ${normalizedOrigin}`);
+        return callback(null, true);
+      }
+
       return callback(new Error("CORS blocked"));
     },
     credentials: true,
@@ -144,6 +199,7 @@ const CSRF_EXEMPT_PATHS = new Set([
   "/api/metrics/core-web-vitals",
   "/api/ai/ask",
   "/api/ask",
+  "/api/ai/vision-ocr",
   "/api/ai/openrouter",
   "/api/interview/analyze-resume",
   "/api/interview/generate-questions",
@@ -180,9 +236,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- Stricter JSON body limit for AI endpoints ---
+// --- Stricter JSON body limit for AI endpoints (with 15MB allowance for Vision OCR) ---
+const visionBodyParser = express.json({ limit: "15mb", strict: true });
 const aiBodyParser = express.json({ limit: AI_BODY_SIZE_LIMIT, strict: true });
 app.use("/api/ai", (req, res, next) => {
+  if (req.path === "/vision-ocr" || req.path === "/ocr") {
+    return visionBodyParser(req, res, (err) => {
+      if (err) {
+        return res.status(413).json({ error: "Image payload too large for Vision OCR (max 15MB)." });
+      }
+      next();
+    });
+  }
   aiBodyParser(req, res, (err) => {
     if (err) {
       return res.status(413).json({ error: "Request payload too large for AI endpoint (max 100KB)." });
@@ -2300,6 +2365,74 @@ app.post(["/api/ai/ask", "/api/ask"], async (req, res) => {
     }
 
     return respondAsk(500, { error: message });
+  } finally {
+    releaseIpSlot();
+  }
+});
+
+// --- High-Precision Multimodal Vision OCR Endpoint (Gemini 2.5 Flash) ---
+app.post("/api/ai/vision-ocr", async (req, res) => {
+  if (!ensureJson(req, res)) return;
+  if (isGlobalAiRateLimited()) {
+    return res.status(503).json({ error: "Server is experiencing high AI demand. Please retry in a moment." });
+  }
+  if (await applyMinInterval(req, res, MIN_REQUEST_INTERVAL_MS)) {
+    return res.status(429).json({ error: "Too many rapid requests. Please retry shortly." });
+  }
+  if (await applyRateLimit(req, res, "vision-ocr", 60)) {
+    return res.status(429).json({ error: "Rate limit exceeded for Vision OCR" });
+  }
+
+  const rawImages = Array.isArray(req.body?.images) ? req.body.images : [];
+  if (!rawImages.length) {
+    return res.status(400).json({ error: "images array (base64 data URLs) is required" });
+  }
+
+  // Cap at 6 pages max for vision OCR per request
+  const images = rawImages.slice(0, 6).map((img) => String(img || "").trim()).filter(Boolean);
+  const docName = String(req.body?.documentName || "Document").trim();
+
+  const releaseIpSlot = acquireIpSlot(req, res, MAX_PARALLEL_PER_IP);
+  if (!releaseIpSlot) {
+    return res.status(429).json({ error: "Too many parallel requests from this client." });
+  }
+
+  try {
+    const ocrInstruction = `You are an ultra-high precision Document OCR and transcription engine.
+Transcribe and extract ALL text, numbers, identifiers, addresses, and details visible across these document page images with 100% exact accuracy.
+
+CRITICAL EXTRACTION RULES:
+1. PERSONAL IDENTITY CARDS (Aadhaar, PAN, Voter ID, Driving License, Passport, etc.):
+   - Extract Full Name in English AND in native/vernacular script (e.g. Hindi) if present.
+   - Extract Date of Birth (DOB) and Gender.
+   - Extract ALL Identification Numbers exactly (Aadhaar number, VID, PAN number, License number, etc.) with exact digits.
+   - Extract COMPLETE ADDRESS: Include Care of / Father's / Husband's name (D/O, S/O, W/O), House/Flat number, Street/Village, Post Office, Tehsil/Taluk, District/City, State, and PIN code. NEVER omit, shorten, or garble address components.
+2. OFFICIAL DOCUMENTS, INVOICES & FORMS:
+   - Extract all headers, dates, reference numbers, candidate/party names, table rows, and key-value fields verbatim.
+3. OUTPUT FORMAT:
+   - Output structured, clean markdown transcription of the document text with clear headings and field labels.
+   - Do NOT add conversational fluff or introductory remarks like "Here is the transcription:". Output only the extracted content.`;
+
+    const result = await aiQueue.enqueue(() =>
+      askAI(ocrInstruction, {
+        gptModel: "gemini-2.5-flash",
+        maxOutputTokens: 2500,
+        temperature: 0.1,
+        images,
+        userPrompt: `Extract and transcribe all text, names, numbers, and addresses from this document (${docName}):`,
+      })
+    );
+
+    return res.status(200).json({
+      text: result?.text || "",
+      provider: result?.provider || "gemini",
+      model: result?.model || "gemini-2.5-flash",
+    });
+  } catch (error) {
+    console.error("[Vision OCR Error]:", error?.message || error);
+    return res.status(500).json({
+      error: error?.message || "Failed to perform vision OCR on document",
+    });
   } finally {
     releaseIpSlot();
   }

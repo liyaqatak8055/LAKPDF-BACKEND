@@ -1,7 +1,17 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import { aiService } from './aiService';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`;
+
+const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+};
 
 export interface ExtractedPage {
     pageNumber: number;
@@ -189,7 +199,25 @@ export async function extractTextFromAnyDocument(
 
     // 3. Images (.png, .jpg, .jpeg, .webp)
     if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp') || fileType.startsWith('image/')) {
-        onStatus?.('Extracting text from image using OCR...');
+        onStatus?.('Extracting text and details using AI Vision OCR...');
+        try {
+            const dataUrl = await fileToDataUrl(file);
+            const visionText = await aiService.extractTextWithVision([dataUrl], file.name);
+            if (visionText && visionText.trim().length > 15) {
+                const words = visionText.split(/\s+/).filter(w => w.length > 0).length;
+                return {
+                    fullText: visionText.trim(),
+                    pages: [{ pageNumber: 1, text: visionText.trim(), wordCount: words }],
+                    totalPages: 1,
+                    totalWords: words,
+                    metadata: { title: file.name },
+                };
+            }
+        } catch (visionErr) {
+            console.warn('AI Vision OCR failed, falling back to local Tesseract OCR:', visionErr);
+        }
+
+        onStatus?.('Extracting text from image using local OCR...');
         const tesseractMod = await import('tesseract.js');
         const Tesseract = (tesseractMod as any).default || tesseractMod;
         const result = await Tesseract.recognize(file, 'eng', {
@@ -214,22 +242,21 @@ export async function extractTextFromAnyDocument(
     onStatus?.('Extracting text from PDF...');
     try {
         const pdfData = await extractTextFromPDF(file);
-        if (pdfData.fullText && pdfData.fullText.trim().length > 30) {
+        // If digital PDF with rich selectable text (> 50 chars), use it directly
+        if (pdfData.fullText && pdfData.fullText.trim().length > 50) {
             return pdfData;
         }
 
-        // Scanned PDF fallback: run OCR on first few pages
-        onStatus?.('Scanned PDF detected. Running OCR on pages...');
-        const tesseractMod = await import('tesseract.js');
-        const Tesseract = (tesseractMod as any).default || tesseractMod;
+        // Scanned PDF detected: Render pages and extract with high-precision AI Vision
+        onStatus?.('Scanned PDF detected. Rendering pages for AI Vision OCR...');
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, verbosity: 0 }).promise;
-        const maxPages = Math.min(pdf.numPages, 6);
-        let fullOcrText = '';
-        const pages: ExtractedPage[] = [];
+        const totalPdfPages = pdf.numPages;
+        const maxPages = Math.min(totalPdfPages, 5);
+        const pageImages: string[] = [];
 
         for (let i = 1; i <= maxPages; i++) {
-            onStatus?.(`Running OCR on page ${i} of ${maxPages}...`);
+            onStatus?.(`Preparing page ${i} of ${maxPages} for AI Vision OCR...`);
             const page = await pdf.getPage(i);
             const viewport = page.getViewport({ scale: 2.0 });
             const canvas = document.createElement('canvas');
@@ -240,23 +267,58 @@ export async function extractTextFromAnyDocument(
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 await (page.render as any)({ canvas, canvasContext: ctx, viewport }).promise;
-                const imgData = canvas.toDataURL('image/png');
-                const result = await Tesseract.recognize(imgData, 'eng');
-                const pageText = String(result?.data?.text || '').trim();
-                const wordCount = pageText.split(/\s+/).filter(w => w.length > 0).length;
-                pages.push({ pageNumber: i, text: pageText, wordCount });
-                fullOcrText += pageText + '\n\n';
+                const imgData = canvas.toDataURL('image/jpeg', 0.85);
+                pageImages.push(imgData);
             }
             page.cleanup();
         }
         pdf.cleanup();
         pdf.destroy();
 
+        if (pageImages.length > 0) {
+            onStatus?.('Extracting exact text & address using AI Vision OCR...');
+            try {
+                const visionText = await aiService.extractTextWithVision(pageImages, file.name);
+                if (visionText && visionText.trim().length > 15) {
+                    const words = visionText.split(/\s+/).filter(w => w.length > 0).length;
+                    return {
+                        fullText: visionText.trim(),
+                        pages: [{ pageNumber: 1, text: visionText.trim(), wordCount: words }],
+                        totalPages: totalPdfPages,
+                        totalWords: words,
+                        metadata: pdfData.metadata,
+                    };
+                }
+            } catch (visionErr) {
+                console.warn('AI Vision OCR failed on scanned PDF, falling back to local Tesseract:', visionErr);
+            }
+        }
+
+        // Scanned PDF fallback to local Tesseract if Vision is unavailable (uses already-rendered pageImages)
+        onStatus?.('Running local fallback OCR on pages...');
+        const tesseractMod = await import('tesseract.js');
+        const Tesseract = (tesseractMod as any).default || tesseractMod;
+        let fullOcrText = '';
+        const pages: ExtractedPage[] = [];
+
+        for (let i = 0; i < pageImages.length; i++) {
+            onStatus?.(`Running OCR on page ${i + 1} of ${pageImages.length}...`);
+            try {
+                const result = await Tesseract.recognize(pageImages[i], 'eng');
+                const pageText = String(result?.data?.text || '').trim();
+                const wordCount = pageText.split(/\s+/).filter(w => w.length > 0).length;
+                pages.push({ pageNumber: i + 1, text: pageText, wordCount });
+                fullOcrText += pageText + '\n\n';
+            } catch (pageOcrErr) {
+                console.warn(`Local OCR error on page ${i + 1}:`, pageOcrErr);
+            }
+        }
+
         const words = fullOcrText.split(/\s+/).filter(w => w.length > 0).length;
         return {
             fullText: fullOcrText.trim(),
             pages,
-            totalPages: pdf.numPages,
+            totalPages: totalPdfPages,
             totalWords: words,
             metadata: pdfData.metadata,
         };

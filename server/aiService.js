@@ -23,15 +23,16 @@ const OPENROUTER_FALLBACK_MODELS = String(
 
 // Free models on Groq (ultra fast inference, 14,400 free requests/day)
 const GROQ_FREE_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3.8-27b",
 ];
 
 // Free models on Google Gemini (1,500 free requests/day + 1M tokens/min via Google AI Studio)
 const GEMINI_FREE_MODELS = [
   "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite-preview",
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -388,6 +389,7 @@ async function callOpenAICompatible(client, model, messages, maxOutputTokens, op
     }
   }
 
+  const isGemini = String(client?.baseURL || "").includes("generativelanguage.googleapis.com");
   const response = await client.chat.completions.create(
     {
       model,
@@ -395,7 +397,7 @@ async function callOpenAICompatible(client, model, messages, maxOutputTokens, op
       max_tokens: clampOutputTokens(maxOutputTokens),
       temperature,
       ...(stop.length ? { stop } : {}),
-      ...(requireJson ? { response_format: { type: "json_object" } } : {}),
+      ...(requireJson && !isGemini ? { response_format: { type: "json_object" } } : {}),
     },
     { timeout: 25000 } // 25s timeout so failover can complete before reverse proxy 504 timeout
   );
@@ -438,7 +440,22 @@ export async function askAI(prompt, options = {}) {
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
   }
-  messages.push({ role: "user", content: effectiveUserContent });
+
+  const hasImages = Array.isArray(options.images) && options.images.length > 0;
+  if (hasImages) {
+    messages.push({
+      role: "user",
+      content: [
+        { type: "text", text: effectiveUserContent },
+        ...options.images.map((img) => ({
+          type: "image_url",
+          image_url: { url: String(img) },
+        })),
+      ],
+    });
+  } else {
+    messages.push({ role: "user", content: effectiveUserContent });
+  }
 
   let lastError = null;
 
@@ -452,7 +469,7 @@ export async function askAI(prompt, options = {}) {
       customBaseURL = GROQ_BASE_URL;
       customProvider = "groq-custom";
       if (!gptModel || gptModel.includes("nemotron") || gptModel.includes("nex-agi") || gptModel.includes("llama")) {
-        customDefaultModel = "llama-3.3-70b-versatile";
+        customDefaultModel = "openai/gpt-oss-120b";
       }
     } else if (customApiKey.startsWith("AIza") || customApiKey.startsWith("AQ.")) {
       customBaseURL = GEMINI_BASE_URL;
@@ -547,23 +564,32 @@ export async function askAI(prompt, options = {}) {
           };
         } catch (err) {
           lastError = err;
-          console.error(`[AI Gemini Error] Model ${geminiModel}:`, err?.message || err, err?.status || err?.statusCode);
           const statusCode = toNumber(err?.status || err?.statusCode || 500);
-          keyManager.reportFailure(geminiKeyEntry.key, statusCode);
+          console.warn(`[AI Gemini Error] Model ${geminiModel} failed (${statusCode}):`, err?.message || err);
+          if (statusCode === 401 || statusCode === 403) {
+            keyManager.reportFailure(geminiKeyEntry.key, statusCode);
+          }
         }
       }
+    }
+    // If all models failed with 429/quota, report failure on key with cooldown
+    if (lastError && geminiKeys.length > 0) {
+      const statusCode = toNumber(lastError?.status || lastError?.statusCode || 500);
+      keyManager.reportFailure(geminiKeys[0].key, statusCode);
     }
     return null;
   };
 
   // 2. Execute with Primary & Backup Failover
-  if (wantsGemini || AI_PROVIDER === "gemini") {
-    // Gemini primary, Groq backup
+  if (hasImages || wantsGemini || AI_PROVIDER === "gemini") {
+    // Gemini primary (supports multimodal vision and high-context reasoning)
     const geminiResult = await tryGemini();
     if (geminiResult) return geminiResult;
-    console.info("[AI Failover] Gemini failed or exhausted, failing over to Groq...");
-    const groqResult = await tryGroq();
-    if (groqResult) return groqResult;
+    if (!hasImages) {
+      console.info("[AI Failover] Gemini failed or exhausted, failing over to Groq...");
+      const groqResult = await tryGroq();
+      if (groqResult) return groqResult;
+    }
   } else {
     // Groq primary (14,400 req/day), Gemini backup (1,500 req/day)
     const groqResult = await tryGroq();

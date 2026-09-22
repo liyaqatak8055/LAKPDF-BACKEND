@@ -22,7 +22,11 @@ import {
   FileImage,
   FileType,
   FileSpreadsheet,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { Button } from "../components/Button";
 import { ToolSEOContent } from "../components/ToolSEOContent";
 import { AiApiKeyModal } from "../components/AiApiKeyModal";
@@ -34,6 +38,7 @@ import {
   parseStructuredSummaryText,
 } from "../services/aiService";
 import { formatBytes } from "../services/pdfService";
+import { DocumentViewerPanel } from "../components/pdf-summarizer/DocumentViewerPanel";
 
 // Helper to render inline bold styling
 const renderInlineBold = (text: string) => {
@@ -51,18 +56,22 @@ const renderInlineBold = (text: string) => {
 };
 
 /**
- * Exact structured card requested by user:
- * - Pastel-blue card background (#edf4ff)
+ * Exact Smallpdf-style structured card:
+ * - 4-colored brand quadrant icon
  * - Clean bold title at top
  * - Solid bullet points with bold key topics
- * - Suggested questions section with chevron toggle and clickable arrow cards
+ * - Suggested questions section with clickable arrow cards
+ * - Action footer with feedback thumbs & copy button
  */
 const StructuredSummaryCard: React.FC<{
   summary: StructuredSummaryData | string;
   fileName?: string;
   onSelectQuestion: (question: string) => void;
-}> = ({ summary, fileName, onSelectQuestion }) => {
+  onCopy?: () => void;
+  copied?: boolean;
+}> = ({ summary, fileName, onSelectQuestion, onCopy, copied }) => {
   const [isQuestionsOpen, setIsQuestionsOpen] = useState(true);
+  const [feedback, setFeedback] = useState<"liked" | "disliked" | null>(null);
 
   const parsed: StructuredSummaryData = useMemo(() => {
     if (typeof summary === "string") {
@@ -72,33 +81,34 @@ const StructuredSummaryCard: React.FC<{
   }, [summary, fileName]);
 
   return (
-    <div className="bg-[#eaf2ff] border border-blue-200/70 rounded-2xl p-6 sm:p-7 shadow-xs transition-all">
-      {/* Top Title & Document Type Badge */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 mb-5">
-        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+    <div className="bg-[#eef5ff] border border-blue-200/70 rounded-2xl p-5 sm:p-6 shadow-xs transition-all">
+      {/* Top Title with 4-quadrant Smallpdf-style icon */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-7 h-7 rounded-lg grid grid-cols-2 gap-0.5 p-1 bg-white shadow-2xs border border-blue-100 shrink-0">
+          <div className="bg-rose-500 rounded-[2px]" />
+          <div className="bg-amber-400 rounded-[2px]" />
+          <div className="bg-cyan-500 rounded-[2px]" />
+          <div className="bg-emerald-500 rounded-[2px]" />
+        </div>
+        <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-snug">
           {parsed.title}
         </h2>
-        {parsed.document_type && parsed.document_type !== "general" && (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100/90 text-primary-700 capitalize tracking-wide border border-blue-200/60 select-none">
-            {parsed.document_type.replace(/_/g, " ")}
-          </span>
-        )}
       </div>
 
       {/* Main Bullet Points */}
-      <div className="space-y-3.5 mb-6 text-slate-800 text-[15px] sm:text-base leading-relaxed">
+      <div className="space-y-3 mb-5 text-slate-800 text-sm sm:text-[15px] leading-relaxed">
         {parsed.bullets.map((b, idx) => {
           const heading = b.heading || b.topic;
           const text = b.text || b.detail || "";
           return (
             <div key={idx} className="flex items-start gap-2.5">
-              <span className="text-black font-black text-lg leading-none mt-1 select-none shrink-0">
+              <span className="text-black font-black text-base leading-none mt-1 select-none shrink-0">
                 •
               </span>
               <div className="flex-1">
                 {heading ? (
                   <>
-                    <strong className="font-extrabold text-slate-950">{heading}: </strong>
+                    <strong className="font-bold text-slate-950">{heading}: </strong>
                     <span className="text-slate-800 font-normal">{renderInlineBold(text)}</span>
                   </>
                 ) : (
@@ -112,14 +122,14 @@ const StructuredSummaryCard: React.FC<{
 
       {/* Suggested Questions Section */}
       {parsed.suggestedQuestions.length > 0 && (
-        <div className="pt-3 border-t border-blue-200/60">
+        <div className="pt-3 border-t border-blue-200/60 mb-3">
           <button
             type="button"
             onClick={() => setIsQuestionsOpen(!isQuestionsOpen)}
-            className="w-full flex items-center justify-between py-1.5 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between py-1 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-600">
-              <Sparkles className="w-4 h-4 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>Suggested questions:</span>
             </div>
             <div className="text-slate-500 hover:text-slate-700">
@@ -132,22 +142,69 @@ const StructuredSummaryCard: React.FC<{
           </button>
 
           {isQuestionsOpen && (
-            <div className="space-y-2 mt-2.5 animate-in fade-in duration-200">
-              {parsed.suggestedQuestions.map((q, qIdx) => (
+            <div className="space-y-2 mt-2 animate-in fade-in duration-200">
+              {parsed.suggestedQuestions.slice(0, 3).map((q, qIdx) => (
                 <button
                   key={qIdx}
                   type="button"
                   onClick={() => onSelectQuestion(q)}
-                  className="w-full bg-white hover:bg-slate-50/90 active:bg-blue-50/50 border border-blue-100 rounded-xl px-4 py-3 sm:py-3.5 text-slate-800 text-xs sm:text-sm font-medium flex items-center justify-between shadow-2xs transition-all text-left group cursor-pointer"
+                  className="w-full bg-white hover:bg-slate-50 active:bg-blue-50/50 border border-blue-100 rounded-xl px-3.5 py-2.5 sm:py-3 text-slate-800 text-xs sm:text-sm font-medium flex items-center justify-between shadow-2xs transition-all text-left group cursor-pointer"
                 >
-                  <span className="flex-1 pr-3 leading-snug">{q}</span>
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-primary-600 group-hover:translate-x-1 transition-all shrink-0" />
+                  <span className="flex-1 pr-2 leading-snug">{q}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all shrink-0" />
                 </button>
               ))}
             </div>
           )}
         </div>
       )}
+
+      {/* Action Footer: Feedback & Copy */}
+      <div className="pt-2 border-t border-blue-200/50 flex items-center justify-between text-slate-500">
+        <div className="flex items-center gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setFeedback((f) => (f === "liked" ? null : "liked"))}
+            className={`p-1.5 rounded-lg hover:bg-white/80 transition-colors cursor-pointer ${
+              feedback === "liked" ? "text-blue-600 bg-white font-semibold" : "text-slate-400 hover:text-slate-600"
+            }`}
+            title="Helpful summary"
+          >
+            <ThumbsUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setFeedback((f) => (f === "disliked" ? null : "disliked"))}
+            className={`p-1.5 rounded-lg hover:bg-white/80 transition-colors cursor-pointer ${
+              feedback === "disliked" ? "text-rose-600 bg-white font-semibold" : "text-slate-400 hover:text-slate-600"
+            }`}
+            title="Not helpful"
+          >
+            <ThumbsDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {onCopy && (
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold hover:bg-white/80 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+            title="Copy summary"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-700">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -234,61 +291,140 @@ export const PdfSummarizerQA: React.FC = () => {
   };
 
   // Sample document for instant 1-click test
-  const handleSampleDoc = () => {
+  const handleSampleDoc = async () => {
     const sampleData: StructuredSummaryData = {
       title: "NCISM Elective Courses - FAQs Summary",
+      document_type: "policy",
       bullets: [
         {
+          heading: "Electives Definition",
+          text: "Optional courses in B.A.M.S./B.U.M.S./B.S.M.S./B.S.R.M.S. for interdisciplinary exposure.",
           topic: "Electives Definition",
           detail: "Optional courses in B.A.M.S./B.U.M.S./B.S.M.S./B.S.R.M.S. for interdisciplinary exposure.",
         },
         {
+          heading: "Mandatory Requirement",
+          text: "Students must complete a minimum of 3 electives per session; 9 before the final exam.",
           topic: "Mandatory Requirement",
-          detail: "Students must complete a minimum of three electives per session; nine before the final exam.",
+          detail: "Students must complete a minimum of 3 electives per session; 9 before the final exam.",
         },
         {
-          topic: "Enrollment",
-          detail: "Step-by-step guide available for enrollment.",
+          heading: "Structure & Hours",
+          text: "Each elective consists of 5 modules (45 hours total), earning academic credits.",
+          topic: "Structure & Hours",
+          detail: "Each elective consists of 5 modules (45 hours total), earning academic credits.",
         },
         {
-          topic: "Structure",
-          detail: "Each elective consists of five modules (45 hours total), earning credits and grades.",
-        },
-        {
+          heading: "Marks Addition",
+          text: "Elective marks contribute directly to viva marks in respective subjects.",
           topic: "Marks Addition",
-          detail: "Elective marks contribute to viva marks in respective subjects.",
+          detail: "Elective marks contribute directly to viva marks in respective subjects.",
         },
         {
-          topic: "Fees",
-          detail: "INR 500 per elective, payable before results are issued.",
+          heading: "Course Fee",
+          text: "INR 500 per elective, payable before semester results are issued.",
+          topic: "Course Fee",
+          detail: "INR 500 per elective, payable before semester results are issued.",
         },
       ],
       suggestedQuestions: [
-        "What are Electives or Elective Courses?",
-        "What is the Fee for Elective Courses and When would students pay for the same?",
-        "How can I enroll for Electives?",
+        "What are elective courses?",
+        "What is the fee for elective courses?",
+        "How many electives are mandatory before the final exam?",
       ],
       formattedMarkdown: "",
     };
 
     sampleData.formattedMarkdown =
       `${sampleData.title}\n\n` +
-      sampleData.bullets.map((b) => `• **${b.topic}**: ${b.detail}`).join("\n") +
+      sampleData.bullets.map((b) => `• **${b.heading}**: ${b.text}`).join("\n") +
       `\n\n### Suggested questions:\n` +
       sampleData.suggestedQuestions.map((q) => `- ${q}`).join("\n");
 
-    const dummyFile = new File([sampleData.formattedMarkdown], "FAQ's Electives 06_10_202...pdf", {
-      type: "application/pdf",
-    });
+    try {
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595, 842]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    setFile(dummyFile);
-    setExtractedData({
-      fullText: sampleData.formattedMarkdown,
-      totalPages: 4,
-      totalWords: 1205,
-      pages: [],
-    });
-    setGeneratedSummary(sampleData);
+      page.drawText("NCISM FAQ'S ON ELECTIVES (Sample Document)", {
+        x: 50,
+        y: 790,
+        size: 15,
+        font: fontBold,
+        color: rgb(0.1, 0.2, 0.45),
+      });
+
+      page.drawText("National Commission for Indian System of Medicine", {
+        x: 50,
+        y: 770,
+        size: 10,
+        font,
+        color: rgb(0.4, 0.45, 0.5),
+      });
+
+      let yPos = 730;
+      const lines = [
+        "1. What are Electives or Elective Courses?",
+        "Electives are courses which can be chosen from a pool of papers. They may be very specific or",
+        "advanced, supportive to the discipline, providing an expanded scope, or enabling an exposure to",
+        "some other discipline or domain. They nurture student's proficiency and skill.",
+        "",
+        "2. Mandatory Requirement for Students:",
+        "Each student must complete a minimum of three electives per session, totalling nine electives",
+        "before appearing in the final professional examination.",
+        "",
+        "3. Elective Modules & Duration:",
+        "Each elective course consists of five modules, each module with nine hours of learning (45 hours total).",
+        "",
+        "4. Marks Addition in University Results:",
+        "Elective marks shall contribute towards the viva marks in the respective subject examination.",
+        "",
+        "5. Fee Structure:",
+        "The fee for each elective is INR 500, payable before the issuance of course results.",
+      ];
+
+      for (const line of lines) {
+        if (
+          line.startsWith("1.") ||
+          line.startsWith("2.") ||
+          line.startsWith("3.") ||
+          line.startsWith("4.") ||
+          line.startsWith("5.")
+        ) {
+          page.drawText(line, { x: 50, y: yPos, size: 11, font: fontBold, color: rgb(0.15, 0.15, 0.15) });
+        } else if (line) {
+          page.drawText(line, { x: 50, y: yPos, size: 9.5, font, color: rgb(0.3, 0.3, 0.3) });
+        }
+        yPos -= 22;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const dummyFile = new File([pdfBytes], "FAQ's Electives 06_10_2025.pdf", {
+        type: "application/pdf",
+      });
+
+      setFile(dummyFile);
+      setExtractedData({
+        fullText: sampleData.formattedMarkdown,
+        totalPages: 1,
+        totalWords: 1205,
+        pages: [],
+      });
+      setGeneratedSummary(sampleData);
+    } catch {
+      const dummyFile = new File([sampleData.formattedMarkdown], "FAQ's Electives 06_10_2025.txt", {
+        type: "text/plain",
+      });
+      setFile(dummyFile);
+      setExtractedData({
+        fullText: sampleData.formattedMarkdown,
+        totalPages: 1,
+        totalWords: 1205,
+        pages: [],
+      });
+      setGeneratedSummary(sampleData);
+    }
   };
 
   // Re-generate summary if needed
@@ -409,33 +545,35 @@ export const PdfSummarizerQA: React.FC = () => {
 
       <AiApiKeyModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-primary-700 text-xs font-semibold mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-primary-600" />
-              1-Click Instant AI Summary
+      <div className={file && !isProcessing && generatedSummary ? "max-w-[1600px] mx-auto px-2 sm:px-4 py-3 sm:py-4" : "max-w-4xl mx-auto px-4 py-8"}>
+        {/* Header Bar (Upload Mode only) */}
+        {(!file || isProcessing || !generatedSummary) && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-primary-700 text-xs font-semibold mb-2">
+                <Sparkles className="w-3.5 h-3.5 text-primary-600" />
+                1-Click Instant AI Summary
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                AI Summary
+              </h1>
+              <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+                Upload any PDF, Word file, scanned image, or text document. The AI automatically extracts and generates an executive AI summary with zero options required.
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-              AI Summary
-            </h1>
-            <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-              Upload any PDF, Word file, scanned image, or text document. The AI automatically extracts and generates an executive AI summary with zero options required.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition-all"
-            >
-              <Settings className="w-3.5 h-3.5 text-slate-500" />
-              AI Settings
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition-all cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5 text-slate-500" />
+                AI Settings
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Error Alert */}
         {errorMessage && (
@@ -543,91 +681,12 @@ export const PdfSummarizerQA: React.FC = () => {
           </div>
         )}
 
-        {/* STATE 3: SUMMARY GENERATED VIEW */}
+        {/* STATE 3: SUMMARY GENERATED VIEW (SMALLPDF-STYLE SPLIT WORKSPACE) */}
         {file && !isProcessing && generatedSummary && (
-          <div className="mt-6 space-y-6 animate-in fade-in">
-            {/* Document Info Ribbon & Action Buttons */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl shrink-0">
-                  {getFileIcon(file.name)}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-slate-900 text-sm sm:text-base truncate max-w-md">
-                      {file.name}
-                    </p>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
-                      Summarized
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {extractedData ? (
-                      <>
-                        {extractedData.totalPages > 1 && `${extractedData.totalPages} pages • `}
-                        {extractedData.totalWords.toLocaleString()} words analyzed •{" "}
-                        {formatBytes(file.size)}
-                      </>
-                    ) : (
-                      formatBytes(file.size)
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto justify-end">
-                <button
-                  type="button"
-                  onClick={handleCopySummary}
-                  className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                  title="Copy summary to clipboard"
-                >
-                  {copiedSummary ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-slate-500" /> Copy
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadSummaryPdf}
-                  disabled={isDownloadingPdf}
-                  className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                  title="Export summary to PDF document"
-                >
-                  {isDownloadingPdf ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Download className="w-3.5 h-3.5" />
-                  )}
-                  Export PDF
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadSummaryTxt}
-                  className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                  title="Download as plain text (.txt)"
-                >
-                  TXT
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleRegenerate}
-                  className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                  title="Regenerate summary"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                  Regenerate
-                </button>
-
+          <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-140px)] min-h-[640px] animate-in fade-in">
+            {/* Minimalist Workspace Header Bar (Smallpdf Style) */}
+            <div className="px-4 sm:px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white shrink-0 z-10">
+              <div className="flex items-center gap-3 min-w-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -636,134 +695,207 @@ export const PdfSummarizerQA: React.FC = () => {
                     setGeneratedSummary(null);
                     setChatMessages([]);
                   }}
-                  className="px-3 py-2 text-xs font-semibold rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
-                  title="Upload a new document"
+                  className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Upload another document"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  New Document
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">New Document</span>
+                </button>
+
+                <div className="h-5 w-[1px] bg-slate-200 hidden sm:block" />
+
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate">
+                    Summarize
+                  </h2>
+                  <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-medium truncate max-w-xs">
+                    {file.name}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  title="Regenerate summary"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">Regenerate</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadSummaryTxt}
+                  className="px-2.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors shadow-2xs cursor-pointer hidden sm:inline-flex"
+                  title="Download plain text (.txt)"
+                >
+                  TXT
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadSummaryPdf}
+                  disabled={isDownloadingPdf}
+                  className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  title="Download Summary PDF"
+                >
+                  {isDownloadingPdf ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>Download</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs cursor-pointer"
+                  title="AI Settings"
+                >
+                  <Settings className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* EXACT STRUCTURED SUMMARY CARD AS IN SCREENSHOT */}
-            <StructuredSummaryCard
-              summary={generatedSummary}
-              fileName={file.name}
-              onSelectQuestion={handleAskQuestion}
-            />
+            {/* Split Screen Columns: Left (Viewer) & Right (Summary + Chat) */}
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              {/* Left Column: PDF / Document Preview Canvas */}
+              <div className="lg:w-[50%] xl:w-[52%] h-[40vh] lg:h-full shrink-0">
+                <DocumentViewerPanel file={file} className="h-full border-r border-slate-200" />
+              </div>
 
-            {/* INTERACTIVE Q&A CONVERSATION THREAD */}
-            {chatMessages.length > 0 && (
-              <div
-                ref={chatSectionRef}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4 animate-in fade-in"
-              >
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-primary-600" />
-                    <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-                      Interactive Document Q&A
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setChatMessages([])}
-                    className="text-xs text-slate-400 hover:text-rose-600 font-medium transition-colors"
-                  >
-                    Clear Q&A
-                  </button>
-                </div>
+              {/* Right Column: AI Assistant Panel with Sticky Bottom Chat */}
+              <div className="lg:w-[50%] xl:w-[48%] flex flex-col h-full bg-white overflow-hidden">
+                {/* Scrollable Conversation & Summary Content */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                  {/* Summary Card */}
+                  <StructuredSummaryCard
+                    summary={generatedSummary}
+                    fileName={file.name}
+                    onSelectQuestion={handleAskQuestion}
+                    onCopy={handleCopySummary}
+                    copied={copiedSummary}
+                  />
 
-                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
-                  {chatMessages.map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`flex gap-3 ${
-                        msg.role === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      {msg.role === "assistant" && (
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-primary-700 flex items-center justify-center shrink-0 mt-1">
-                          <Sparkles className="w-4 h-4" />
+                  {/* Interactive Q&A Message Stream */}
+                  {chatMessages.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Conversation</span>
                         </div>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => setChatMessages([])}
+                          className="text-xs text-slate-400 hover:text-rose-600 font-medium transition-colors cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
 
-                      <div
-                        className={`max-w-[85%] sm:max-w-[78%] rounded-2xl p-4 text-sm leading-relaxed ${
-                          msg.role === "user"
-                            ? "bg-primary-600 text-white rounded-br-xs"
-                            : "bg-[#edf4ff] text-slate-800 rounded-bl-xs border border-blue-200/70"
-                        }`}
-                      >
-                        <div className="whitespace-pre-line">{msg.content}</div>
+                      {chatMessages.map((msg, index) => (
+                        <div
+                          key={index}
+                          className={`flex gap-2.5 ${
+                            msg.role === "user" ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          {msg.role === "assistant" && (
+                            <div className="w-7 h-7 rounded-full bg-blue-100 text-primary-700 flex items-center justify-center shrink-0 mt-0.5">
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </div>
+                          )}
 
-                        {msg.role === "assistant" && (
-                          <div className="mt-2.5 pt-2 border-t border-blue-200/60 flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleCopyMessage(msg.content, index)}
-                              className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
-                            >
-                              {copiedIndex === index ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-600" /> Copied
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" /> Copy
-                                </>
-                              )}
-                            </button>
+                          <div
+                            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                              msg.role === "user"
+                                ? "bg-blue-600 text-white rounded-br-xs shadow-xs"
+                                : "bg-[#f1f6ff] text-slate-800 rounded-bl-xs border border-blue-200/70"
+                            }`}
+                          >
+                            <div className="whitespace-pre-line">{msg.content}</div>
+
+                            {msg.role === "assistant" && (
+                              <div className="mt-2 pt-1.5 border-t border-blue-200/50 flex items-center justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyMessage(msg.content, index)}
+                                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
+                                >
+                                  {copiedIndex === index ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-600" /> Copied
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" /> Copy
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      {msg.role === "user" && (
-                        <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 mt-1 font-bold text-xs">
-                          You
+                          {msg.role === "user" && (
+                            <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[11px]">
+                              You
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {isAsking && (
+                        <div className="flex gap-2.5 justify-start items-center text-slate-500 text-xs py-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          </div>
+                          <span className="italic">AI is generating answer from PDF...</span>
                         </div>
                       )}
-                    </div>
-                  ))}
 
-                  {isAsking && (
-                    <div className="flex gap-3 justify-start items-center text-slate-500 text-sm py-2">
-                      <div className="w-7 h-7 rounded-full bg-blue-50 text-primary-600 flex items-center justify-center">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      </div>
-                      <span className="italic text-xs">AI is searching document context...</span>
+                      <div ref={chatBottomRef} />
                     </div>
                   )}
-                  <div ref={chatBottomRef} />
                 </div>
 
-                {/* Input form */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAskQuestion();
-                  }}
-                  className="flex gap-2 pt-3 border-t border-slate-100"
-                >
-                  <input
-                    type="text"
-                    value={inputQuestion}
-                    onChange={(e) => setInputQuestion(e.target.value)}
-                    placeholder="Ask another question about this document..."
-                    disabled={isAsking}
-                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all"
-                  />
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    disabled={!inputQuestion.trim() || isAsking}
-                    className="px-5"
+                {/* Sticky Bottom Chat Input Bar (Smallpdf Style) */}
+                <div className="p-3 sm:p-4 bg-white border-t border-slate-200/90 shrink-0">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleAskQuestion();
+                    }}
+                    className="relative flex items-center"
                   >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </form>
+                    <input
+                      type="text"
+                      value={inputQuestion}
+                      onChange={(e) => setInputQuestion(e.target.value)}
+                      placeholder="Hey! Ask me anything about your PDF."
+                      disabled={isAsking}
+                      className="w-full pl-4 pr-12 py-3 rounded-xl border border-slate-300 bg-slate-50/60 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-slate-800 text-sm outline-none transition-all placeholder:text-slate-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!inputQuestion.trim() || isAsking}
+                      className="absolute right-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 text-white transition-all cursor-pointer shadow-xs"
+                      title="Send question"
+                    >
+                      {isAsking ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-4 h-4" />
+                      )}
+                    </button>
+                  </form>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
 

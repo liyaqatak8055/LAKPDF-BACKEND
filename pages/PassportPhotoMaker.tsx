@@ -400,7 +400,7 @@ export const PassportPhotoMaker: React.FC = () => {
         />
         <meta property="og:url" content="https://lakpdf.com/passport-photo-maker" />
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="LAK PDF" />
+        <meta property="og:site_name" content="LAKPDF" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta
           name="twitter:title"

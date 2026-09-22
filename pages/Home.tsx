@@ -465,8 +465,9 @@ const Home: React.FC = () => {
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "LAK PDF",
-    url: "https://lakpdf.com",
+    name: "LAKPDF",
+    alternateName: "LAK PDF",
+    url: "https://lakpdf.com/",
     logo: "https://lakpdf.com/icon-512.png",
     contactPoint: [{
       "@type": "ContactPoint",
@@ -477,14 +478,15 @@ const Home: React.FC = () => {
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "LAK PDF",
-    url: "https://lakpdf.com"
+    name: "LAKPDF",
+    alternateName: ["LAK PDF", "lakpdf", "LAKPDF.com"],
+    url: "https://lakpdf.com/"
   };
 
   return (
     <>
       <Helmet>
-        <title>LAK PDF - Free Online PDF Tools</title>
+        <title>LAKPDF - Free Online PDF Tools</title>
 
         <meta
           name="description"
@@ -493,13 +495,14 @@ const Home: React.FC = () => {
 
         <meta
           name="keywords"
-          content="lak pdf, pdf tools, merge pdf, compress pdf, pdf to jpg, jpg to pdf"
+          content="lakpdf, lak pdf, pdf tools, merge pdf, compress pdf, pdf to jpg, jpg to pdf"
         />
 
         <link rel="canonical" href="https://lakpdf.com/" />
 
         {/* Open Graph */}
-        <meta property="og:title" content="LAK PDF – Free Online PDF Tools" />
+        <meta property="og:site_name" content="LAKPDF" />
+        <meta property="og:title" content="LAKPDF – Free Online PDF Tools" />
         <meta
           property="og:description"
           content="All-in-one free online PDF tools. No signup required."

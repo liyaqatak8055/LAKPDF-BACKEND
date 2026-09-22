@@ -1,6 +1,6 @@
 {
-  "name": "LAK PDF",
-  "short_name": "LAK PDF",
+  "name": "LAKPDF",
+  "short_name": "LAKPDF",
   "description": "Free online PDF tools to merge, compress, convert and edit PDFs.",
   "start_url": "/",
   "scope": "/",

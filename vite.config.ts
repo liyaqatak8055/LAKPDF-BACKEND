@@ -227,8 +227,8 @@ export default defineConfig(({ mode }) => {
         // Inline the SW registration snippet (no extra network request)
         injectRegister: 'inline',
         manifest: {
-          name: 'LAK PDF – Free Online PDF Tools',
-          short_name: 'LAK PDF',
+          name: 'LAKPDF – Free Online PDF Tools',
+          short_name: 'LAKPDF',
           description: 'Merge, compress, convert, sign and edit PDFs online free. No signup required.',
           theme_color: '#e5323f',
           background_color: '#f6f7f9',

@@ -272,7 +272,7 @@ export const MakePpt: React.FC = () => {
         />
         <meta property="og:url" content="https://lakpdf.com/make-ppt" />
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="LAK PDF" />
+        <meta property="og:site_name" content="LAKPDF" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Make PPT Online Free | Images to PowerPoint Converter - LAK PDF" />
         <meta

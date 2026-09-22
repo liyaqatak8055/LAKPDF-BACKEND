@@ -281,12 +281,6 @@ export default defineConfig(({ mode }) => {
                 cacheableResponse: { statuses: [0, 200] },
               },
             },
-            {
-              // API — network-first, fall back gracefully
-              urlPattern: /^\/api\//,
-              handler: 'NetworkFirst',
-              options: { cacheName: 'api-cache', networkTimeoutSeconds: 5 },
-            },
           ],
           // Ensure SW doesn't break SPA routing
           navigateFallback: '/index.html',

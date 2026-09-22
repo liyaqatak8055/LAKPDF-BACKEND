@@ -677,11 +677,23 @@ class AIService {
       if (!response.ok) {
         let errMessage = `Error ${response.status}`;
         try {
-          const errJson = await response.json();
-          errMessage = errJson.error || errJson.message || errMessage;
-        } catch {
           const errText = await response.text();
-          if (errText) errMessage = errText;
+          if (errText) {
+            try {
+              const errJson = JSON.parse(errText);
+              errMessage = errJson.error || errJson.message || errText;
+            } catch {
+              if (response.status === 504) {
+                errMessage = 'Server gateway timeout (504). The AI request took too long. Please retry with a shorter document section.';
+              } else if (response.status === 503) {
+                errMessage = 'AI service is temporarily busy or unavailable (503). Please retry in a moment.';
+              } else {
+                errMessage = errText.length > 200 ? `Server error (${response.status})` : errText;
+              }
+            }
+          }
+        } catch {
+          // If reading text fails altogether, fallback to status
         }
         throw new Error(errMessage);
       }

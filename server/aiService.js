@@ -23,11 +23,8 @@ const OPENROUTER_FALLBACK_MODELS = String(
 
 // Free models on Groq (ultra fast inference, 14,400 free requests/day)
 const GROQ_FREE_MODELS = [
-  "openai/gpt-oss-120b",
-  "openai/gpt-oss-20b",
-  "qwen/qwen3.8-27b",
-  "groq/compound-mini",
-  "groq/compound",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
 ];
 
 // Free models on Google Gemini (1,500 free requests/day + 1M tokens/min via Google AI Studio)
@@ -275,8 +272,8 @@ class ApiKeyManager {
       console.warn(
         `[AI KeyPool] Key ${entry.masked} (${entry.provider}) invalid or expired (${statusCode}). Disabled for 24h. Auto-switched to backup key.`
       );
-    } else if (statusCode === 400) {
-      // Bad Request (e.g. invalid parameter/payload): not an API key issue, do not cooldown
+    } else if (statusCode === 400 || statusCode === 404) {
+      // Bad Request / Model Not Found: not an API key issue, do not cooldown
       return;
     } else {
       // General error: brief 5s cooldown
@@ -317,32 +314,34 @@ export const aiConfig = {
   getPoolStats: () => keyManager.getPoolStats(),
 };
 
-const normalizeOpenRouterError = (error) => {
+const normalizeOpenRouterError = (error, provider = "") => {
   const status = toNumber(error?.status || error?.statusCode);
   const retryAfterSec = toNumber(
     error?.headers?.["retry-after"] || error?.response?.headers?.["retry-after"]
   );
 
+  const providerLabel = provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : "AI";
+
   if (status === 429) {
-    return createServiceError("OpenRouter rate limit exceeded. Please retry shortly.", 429, retryAfterSec);
+    return createServiceError(`${providerLabel} rate limit exceeded. Please retry shortly.`, 429, retryAfterSec);
   }
   if (status === 401 || status === 403) {
-    return createServiceError("OpenRouter API key is invalid or unauthorized.", status);
+    return createServiceError(`${providerLabel} API key is invalid or unauthorized.`, status);
   }
   if (status === 402) {
-    return createServiceError("OpenRouter API key has insufficient credits or quota.", 402);
+    return createServiceError(`${providerLabel} API key has insufficient credits or quota.`, 402);
   }
   if (status >= 500) {
-    return createServiceError("OpenRouter upstream is temporarily unavailable. Please retry.", 503, retryAfterSec);
+    return createServiceError(`${providerLabel} upstream is temporarily unavailable. Please retry.`, 503, retryAfterSec);
   }
 
   const rawMessage = String(error?.message || "").toLowerCase();
   if (rawMessage.includes("timeout") || rawMessage.includes("network") || rawMessage.includes("econnreset")) {
-    return createServiceError("OpenRouter network timeout. Please retry.", 503);
+    return createServiceError(`${providerLabel} network timeout. Please retry.`, 503);
   }
 
   return createServiceError(
-    String(error?.message || "OpenRouter request failed"),
+    String(error?.message || `${providerLabel} request failed`),
     status >= 400 ? status : 500,
     retryAfterSec
   );
@@ -373,16 +372,32 @@ async function callOpenAICompatible(client, model, messages, maxOutputTokens, op
     ? options.stop.map((s) => String(s || "").trim()).filter(Boolean).slice(0, 4)
     : [];
 
+  // When requireJson is true, ensure at least one message contains the word "json" (required by Groq & OpenAI specs)
+  let finalMessages = messages;
+  if (requireJson) {
+    const hasJsonWord = messages.some((m) => {
+      if (typeof m?.content === "string") return m.content.toLowerCase().includes("json");
+      if (Array.isArray(m?.content)) return JSON.stringify(m.content).toLowerCase().includes("json");
+      return false;
+    });
+    if (!hasJsonWord) {
+      finalMessages = [
+        ...messages,
+        { role: "system", content: "You must return valid JSON output only." },
+      ];
+    }
+  }
+
   const response = await client.chat.completions.create(
     {
       model,
-      messages,
+      messages: finalMessages,
       max_tokens: clampOutputTokens(maxOutputTokens),
       temperature,
       ...(stop.length ? { stop } : {}),
       ...(requireJson ? { response_format: { type: "json_object" } } : {}),
     },
-    { timeout: 60000 }
+    { timeout: 25000 } // 25s timeout so failover can complete before reverse proxy 504 timeout
   );
 
   const content = response?.choices?.[0]?.message?.content;
@@ -437,7 +452,7 @@ export async function askAI(prompt, options = {}) {
       customBaseURL = GROQ_BASE_URL;
       customProvider = "groq-custom";
       if (!gptModel || gptModel.includes("nemotron") || gptModel.includes("nex-agi") || gptModel.includes("llama")) {
-        customDefaultModel = "openai/gpt-oss-120b";
+        customDefaultModel = "llama-3.3-70b-versatile";
       }
     } else if (customApiKey.startsWith("AIza") || customApiKey.startsWith("AQ.")) {
       customBaseURL = GEMINI_BASE_URL;
@@ -670,6 +685,6 @@ export async function askAI(prompt, options = {}) {
     }
   }
 
-  throw normalizeOpenRouterError(lastError || createServiceError("All API keys and fallback models exhausted", 503));
+  throw normalizeOpenRouterError(lastError || createServiceError("All API keys and fallback models exhausted", 503), AI_PROVIDER);
 }
 

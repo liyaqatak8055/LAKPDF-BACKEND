@@ -19,7 +19,7 @@
     "security:migrate-otp": "node scripts/migrate-otp-hashes.mjs",
     "test:cross-browser": "playwright test tests/cross-browser-blank-page.spec.ts",
     "sitemap:generate": "node scripts/generate-sitemap.mjs",
-    "build": "npm run sitemap:generate && vite build && node -e \"const fs=require('fs');const path=require('path');const src=path.join('public','.htaccess');const dest=path.join('dist','.htaccess');if(fs.existsSync(src)){fs.copyFileSync(src,dest);}\"",
+    "build": "npm run sitemap:generate && NODE_ENV=production vite build && node -e \"const fs=require('fs');const path=require('path');const src=path.join('public','.htaccess');const dest=path.join('dist','.htaccess');if(fs.existsSync(src)){fs.copyFileSync(src,dest);}\"",
     "start": "NODE_ENV=production node server/cluster.js",
     "start:single": "NODE_ENV=production node server/index.js",
     "start:prod": "npm run check:env:prod && npm run start",

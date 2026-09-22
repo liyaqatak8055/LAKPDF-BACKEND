@@ -197,10 +197,16 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous"
     href="/assets/fonts/inter-latin-700-normal.woff2" />
 
-  <!-- Roboto Slab display font for distinctive logo branding -->
+  <!-- Roboto Slab display font for distinctive logo branding (Non-render-blocking) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap" />
+  <link rel="preload" as="style"
+    href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap"
+    media="print" onload="this.media='all'" />
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap" />
+  </noscript>
 
   <!-- Noto Sans Devanagari — deferred to idle to ensure 0 critical path contention -->
   <script>
@@ -594,8 +600,9 @@
               <img src="/logo-80x80.png" alt="LAK PDF Logo" width="40" height="40" fetchpriority="high"
                 style="width:40px;height:40px;object-fit:contain;" />
             </picture>
-            <span style="font-family:'Roboto Slab',Georgia,serif;font-weight:900;font-size:2.2rem;line-height:1;color:var(--text-primary);letter-spacing:-0.02em;">LAK <span
-                style="color:#e5323f;font-weight:900;">PDF</span></span>
+            <span
+              style="font-family:'Roboto Slab',Georgia,serif;font-weight:900;font-size:2.2rem;line-height:1;color:var(--text-primary);letter-spacing:-0.02em;">LAK
+              <span style="color:#e5323f;font-weight:900;">PDF</span></span>
           </a>
         </div>
       </header>

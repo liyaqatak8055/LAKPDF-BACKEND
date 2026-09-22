@@ -20,7 +20,8 @@ async function measure() {
   // Enable performance monitoring
   await client.send('Performance.enable');
 
-  console.log('Navigating to http://localhost:4173/ (Production Build) with mobile throttling...');
+  const targetUrl = process.env.TARGET_URL || 'http://localhost:3000/';
+  console.log(`Navigating to ${targetUrl} (Production Build) with mobile throttling...`);
   // Emulate mobile slow CPU and 4G network as Lighthouse does:
   await client.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   await client.send('Network.emulateNetworkConditions', {
@@ -31,7 +32,7 @@ async function measure() {
   });
 
   const start = Date.now();
-  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 30000 });
+  await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 });
   await page.waitForTimeout(3000); // Allow LCP and observers to settle
 
   const metrics = await page.evaluate(() => {

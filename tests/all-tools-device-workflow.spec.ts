@@ -230,13 +230,13 @@ test.describe("Core PDF Tools Workflows", () => {
     setupErrorListener(page, pageErrors);
 
     await page.goto("/pdf-editor", { waitUntil: "domcontentloaded" });
-    await expect(page.locator("p", { hasText: "Select PDF" }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("text=Choose PDF File").first()).toBeVisible({ timeout: 15_000 });
 
     const samplePdf = path.join(process.cwd(), "tmp", "sample.pdf");
     await page.setInputFiles('input[type="file"][accept="application/pdf"]', samplePdf);
 
     await expect(page.locator("canvas").first()).toBeVisible({ timeout: 25_000 });
-    const saveBtn = page.getByRole("button", { name: "Save changes" });
+    const saveBtn = page.getByRole("button", { name: "Export PDF" });
     await expect(saveBtn).toBeVisible({ timeout: 25_000 });
     await saveBtn.click();
 

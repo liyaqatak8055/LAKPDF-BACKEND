@@ -109,18 +109,10 @@ export const AdUnit: React.FC<AdUnitProps> = ({
     }
 
     try {
-      // @ts-ignore - adsbygoogle is loaded from external script
-      if (window.adsbygoogle && Array.isArray(window.adsbygoogle)) {
-        // @ts-ignore
-        window.adsbygoogle.push({
-          google_query_id: generateQueryId(),
-          ad_client: AD_CONFIG.CLIENT_ID,
-          ad_slot: slotId,
-          format,
-          layout,
-        });
+      if (typeof window !== "undefined") {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
         loaded.current = true;
-        logger.debug("[AdUnit] Ad loaded successfully", { slotId });
+        logger.debug("[AdUnit] Ad requested successfully", { slotId });
       }
     } catch {
       logger.debug("[AdUnit] AdSense blocked (AdBlock enabled)");

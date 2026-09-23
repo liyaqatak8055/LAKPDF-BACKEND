@@ -13,6 +13,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <link rel="canonical" href="https://lakpdf.com/" />
+  <meta name="google-adsense-account" content="ca-pub-9704679803624436" />
 
   <!-- ====== Primary SEO ====== -->
   <title>LAKPDF - Free Online PDF Tools | Merge, Compress, Convert PDF</title>
@@ -553,46 +554,10 @@
   <!-- Critical above-fold CSS is already inlined in the <style> block above -->
 
 
-  <!-- ====== Google AdSense (Deferred to keep FCP/LCP instant) ====== -->
-  <script>
-    (function () {
-      function isLocalHost() {
-        var host = window.location.hostname;
-        return host === 'localhost' ||
-          host === '127.0.0.1' ||
-          host === '0.0.0.0' ||
-          /^192\.168\./.test(host) ||
-          /^10\./.test(host) ||
-          /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
-          host.endsWith('.local');
-      }
-      function loadAdSense() {
-        if (isLocalHost() || window.__adsense_loaded) return;
-        window.__adsense_loaded = true;
-        var s = document.createElement('script');
-        s.async = true;
-        s.crossOrigin = 'anonymous';
-        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436';
-        document.head.appendChild(s);
-      }
-      if (isLocalHost()) return;
-      if (document.readyState === 'complete') {
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(loadAdSense, { timeout: 3000 });
-        } else {
-          setTimeout(loadAdSense, 2000);
-        }
-      } else {
-        window.addEventListener('load', function () {
-          if ('requestIdleCallback' in window) {
-            requestIdleCallback(loadAdSense, { timeout: 3000 });
-          } else {
-            setTimeout(loadAdSense, 2000);
-          }
-        }, { once: true });
-      }
-    })();
-  </script>
+  <!-- ====== Google AdSense Verification & Auto-Ads ====== -->
+  <meta name="google-adsense-account" content="ca-pub-9704679803624436" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436"
+    crossorigin="anonymous"></script>
 </head>
 
 <body>

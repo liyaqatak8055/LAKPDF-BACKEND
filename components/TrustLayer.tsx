@@ -11,11 +11,15 @@ type ServiceStatus = 'checking' | 'online' | 'unavailable';
 
 const fetchFilesProcessedToday = async (): Promise<number | null> => {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
     const response = await fetch(`${API_BASE_URL}/metrics/files-processed-today`, {
       method: 'GET',
       credentials: 'omit',
       cache: 'no-store',
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!response.ok) return null;
     const data = await response.json();
     const value = Number(data?.filesProcessedToday);
@@ -27,11 +31,15 @@ const fetchFilesProcessedToday = async (): Promise<number | null> => {
 
 const fetchServiceStatus = async (): Promise<ServiceStatus> => {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
       credentials: 'omit',
       cache: 'no-store',
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!response.ok) return 'unavailable';
     const data = await response.json();
     return data?.ok === true ? 'online' : 'unavailable';

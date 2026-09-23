@@ -72,13 +72,25 @@ if (!rootElement) {
 }
 
 applyInitialTheme();
-sanitizeStartupStorage();
-runStorageMaintenance();
-if (import.meta.env.PROD) {
-  initAnalytics();
-}
 
 const root = ReactDOM.createRoot(rootElement);
+
+// Defer non-critical startup storage maintenance and analytics to idle time (0 critical path contention)
+const scheduleIdleWork = (fn: () => void) => {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(fn, { timeout: 3000 });
+  } else {
+    setTimeout(fn, 1500);
+  }
+};
+
+scheduleIdleWork(() => {
+  sanitizeStartupStorage();
+  runStorageMaintenance();
+  if (import.meta.env.PROD) {
+    initAnalytics();
+  }
+});
 
 const renderStartupFallback = (message: string) => {
   rootElement.innerHTML = `

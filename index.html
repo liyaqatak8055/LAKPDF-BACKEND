@@ -422,6 +422,34 @@
       white-space: nowrap
     }
 
+    .hero-smile-doodle {
+      width: 32px;
+      height: 32px;
+      max-width: 32px;
+      max-height: 32px;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    @media (min-width: 640px) {
+      .hero-smile-doodle {
+        width: 40px;
+        height: 40px;
+        max-width: 40px;
+        max-height: 40px;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .hero-smile-doodle {
+        width: 48px;
+        height: 48px;
+        max-width: 48px;
+        max-height: 48px;
+      }
+    }
+
     html.dark .hero-shell__highlight {
       color: #fb7185
     }
@@ -599,11 +627,11 @@
           <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
             <picture>
               <source srcset="/logo-80x80.webp" type="image/webp" />
-              <img src="/logo-80x80.png" alt="LAK PDF Logo" width="40" height="40" fetchpriority="high"
-                style="width:40px;height:40px;object-fit:contain;" />
+              <img src="/logo-80x80.png" alt="LAK PDF Logo" width="38" height="38" fetchpriority="high"
+                style="width:38px;height:38px;object-fit:contain;" />
             </picture>
             <span
-              style="font-family:'Roboto Slab',Georgia,serif;font-weight:900;font-size:2.2rem;line-height:1;color:var(--text-primary);letter-spacing:-0.02em;">LAK
+              style="font-family:'Roboto Slab',Georgia,serif;font-weight:900;font-size:clamp(1.75rem, 4vw, 2.25rem);line-height:1;color:var(--text-primary);letter-spacing:-0.02em;">LAK
               <span style="color:#e5323f;font-weight:900;">PDF</span></span>
           </a>
         </div>
@@ -617,9 +645,11 @@
               data-elementtiming="hero-heading">
               Finish everyday PDF work in <span
                 class="text-primary-600 dark:text-rose-400 inline-flex items-center gap-1.5 whitespace-nowrap hero-shell__highlight"><span>seconds</span><svg
-                  class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-primary-600 dark:text-rose-400 inline-block -rotate-6 transition-transform duration-300"
+                  width="32"
+                  height="32"
+                  class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 hero-smile-doodle text-primary-600 dark:text-rose-400 inline-block -rotate-6 transition-transform duration-300"
                   viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
-                  style="width:32px;height:32px;display:inline-block;">
+                  style="width:32px;height:32px;max-width:32px;max-height:32px;display:inline-block;">
                   <path d="M 11 16 Q 16 10 21 16" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
                   </path>
                   <path d="M 25 16 Q 30 10 35 16" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">

@@ -217,10 +217,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <img
                   src="/logo-80x80.png"
                   alt="LAK PDF Logo"
-                  width={40}
-                  height={40}
+                  width={38}
+                  height={38}
                   decoding="async"
-                  className="w-[38px] h-[38px] sm:w-[42px] sm:h-[42px] object-contain animate-heartbeat transition-transform duration-300 group-hover:scale-105 drop-shadow-xs"
+                  className="w-[38px] h-[38px] sm:w-[42px] sm:h-[42px] object-contain group-hover:animate-heartbeat transition-transform duration-300 group-hover:scale-105 drop-shadow-xs"
                 />
               </picture>
               <span

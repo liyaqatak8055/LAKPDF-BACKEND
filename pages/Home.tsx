@@ -532,7 +532,10 @@ const Home: React.FC = () => {
               <span>seconds</span>
               {/* Cute Line-Drawn Smile Doodle */}
               <svg
-                className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-primary-600 dark:text-rose-400 inline-block -rotate-6 transition-transform duration-300 hover:rotate-6 hover:scale-110"
+                width={32}
+                height={32}
+                style={{ width: '32px', height: '32px', maxWidth: '32px', maxHeight: '32px', display: 'inline-block' }}
+                className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 hero-smile-doodle text-primary-600 dark:text-rose-400 inline-block -rotate-6 transition-transform duration-300 hover:rotate-6 hover:scale-110"
                 viewBox="0 0 42 42"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"

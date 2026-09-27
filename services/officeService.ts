@@ -2372,8 +2372,8 @@ function createTable(data: string[][]): DocxElement {
 
 
 export interface PdfToPowerPointOptions {
-  layout?: 'standard' | 'wide';
-  fit?: 'contain' | 'cover';
+  layout?: 'auto' | 'portrait' | 'standard' | 'wide';
+  fit?: 'fill' | 'contain' | 'cover';
   scale?: number;
   imageFormat?: 'png' | 'jpeg';
   imageQuality?: number;
@@ -2392,11 +2392,11 @@ export const convertPdfToPowerPoint = async (
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
   const {
-    layout = 'wide',
-    fit = 'contain',
+    layout = 'auto',
+    fit = 'fill',
     scale = 2,
     imageFormat = 'jpeg',
-    imageQuality = 0.9,
+    imageQuality = 0.92,
     backgroundColor = 'FFFFFF',
     onProgress
   } = options;
@@ -2418,14 +2418,44 @@ export const convertPdfToPowerPoint = async (
   }
 
   const pres = new PptxGenJS();
-  const standardLayoutName = 'CUSTOM_STANDARD_4_3';
-  const wideLayoutName = 'CUSTOM_WIDE_16_9';
-  pres.defineLayout({ name: standardLayoutName, width: 10, height: 7.5 });
-  pres.defineLayout({ name: wideLayoutName, width: 13.333, height: 7.5 });
-  pres.layout = layout === 'standard' ? standardLayoutName : wideLayoutName;
-  const slide = layout === 'standard'
-    ? { w: 10, h: 7.5 }
-    : { w: 13.333, h: 7.5 };
+
+  // Inspect first page to determine native document dimensions (like Smallpdf)
+  const firstPage = await pdf.getPage(pageNumbers[0]);
+  const unscaledVp = firstPage.getViewport({ scale: 1.0 });
+  const rawPageW = unscaledVp.width / 72;
+  const rawPageH = unscaledVp.height / 72;
+  const isDocPortrait = unscaledVp.height > unscaledVp.width;
+  firstPage.cleanup();
+
+  let slideW = 13.333;
+  let slideH = 7.5;
+  let layoutName = 'CUSTOM_WIDE_16_9';
+
+  if (layout === 'auto') {
+    // Exactly like Smallpdf: match the document page dimensions / orientation!
+    slideW = Math.max(4, Math.min(20, Math.round(rawPageW * 100) / 100));
+    slideH = Math.max(4, Math.min(20, Math.round(rawPageH * 100) / 100));
+    if (!Number.isFinite(slideW) || !Number.isFinite(slideH)) {
+      slideW = isDocPortrait ? 8.5 : 11;
+      slideH = isDocPortrait ? 11 : 8.5;
+    }
+    layoutName = 'CUSTOM_MATCH_DOC_PAGE';
+  } else if (layout === 'portrait') {
+    slideW = 8.5;
+    slideH = 11.0;
+    layoutName = 'CUSTOM_PORTRAIT_LETTER';
+  } else if (layout === 'standard') {
+    slideW = 10;
+    slideH = 7.5;
+    layoutName = 'CUSTOM_STANDARD_4_3';
+  } else {
+    slideW = 13.333;
+    slideH = 7.5;
+    layoutName = 'CUSTOM_WIDE_16_9';
+  }
+
+  pres.defineLayout({ name: layoutName, width: slideW, height: slideH });
+  pres.layout = layoutName;
 
   for (let i = 0; i < pageNumbers.length; i++) {
     const pageIndex = pageNumbers[i];
@@ -2449,14 +2479,27 @@ export const convertPdfToPowerPoint = async (
       ? canvas.toDataURL('image/png')
       : canvas.toDataURL('image/jpeg', safeQuality);
 
-    const imageRatio = canvas.width / canvas.height;
-    const slideRatio = slide.w / slide.h;
-    const byWidth = fit === 'contain' ? imageRatio >= slideRatio : imageRatio < slideRatio;
+    let renderX = 0;
+    let renderY = 0;
+    let renderW = slideW;
+    let renderH = slideH;
 
-    const renderW = byWidth ? slide.w : slide.h * imageRatio;
-    const renderH = byWidth ? slide.w / imageRatio : slide.h;
-    const renderX = (slide.w - renderW) / 2;
-    const renderY = (slide.h - renderH) / 2;
+    if (layout === 'auto' || fit === 'fill') {
+      // Smallpdf mode: full slide coverage, no empty sidebars
+      renderX = 0;
+      renderY = 0;
+      renderW = slideW;
+      renderH = slideH;
+    } else {
+      const imageRatio = canvas.width / canvas.height;
+      const slideRatio = slideW / slideH;
+      const byWidth = fit === 'contain' ? imageRatio >= slideRatio : imageRatio < slideRatio;
+
+      renderW = byWidth ? slideW : slideH * imageRatio;
+      renderH = byWidth ? slideW / imageRatio : slideH;
+      renderX = (slideW - renderW) / 2;
+      renderY = (slideH - renderH) / 2;
+    }
 
     const pptSlide = pres.addSlide();
     pptSlide.background = { color: backgroundColor };
@@ -2478,7 +2521,7 @@ export const convertPdfToPowerPoint = async (
 // --- Make PPT / Images to PowerPoint ---
 
 export interface ImageToPptOptions {
-  layout?: 'wide' | 'standard'; // wide = 16:9, standard = 4:3
+  layout?: 'auto' | 'portrait' | 'wide' | 'standard'; // auto = match document ratio (Smallpdf style)
   imagesPerSlide?: 1 | 2 | 4;
   backgroundColor?: string; // hex without #, e.g. 'FFFFFF', '1E293B'
   margin?: 'none' | 'small' | 'medium';
@@ -2552,35 +2595,13 @@ export const convertImagesToPowerPoint = async (
   const pres = new PptxGenJS();
 
   const {
-    layout = 'wide',
+    layout = 'auto',
     imagesPerSlide = 1,
     backgroundColor = 'FFFFFF',
-    margin = 'small',
+    margin = 'none',
     includeTitles = false,
     onProgress
   } = options;
-
-  // Slide Layout setup
-  const standardLayoutName = 'CUSTOM_STANDARD_4_3';
-  const wideLayoutName = 'CUSTOM_WIDE_16_9';
-  pres.defineLayout({ name: standardLayoutName, width: 10, height: 7.5 });
-  pres.defineLayout({ name: wideLayoutName, width: 13.333, height: 7.5 });
-  pres.layout = layout === 'standard' ? standardLayoutName : wideLayoutName;
-
-  const slideW = layout === 'standard' ? 10 : 13.333;
-  const slideH = 7.5;
-
-  // Padding margin
-  const pad = margin === 'none' ? 0.05 : margin === 'medium' ? 0.6 : 0.35;
-  const titleH = includeTitles ? 0.65 : 0;
-  const areaX = pad;
-  const areaY = includeTitles ? pad + titleH + 0.1 : pad;
-  const areaW = Math.max(1, slideW - 2 * pad);
-  const areaH = Math.max(1, slideH - areaY - pad);
-
-  // Title text color depending on background darkness
-  const isDarkBg = ['1E293B', '0F172A', '000000', '18181B'].includes(backgroundColor.toUpperCase());
-  const titleColor = isDarkBg ? 'F8FAFC' : '0F172A';
 
   // Process all images to get rotated dimensions and clean dataUrls
   const preparedImages = [];
@@ -2592,6 +2613,61 @@ export const convertImagesToPowerPoint = async (
       title: items[i].title || items[i].name.replace(/\.[^/.]+$/, '')
     });
   }
+
+  // Calculate slide dimensions based on layout option & image dimensions (like Smallpdf)
+  let slideW = 13.333;
+  let slideH = 7.5;
+  let layoutName = 'CUSTOM_WIDE_16_9';
+
+  if (layout === 'auto') {
+    const firstImg = preparedImages[0];
+    const isPortrait = firstImg.height > firstImg.width;
+    const ratio = firstImg.width / firstImg.height;
+
+    if (isPortrait) {
+      // Document Portrait Slide (8.5 x 11 or proportional height 11)
+      slideH = 11.0;
+      slideW = Math.max(5.5, Math.min(10.5, Math.round((slideH * ratio) * 100) / 100));
+      layoutName = 'CUSTOM_DOC_PORTRAIT';
+    } else {
+      if (Math.abs(ratio - (4 / 3)) < 0.15) {
+        slideW = 10;
+        slideH = 7.5;
+        layoutName = 'CUSTOM_STANDARD_4_3';
+      } else {
+        slideW = 13.333;
+        slideH = 7.5;
+        layoutName = 'CUSTOM_WIDE_16_9';
+      }
+    }
+  } else if (layout === 'portrait') {
+    slideW = 8.5;
+    slideH = 11.0;
+    layoutName = 'CUSTOM_PORTRAIT_LETTER';
+  } else if (layout === 'standard') {
+    slideW = 10;
+    slideH = 7.5;
+    layoutName = 'CUSTOM_STANDARD_4_3';
+  } else {
+    slideW = 13.333;
+    slideH = 7.5;
+    layoutName = 'CUSTOM_WIDE_16_9';
+  }
+
+  pres.defineLayout({ name: layoutName, width: slideW, height: slideH });
+  pres.layout = layoutName;
+
+  // Padding margin
+  const pad = margin === 'none' ? 0 : margin === 'medium' ? 0.6 : 0.35;
+  const titleH = includeTitles ? 0.65 : 0;
+  const areaX = pad;
+  const areaY = includeTitles ? pad + titleH + 0.1 : pad;
+  const areaW = Math.max(1, slideW - 2 * pad);
+  const areaH = Math.max(1, slideH - areaY - pad);
+
+  // Title text color depending on background darkness
+  const isDarkBg = ['1E293B', '0F172A', '000000', '18181B'].includes(backgroundColor.toUpperCase());
+  const titleColor = isDarkBg ? 'F8FAFC' : '0F172A';
 
   // Calculate slide chunks based on imagesPerSlide
   const chunks: typeof preparedImages[] = [];
@@ -2609,8 +2685,8 @@ export const convertImagesToPowerPoint = async (
     if (includeTitles) {
       const slideTitle = chunk.length === 1 ? chunk[0].title : `Slide ${slideIdx + 1}`;
       pptSlide.addText(slideTitle, {
-        x: pad,
-        y: pad,
+        x: pad || 0.3,
+        y: pad || 0.2,
         w: areaW,
         h: titleH,
         fontSize: 16,
@@ -2621,23 +2697,34 @@ export const convertImagesToPowerPoint = async (
     }
 
     if (chunk.length === 1) {
-      // 1 Image per slide - Centered Fit
+      // 1 Image per slide
       const img = chunk[0];
       const imgRatio = img.width / img.height;
       const boxRatio = areaW / areaH;
 
+      let x = areaX;
+      let y = areaY;
       let w = areaW;
       let h = areaH;
-      if (imgRatio >= boxRatio) {
-        w = areaW;
-        h = areaW / imgRatio;
-      } else {
-        h = areaH;
-        w = areaH * imgRatio;
-      }
 
-      const x = areaX + (areaW - w) / 2;
-      const y = areaY + (areaH - h) / 2;
+      if (margin === 'none' && !includeTitles && (layout === 'auto' || Math.abs(imgRatio - boxRatio) < 0.05)) {
+        // True edge-to-edge full bleed coverage (Smallpdf style)
+        x = 0;
+        y = 0;
+        w = slideW;
+        h = slideH;
+      } else {
+        // Proportionally fit without stretching or distortion
+        if (imgRatio >= boxRatio) {
+          w = areaW;
+          h = areaW / imgRatio;
+        } else {
+          h = areaH;
+          w = areaH * imgRatio;
+        }
+        x = areaX + (areaW - w) / 2;
+        y = areaY + (areaH - h) / 2;
+      }
 
       pptSlide.addImage({
         data: img.dataUrl,
@@ -2647,17 +2734,34 @@ export const convertImagesToPowerPoint = async (
         h,
       });
     } else if (chunk.length === 2) {
-      // 2 Images per slide - Side-by-Side Dual Fit
-      const gap = 0.3;
-      const boxW = (areaW - gap) / 2;
-      const boxH = areaH;
+      // 2 Images per slide
+      const isSlidePortrait = slideH > slideW;
+      const gap = 0.25;
 
       for (let c = 0; c < chunk.length; c++) {
         const img = chunk[c];
-        const boxX = areaX + c * (boxW + gap);
         const imgRatio = img.width / img.height;
-        const boxRatio = boxW / boxH;
 
+        let boxX: number;
+        let boxY: number;
+        let boxW: number;
+        let boxH: number;
+
+        if (isSlidePortrait) {
+          // Portrait slide: stack vertically (top and bottom)
+          boxW = areaW;
+          boxH = (areaH - gap) / 2;
+          boxX = areaX;
+          boxY = areaY + c * (boxH + gap);
+        } else {
+          // Landscape slide: side-by-side (left and right)
+          boxW = (areaW - gap) / 2;
+          boxH = areaH;
+          boxX = areaX + c * (boxW + gap);
+          boxY = areaY;
+        }
+
+        const boxRatio = boxW / boxH;
         let w = boxW;
         let h = boxH;
         if (imgRatio >= boxRatio) {
@@ -2669,7 +2773,7 @@ export const convertImagesToPowerPoint = async (
         }
 
         const x = boxX + (boxW - w) / 2;
-        const y = areaY + (boxH - h) / 2;
+        const y = boxY + (boxH - h) / 2;
 
         pptSlide.addImage({
           data: img.dataUrl,
@@ -2681,8 +2785,8 @@ export const convertImagesToPowerPoint = async (
       }
     } else {
       // 3 or 4 Images per slide - 2x2 Grid Fit
-      const gapX = 0.3;
-      const gapY = 0.25;
+      const gapX = 0.25;
+      const gapY = 0.2;
       const boxW = (areaW - gapX) / 2;
       const boxH = (areaH - gapY) / 2;
 

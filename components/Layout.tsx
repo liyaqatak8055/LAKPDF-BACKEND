@@ -21,7 +21,8 @@ const AuthModal = React.lazy(() => import('./AuthModal').then(m => ({ default: m
 import { authService, User } from '../services/authService';
 import { UsageCounter } from './UsageCounter';
 import { useOnlineStatus } from '../hooks/useHooks';
-import { isToolRoute } from '../utils/toolUsage';
+import { isToolRoute, getToolTitle } from '../utils/toolUsage';
+import { ROUTE_SEO } from '../config/seoRoutes';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -32,48 +33,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isOnline = useOnlineStatus();
   const siteUrl = 'https://lakpdf.com';
   const canonicalUrl = `${siteUrl}${location.pathname}`;
-  const toolSeoMap: Record<string, { title: string; description: string }> = {
-    '/merge': { title: 'Merge PDF Online Free | LAK PDF', description: 'Combine multiple PDF files into one document quickly and securely.' },
-    '/split': { title: 'Split PDF Online Free | LAK PDF', description: 'Extract pages and split PDF into smaller files in seconds.' },
-    '/compress': { title: 'Compress PDF Online Free | LAK PDF', description: 'Reduce PDF file size while keeping readable quality.' },
-    '/organize-pdf': { title: 'Organize PDF Pages | LAK PDF', description: 'Reorder and manage PDF pages online in a simple workflow.' },
-    '/img-to-pdf': { title: 'Image to PDF Converter | LAK PDF', description: 'Convert JPG and PNG images into PDF documents instantly.' },
-    '/pdf-to-img': { title: 'PDF to Image Converter | LAK PDF', description: 'Convert PDF pages to high-quality image files online.' },
-    '/compress-img': { title: 'Compress Image Online Free | LAK PDF', description: 'Reduce JPG and PNG image size quickly while preserving visual quality.' },
-    '/advance-compress-img': { title: 'Compress Image to 50KB | LAK PDF', description: 'Compress photos and images close to 50KB for forms, exams, and uploads.' },
-    '/make-ppt': { title: 'Make PPT - Images to PowerPoint | LAK PDF', description: 'Convert photos and images into professional PowerPoint presentations (.pptx) with smart aspect ratio auto-fit.' },
-    '/img-to-ppt': { title: 'Image to PowerPoint Converter | LAK PDF', description: 'Turn JPG, PNG and photos into neatly formatted PowerPoint slides (.pptx).' },
-    '/passport-photo-maker': { title: 'Passport Size Photo Maker | LAK PDF', description: 'Create official passport size photos online free. Auto-align face, change background, 4x6 & A4 print sheets, and 20-50KB form mode.' },
-    '/passport-photo': { title: 'Passport Photo Maker Free | LAK PDF', description: 'Free passport size photo maker with biometric face guides and printable sheets.' },
-    '/redact-pdf': { title: 'Redact PDF Online Free | LAK PDF', description: 'Permanently blackout and erase sensitive info from PDF files with true pixel sanitization.' },
-    '/blackout-pdf': { title: 'Blackout PDF Online | LAK PDF', description: 'Permanently black out text and confidential data in PDF documents.' },
-    '/convert': { title: 'Convert PDF Online | LAK PDF', description: 'Convert PDF documents into popular editable or shareable formats.' },
-    '/pdf-to-word': { title: 'PDF to Word Online | LAK PDF', description: 'Convert PDF files to editable Word documents quickly.' },
-    '/pdf-to-powerpoint': { title: 'PDF to PowerPoint Online | LAK PDF', description: 'Turn PDF pages into editable PowerPoint slides in a few steps.' },
-    '/word-to-pdf': { title: 'Word to PDF Online | LAK PDF', description: 'Convert DOC and DOCX files to clean PDF format instantly.' },
-    '/powerpoint-to-pdf': { title: 'PowerPoint to PDF Online | LAK PDF', description: 'Convert PPT and PPTX files into share-ready PDF documents.' },
-    '/rotate': { title: 'Rotate PDF Pages Online | LAK PDF', description: 'Rotate PDF pages and fix orientation issues in seconds.' },
-    '/page-number': { title: 'Add Page Numbers to PDF | LAK PDF', description: 'Insert page numbers into your PDF with easy position settings.' },
-    '/watermark': { title: 'Watermark PDF Online | LAK PDF', description: 'Add text or image watermark to protect and brand PDF files.' },
-    '/crop-pdf': { title: 'Crop PDF Online Free | LAK PDF', description: 'Crop PDF margins and remove unwanted white space with precision.' },
-    '/scan-pdf': { title: 'Scan Document Online | LAK PDF', description: 'Convert scanned pages and photos into usable PDF documents.' },
-    '/sign-pdf': { title: 'Sign PDF Online Free | LAK PDF', description: 'Add digital signatures to PDF files without complex setup.' },
-    '/ocr-pdf': { title: 'OCR PDF Online | LAK PDF', description: 'Extract selectable text from scanned PDFs using OCR.' },
-    '/compare-pdf': { title: 'Compare PDF Online | LAK PDF', description: 'Compare two PDF files and highlight differences quickly.' },
-    '/delete-page': { title: 'Delete PDF Pages Online | LAK PDF', description: 'Remove unwanted pages from PDF documents in one click.' },
-    '/detect-duplicates': { title: 'Detect Duplicate PDF Pages | LAK PDF', description: 'Find duplicate pages in PDF and clean file structure faster.' },
-    '/summarizer-qa': { title: 'AI Summary | LAK PDF', description: 'Generate concise summaries and main topics from your document.' },
-    '/ai-pdf-to-mcq': { title: 'AI PDF to MCQ Generator | LAK PDF', description: 'Create exam-style MCQs from PDF notes with answer keys and test mode.' },
-    '/ai-interview-generator': { title: 'AI Interview Generator | LAK PDF', description: 'Generate technical and HR interview questions from resume or notes.' },
-    '/pdf-editor': { title: 'PDF Editor Online | LAK PDF', description: 'Use normal PDF editor mode to add text, highlights, and shapes directly in your PDF.' },
-    '/protect-pdf': { title: 'Protect PDF Online Free | LAK PDF', description: 'Password protect PDF documents with bank-grade encryption in your browser.' },
-    '/unlock-pdf': { title: 'Unlock PDF Online Free | LAK PDF', description: 'Remove password and restrictions from PDF files instantly.' },
-    '/unlock': { title: 'Unlock PDF Online Free | LAK PDF', description: 'Remove password and restrictions from PDF files instantly.' },
-    '/pdf-to-text': { title: 'PDF to Text OCR Converter | LAK PDF', description: 'Extract clean selectable text and OCR from scanned PDF documents online.' },
-    '/ai-edit-pdf': { title: 'AI PDF Editor Online | LAK PDF', description: 'Edit text, annotate, erase, and highlight PDFs directly with AI-powered OCR.' },
-  };
-  const seo = toolSeoMap[location.pathname];
-  const showToolBack = isToolRoute(location.pathname) && location.pathname !== '/pdf-editor';
+  const seo = ROUTE_SEO[location.pathname];
+  const showToolBack = isToolRoute(location.pathname);
   const toolFaqSchema = seo
     ? {
       '@context': 'https://schema.org',
@@ -169,7 +130,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const navLinks = [
     { label: 'All Tools', path: '/tools' },
-    { label: 'Learn', path: '/learn-pdf' },
+    { label: 'FormDocFixer', path: '/govt-exam-resizer' },
     { label: 'Merge PDF', path: '/merge' },
     { label: 'Split PDF', path: '/split' },
     { label: 'Compress PDF', path: '/compress' },
@@ -202,8 +163,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </Helmet>
       {/* Offline Banner */}
       {!isOnline && (
-        <div className="bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium">
-          <span>You are offline. Some features may be limited.</span>
+        <div className="bg-emerald-600 text-white text-center py-2 px-4 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm animate-in fade-in">
+          <span>⚡ Offline Mode Active: LAKPDF runs 100% locally on your device. Your documents remain completely secure and private.</span>
         </div>
       )}
 
@@ -341,14 +302,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               )}
             </div>
 
-            {/* Mobile menu button */}
-            <button
-              className="md:hidden p-2 text-slate-700 dark:text-slate-200 hover:text-slate-900 rounded-lg focus:outline-none transition-colors"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              aria-label="Toggle menu"
-            >
-              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+            {/* Mobile actions & menu button */}
+            <div className="flex md:hidden items-center gap-2">
+              <button
+                className="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-900 rounded-lg focus:outline-none transition-colors"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label="Toggle menu"
+              >
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -434,16 +397,20 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       {showToolBack && (
-        <div className="w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+        <div className="w-full border-b border-slate-200/80 dark:border-dark-border/80 bg-white/90 dark:bg-dark-surface/90 backdrop-blur-sm sticky top-16 sm:top-[68px] z-30 transition-colors">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center justify-between">
             <button
               type="button"
               onClick={handleToolBack}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 dark:border-dark-border bg-white dark:bg-dark-surface px-3 sm:px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-dark-hover shadow-xs hover:shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-all group"
             >
-              <ArrowLeft className="w-4 h-4" />
-              Back
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1 text-slate-500 dark:text-slate-400 group-hover:text-primary-500" />
+              <span>Back</span>
             </button>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline-flex items-center gap-1.5">
+              <span>Tool:</span>
+              <strong className="text-slate-800 dark:text-slate-200 font-bold">{getToolTitle(location.pathname)}</strong>
+            </span>
           </div>
         </div>
       )}
@@ -489,7 +456,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <ul className="space-y-2.5 text-sm text-slate-400">
                 <li><Link to="/redact-pdf" className="text-rose-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Redact PDF</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-rose-500/20 text-rose-300 font-bold">NEW</span></Link></li>
                 <li><Link to="/passport-photo-maker" className="text-blue-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Passport Photo Maker</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-blue-500/20 text-blue-300 font-bold">NEW</span></Link></li>
-                <li><Link to="/make-ppt" className="text-orange-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Make PPT from Images</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-500/20 text-orange-300 font-bold">NEW</span></Link></li>
+                <li><Link to="/make-ppt" className="text-orange-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Make PPT (PDF & Images)</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-500/20 text-orange-300 font-bold">NEW</span></Link></li>
                 <li><Link to="/merge" className="hover:text-white transition-colors">Merge PDF</Link></li>
                 <li><Link to="/split" className="hover:text-white transition-colors">Split PDF</Link></li>
                 <li><Link to="/compress" className="hover:text-white transition-colors">Compress PDF</Link></li>
@@ -542,7 +509,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy</Link>
               <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms</Link>
               <Link to="/contact" className="hover:text-white transition-colors">Support</Link>
-              <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Sitemap</a>
             </div>
           </div>
         </div>

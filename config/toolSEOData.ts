@@ -912,30 +912,29 @@ const toolSEOData: Record<string, ToolSEOData> = {
   },
 
   "/make-ppt": {
-    intro: "Make PPT online free in seconds with LAK PDF's high-speed Images to PowerPoint converter. Whether you need to turn photo albums into a professional pitch deck, compile project screenshots, or assemble an academic presentation from scanned notes, this tool automatically arranges JPG, PNG, WEBP, and GIF images into cleanly formatted slides. Unlike generic converters that stretch or squash photos, our intelligent bounding-box algorithm preserves the exact native aspect ratio of every portrait, landscape, or square picture. Customize your slides with modern 16:9 widescreen or classic 4:3 standard layouts, arrange 1, 2, or 4 images per slide, select custom background themes, and add slide titles with zero effort. The entire conversion executes locally inside your web browser using client-side Web APIs—meaning zero file uploads to external servers, guaranteed privacy, no watermarks, and no signups or software installation required. Download your fully editable .pptx presentation instantly, ready for Microsoft PowerPoint, Google Slides, Apple Keynote, and LibreOffice Impress.",
+    intro: "Make PPT online free in seconds with LAK PDF's high-speed PDF & Images to PowerPoint converter. Whether you need to convert an existing PDF document into presentation slides, turn photo albums into a professional pitch deck, compile project screenshots, or assemble an academic presentation from scanned notes, this tool automatically arranges PDF pages, JPG, PNG, WEBP, and GIF images into cleanly formatted slides. Unlike generic converters that stretch or squash content, our intelligent bounding-box algorithm preserves the exact native aspect ratio of every portrait, landscape, or square page. Customize your slides with modern 16:9 widescreen or classic 4:3 standard layouts, arrange 1, 2, or 4 items per slide, select custom background themes, and add slide titles with zero effort. The entire conversion executes locally inside your web browser using client-side Web APIs—meaning zero file uploads to external servers, guaranteed privacy, no watermarks, and no signups or software installation required. Download your fully editable .pptx presentation instantly, ready for Microsoft PowerPoint, Google Slides, Apple Keynote, and LibreOffice Impress.",
     howToUse: [
-      { step: "Upload Photos", detail: "Click 'Choose Images' or drag and drop JPG, PNG, WEBP, GIF, or SVG pictures from your PC, Mac, or phone." },
-      { step: "Arrange & Organize", detail: "Reorder images easily using arrows, rotate portrait/landscape photos by 90°, and add optional custom slide titles." },
-      { step: "Customize Slide Layout", detail: "Select 16:9 Widescreen or 4:3 Standard format, and choose 1 image per slide, 2 side-by-side, or a 4-photo grid." },
+      { step: "Upload PDF or Photos", detail: "Click 'Choose PDF File', 'Choose Images', or drag and drop any PDF document, JPG, PNG, WEBP, GIF, or SVG pictures from your PC, Mac, or phone." },
+      { step: "Arrange & Organize", detail: "Reorder slides easily using arrows, rotate portrait/landscape pages by 90°, delete unwanted slides, and add optional custom slide titles." },
+      { step: "Customize Slide Layout", detail: "Select 16:9 Widescreen or 4:3 Standard format, and choose 1 item per slide, 2 side-by-side, or a 4-photo grid." },
       { step: "Pick Theme & Margins", detail: "Choose slide background (Crisp White, Dark Slate, or Soft Gray) and select clean presentation margins." },
       { step: "Convert & Download PPTX", detail: "Click 'Convert to PowerPoint (.pptx)' to generate your presentation in seconds and download it directly." },
     ],
     benefits: [
-      { title: "Smart Aspect Ratio Auto-Fit", description: "Evaluates native dimensions of every image to prevent stretching, squishing, or distortion on any screen size.", icon: "target" },
-      { title: "100% Client-Side Privacy", description: "All conversion runs strictly in your local browser sandbox. Your photos are never uploaded or stored on any server.", icon: "shield" },
-      { title: "Multi-Layouts & Grid Modes", description: "Display 1 photo centered, 2 photos side-by-side for comparisons, or 4 photos in an organized 2x2 presentation grid.", icon: "layers" },
+      { title: "Smart Aspect Ratio Auto-Fit", description: "Evaluates native dimensions of every PDF page and image to prevent stretching, squishing, or distortion on any screen size.", icon: "target" },
+      { title: "PDF & Images Dual Support", description: "Convert multi-page PDF documents page-by-page, individual photos, or mix both seamlessly in a single presentation.", icon: "layers" },
+      { title: "100% Client-Side Privacy", description: "All conversion runs strictly in your local browser sandbox. Your files and photos are never uploaded or stored on any server.", icon: "shield" },
+      { title: "Multi-Layouts & Grid Modes", description: "Display 1 item centered, 2 items side-by-side for comparisons, or 4 items in an organized 2x2 presentation grid.", icon: "layers" },
       { title: "Universal PPTX Compatibility", description: "Produces standard .pptx files fully compatible with Microsoft Office 365, PowerPoint, Google Slides, and Apple Keynote.", icon: "download" },
-      { title: "Ultra Fast & Free", description: "Convert dozens of high-resolution images in seconds without daily limits, watermarks, credit cards, or account signups.", icon: "zap" },
-      { title: "High-Resolution Output", description: "Preserves the original sharpness, vibrant colors, and clarity of your high-resolution photos in the output deck.", icon: "check" },
+      { title: "Ultra Fast & Free", description: "Convert multi-page PDFs and dozens of high-resolution images in seconds without daily limits, watermarks, credit cards, or account signups.", icon: "zap" },
     ],
     faqs: [
-      { question: "How does LAK PDF prevent images from getting stretched or squished?", answer: "Most basic converters force images to fill 100% of the slide dimensions, distorting portrait and square pictures. LAK PDF calculates each photo's exact aspect ratio and fits it within an optimal bounding box, perfectly centering it with proportional margins." },
+      { question: "Can I convert an entire multi-page PDF document to PowerPoint slides here?", answer: "Yes! Simply click 'Choose PDF File' or drag and drop your PDF. LAK PDF extracts each page into a separate slide preview. You can reorder pages, rotate landscape/portrait pages, delete unwanted pages, and export directly as a PowerPoint (.pptx) presentation." },
+      { question: "Can I mix PDF pages and image files in the same presentation?", answer: "Absolutely. You can upload a PDF and then click '+ Add Images' (or vice-versa) to combine PDF slides with photos, diagrams, and screenshots into one unified PowerPoint deck." },
+      { question: "How does LAK PDF prevent slides and images from getting stretched or squished?", answer: "Most basic converters force images and pages to fill 100% of the slide dimensions, distorting portrait and square pictures. LAK PDF calculates each item's exact aspect ratio and fits it within an optimal bounding box, perfectly centering it with proportional margins." },
       { question: "Can I open and edit the downloaded file in Microsoft PowerPoint and Google Slides?", answer: "Yes! The exported presentation is saved in the industry-standard OpenXML (.pptx) format. You can open, edit, animate, and present it in Microsoft PowerPoint, Google Slides, Apple Keynote, and LibreOffice Impress without conversion issues." },
-      { question: "Are my uploaded photos secure and private?", answer: "100% private. Unlike other web converters that transmit your files to cloud servers, LAK PDF processes every image directly in your browser using local JavaScript and Web APIs. Your images never leave your device." },
-      { question: "Can I put multiple photos on a single PowerPoint slide?", answer: "Yes. You can choose between 1 Photo per slide (Full / Centered showcase), 2 Photos per slide (Side-by-side dual layout), or 4 Photos per slide (2x2 grid layout)." },
-      { question: "Can I convert photos from my mobile phone (iPhone or Android)?", answer: "Yes. LAK PDF is fully responsive. You can select photos directly from your mobile camera roll or gallery, convert them to a .pptx presentation, and share immediately via WhatsApp, email, or Google Drive." },
-      { question: "Is there a limit on how many images I can convert to PPT?", answer: "There is no hard limit on image count. You can upload dozens of photos at once. For best performance on lower-powered devices, converting batches of up to 50-100 high-res photos at a time is recommended." },
-      { question: "Can I add slide titles or captions to my photos?", answer: "Yes! You can type custom slide titles or captions for each photo in the interactive organizer before clicking convert, and they will automatically appear styled above your images." },
+      { question: "Are my uploaded PDFs and photos secure and private?", answer: "100% private. Unlike other web converters that transmit your files to cloud servers, LAK PDF processes every page and image directly in your browser using local JavaScript and Web APIs. Your files never leave your device." },
+      { question: "Can I put multiple pages or photos on a single PowerPoint slide?", answer: "Yes. You can choose between 1 Item per slide (Full / Centered showcase), 2 Items per slide (Side-by-side dual layout), or 4 Items per slide (2x2 grid handout layout)." },
       { question: "Does LAK PDF add any watermark to the generated presentation?", answer: "Never. LAK PDF never adds watermarks, branding, or ads to your generated presentation files. You get clean, professional slides ready for client meetings and academic submissions." },
     ],
     internalLinks: [
@@ -1048,6 +1047,196 @@ const toolSEOData: Record<string, ToolSEOData> = {
     ],
     lastUpdated: "2026-09-09",
   },
+  "/govt-exam-resizer": {
+    intro: "FormDocFixer is the complete document preparation engine to prepare, fix, and resize official application documents for SSC, UPSC OTR, Banking (IBPS, SBI, RBI), Railway (RRB), State Police, DSSSB, and State PSC recruitment portals. Our specialized engine automatically adheres to strict portal guidelines, guaranteeing photos are between 20 KB and 50 KB, and signatures are between 10 KB and 20 KB. Eliminate rejected applications with mandatory Name & Date of photo stamping, paper shadow removal for signatures, and single-click ZIP archive downloads. Best of all, FormDocFixer processes all documents 100% locally in your browser with zero server uploads.",
+    howToUse: [
+      { step: "Select Exam or Recruitment Board", detail: "Choose from SSC CGL/CHSL, UPSC OTR, IBPS/SBI Banking, NTA NEET/JEE, Railway, or custom form mode." },
+      { step: "Upload Photo & Signature", detail: "Upload your photos directly. Adjust zoom, brightness, or remove paper shadows from signatures in 1 click." },
+      { step: "Add Candidate Name & Photo Date (Optional)", detail: "Enable the official Name & Date of Photo stamper to print candidate details in compliance with UPSC and SSC OTR rules." },
+      { step: "Download Ready Files or ZIP", detail: "Download individually or package all compliant documents into a single ZIP archive for immediate portal upload." },
+    ],
+    benefits: [
+      { title: "Exact KB Range Guarantee", description: "Binary search compression ensures output files land strictly inside 20-50 KB for photos and 10-20 KB for signatures.", icon: "target" },
+      { title: "Name & Date Stamper", description: "Prevents exam form rejection by automatically printing candidate name and date of photo capture in high resolution.", icon: "check" },
+      { title: "Paper Shadow Cleaner", description: "Transforms grey, shadowed phone pictures of signatures into crisp dark ink on pure white backgrounds.", icon: "eye" },
+      { title: "100% Client-Side Privacy", description: "Zero server uploads. Your personal photos, signatures, and identity documents never leave your browser.", icon: "lock" },
+      { title: "1-Click ZIP Packaging", description: "Download all application documents at once, organized and named according to official guidelines.", icon: "download" },
+      { title: "Works on Mobile & Desktop", description: "Easily crop and compress documents directly from your Android, iPhone, or laptop without installing any apps.", icon: "smartphone" },
+    ],
+    faqs: [
+      { question: "Why do SSC and UPSC portals reject photos?", answer: "Portals reject photos if the file size is outside allowed limits (e.g. over 50KB or under 20KB for SSC), if the aspect ratio is stretched, if spectacles or caps are worn, or if the mandatory Name and Date of photo is missing. LAKPDF enforces exact dimensions and KB limits to guarantee acceptance." },
+      { question: "Is Name and Date of photo mandatory for UPSC OTR?", answer: "Yes. UPSC One Time Registration (OTR) rules require candidate name and the date on which the photograph was taken to be clearly printed at the bottom of the photo." },
+      { question: "How do I make my phone-captured signature background pure white?", answer: "When taking a photo of a signature with a phone, paper shadows often create a grey tint. Simply check 'Remove Paper Shadow' in our tool; our contrast algorithm converts background grey pixels to pure white (#FFFFFF) while keeping dark ink intact." },
+      { question: "Are my photos or signatures saved on any server?", answer: "Never. All image processing runs in browser memory using HTML5 Canvas. Your documents and signatures never leave your device." },
+      { question: "Can I download all required documents in a single ZIP file?", answer: "Yes. After uploading and previewing your documents, click 'Download All Documents (ZIP)' to get all files organized with official names in a single ZIP archive." },
+    ],
+    internalLinks: [
+      { label: "Passport Photo Maker", to: "/passport-photo-maker" },
+      { label: "Compress Image to 50KB", to: "/advance-compress-img" },
+      { label: "Compress PDF to 100KB", to: "/compress-pdf-to-100kb" },
+      { label: "Redact PDF (Blackout sensitive info)", to: "/redact-pdf" },
+      { label: "Merge PDF", to: "/merge" },
+    ],
+    lastUpdated: "2026-09-23",
+  },
+  "/form-doc-fixer": {
+    intro: "FormDocFixer is the complete document preparation engine to prepare, fix, and resize official application documents for SSC, UPSC OTR, Banking (IBPS, SBI, RBI), Railway (RRB), State Police, DSSSB, and State PSC recruitment portals. Our specialized engine automatically adheres to strict portal guidelines, guaranteeing photos are between 20 KB and 50 KB, and signatures are between 10 KB and 20 KB. Eliminate rejected applications with mandatory Name & Date of photo stamping, paper shadow removal for signatures, Aadhaar Front+Back 1-Page PDF maker, and single-click ZIP archive downloads. Best of all, FormDocFixer processes all documents 100% locally in your browser with zero server uploads.",
+    howToUse: [
+      { step: "Select Exam or Recruitment Board", detail: "Choose from SSC CGL/CHSL, UPSC OTR, IBPS/SBI Banking, NTA NEET/JEE, Railway, or custom form mode." },
+      { step: "Upload Photo & Signature", detail: "Upload your photos directly. Adjust zoom, brightness, or remove paper shadows from signatures in 1 click." },
+      { step: "Add Candidate Name & Photo Date (Optional)", detail: "Enable the official Name & Date of Photo stamper to print candidate details in compliance with UPSC and SSC OTR rules." },
+      { step: "Download Ready Files or ZIP", detail: "Download individually or package all compliant documents into a single ZIP archive for immediate portal upload." },
+    ],
+    benefits: [
+      { title: "Exact KB Range Guarantee", description: "Binary search compression ensures output files land strictly inside 20-50 KB for photos and 10-20 KB for signatures.", icon: "target" },
+      { title: "Name & Date Stamper", description: "Prevents exam form rejection by automatically printing candidate name and date of photo capture in high resolution.", icon: "check" },
+      { title: "Paper Shadow Cleaner", description: "Transforms grey, shadowed phone pictures of signatures into crisp dark ink on pure white backgrounds.", icon: "eye" },
+      { title: "100% Client-Side Privacy", description: "Zero server uploads. Your personal photos, signatures, and identity documents never leave your browser.", icon: "lock" },
+      { title: "1-Click ZIP Packaging", description: "Download all application documents at once, organized and named according to official guidelines.", icon: "download" },
+      { title: "Works on Mobile & Desktop", description: "Easily crop and compress documents directly from your Android, iPhone, or laptop without installing any apps.", icon: "smartphone" },
+    ],
+    faqs: [
+      { question: "Why do SSC and UPSC portals reject photos?", answer: "Portals reject photos if the file size is outside allowed limits (e.g. over 50KB or under 20KB for SSC), if the aspect ratio is stretched, if spectacles or caps are worn, or if the mandatory Name and Date of photo is missing. FormDocFixer enforces exact dimensions and KB limits to guarantee acceptance." },
+      { question: "Is Name and Date of photo mandatory for UPSC OTR?", answer: "Yes. UPSC One Time Registration (OTR) rules require candidate name and the date on which the photograph was taken to be clearly printed at the bottom of the photo." },
+      { question: "How do I make my phone-captured signature background pure white?", answer: "When taking a photo of a signature with a phone, paper shadows often create a grey tint. Simply check 'Remove Paper Shadow' in FormDocFixer; our contrast algorithm converts background grey pixels to pure white (#FFFFFF) while keeping dark ink intact." },
+      { question: "Are my photos or signatures saved on any server?", answer: "Never. All image processing runs in browser memory using HTML5 Canvas. Your documents and signatures never leave your device." },
+      { question: "Can I download all required documents in a single ZIP file?", answer: "Yes. After uploading and previewing your documents, click 'Download All Documents (ZIP)' to get all files organized with official names in a single ZIP archive." },
+    ],
+    internalLinks: [
+      { label: "Passport Photo Maker", to: "/passport-photo-maker" },
+      { label: "Compress Image to 50KB", to: "/advance-compress-img" },
+      { label: "Compress PDF to 100KB", to: "/compress-pdf-to-100kb" },
+      { label: "Redact PDF (Blackout sensitive info)", to: "/redact-pdf" },
+      { label: "Merge PDF", to: "/merge" },
+    ],
+    lastUpdated: "2026-09-23",
+  },
+  "/protect-pdf": {
+    intro: "Password protect PDF online free with strong client-side encryption on LAK PDF. Safeguard sensitive financial reports, personal legal documents, contracts, medical records, and academic papers from unauthorized access. Our browser-based protector allows you to apply high-grade AES password protection directly on your device, ensuring that anyone attempting to open the document must enter the correct password. You can also restrict permissions such as copying text or printing. Because LAK PDF operates 100% in your web browser using WebAssembly and HTML5, your confidential PDF files are never uploaded to any cloud server or third-party database. Protect your documents with complete peace of mind in seconds without any signup or watermarks.",
+    howToUse: [
+      { step: "Upload PDF", detail: "Drag and drop or browse to select your PDF document." },
+      { step: "Set Password", detail: "Enter a strong password of your choice and confirm it." },
+      { step: "Encrypt", detail: "Click Protect PDF to apply bank-grade client-side encryption." },
+      { step: "Download", detail: "Save your encrypted, password-protected PDF file instantly." },
+    ],
+    benefits: [
+      { title: "Bank-Grade Encryption", description: "Protects your document with robust AES encryption to stop unauthorized viewers.", icon: "lock" },
+      { title: "100% Client-Side Privacy", description: "Your file is encrypted locally in your browser. Zero data is sent to external servers.", icon: "shield" },
+      { title: "No File Size Limits", description: "Protect both small single-page documents and heavy multi-page PDF archives.", icon: "layers" },
+      { title: "Free & No Watermarks", description: "Completely free with no hidden charges, trial periods, or branding marks.", icon: "star" },
+    ],
+    faqs: [
+      { question: "Can someone open my PDF without the password?", answer: "No. Strong AES encryption scrambles the internal document stream. Without the exact password, the document cannot be decrypted or viewed by standard PDF readers." },
+      { question: "Is my password or file saved on your servers?", answer: "Never. All encryption occurs in your device's browser memory. We have no servers storing your files or passwords." },
+      { question: "What happens if I forget the password?", answer: "Because encryption is handled locally with zero backdoors, you should store your password in a secure password manager. We cannot recover lost passwords." },
+      { question: "Does protecting the PDF reduce text or image quality?", answer: "No. Encryption only secures the container; original formatting, text clarity, and high-resolution images remain 100% unchanged." },
+      { question: "Can I protect PDF on Android or iPhone?", answer: "Yes, LAK PDF runs seamlessly on mobile browsers including Safari, Chrome, and Firefox without requiring any app installations." },
+    ],
+    internalLinks: [
+      { label: "Unlock PDF", to: "/unlock-pdf" },
+      { label: "Redact PDF (Blackout sensitive data)", to: "/redact-pdf" },
+      { label: "Sign PDF", to: "/sign-pdf" },
+      { label: "Compress PDF", to: "/compress" },
+      { label: "Watermark PDF", to: "/watermark" },
+    ],
+    lastUpdated: "2026-09-23",
+  },
+  "/unlock-pdf": {
+    intro: "Unlock password-protected PDF files online free with LAK PDF. Easily remove restrictions on printing, copying text, or editing when you have authorized access to the document. If you have the valid user password or need to eliminate annoying password prompts on trusted files, this tool decrypts your PDF and produces a permanently unlocked version for quick sharing and archiving. All decryption is processed strictly inside your web browser using client-side JavaScript, guaranteeing that your sensitive contracts, bank statements, salary slips, and tax forms are never exposed to remote servers or stored in any database. Experience instant, seamless PDF unlocking without watermarks, software downloads, or registration.",
+    howToUse: [
+      { step: "Upload Locked PDF", detail: "Select the password-protected PDF file from your device." },
+      { step: "Enter Password (if prompted)", detail: "Provide the opening password to authenticate decryption." },
+      { step: "Remove Security", detail: "Click Unlock PDF to remove encryption headers and permission locks." },
+      { step: "Download Clean PDF", detail: "Download your unencrypted, restriction-free PDF ready to view or print." },
+    ],
+    benefits: [
+      { title: "Instant Restriction Removal", description: "Eliminate printing, editing, and content extraction locks in 1 click.", icon: "zap" },
+      { title: "Permanent Decryption", description: "Download a completely clean PDF that never asks for a password again.", icon: "check" },
+      { title: "100% Local Processing", description: "Decryption runs entirely in your browser memory for maximum confidentiality.", icon: "shield" },
+      { title: "Zero Quality Loss", description: "Document layout, fonts, signatures, and vector illustrations stay crisp.", icon: "eye" },
+    ],
+    faqs: [
+      { question: "Can I unlock a PDF if I don't know the password?", answer: "If the PDF is secured with a strong open/user password, modern cryptographic standards require entering the password once to decrypt the file. Once entered, LAK PDF permanently removes the password so you never need to type it again." },
+      { question: "Does this tool remove printing and copying restrictions?", answer: "Yes, owner restrictions preventing text selection, printing, or form filling are stripped during the unlock process." },
+      { question: "Is it safe to unlock confidential salary slips or bank statements?", answer: "Yes, 100% safe. Your files never leave your computer or phone. No network packets containing your document are transmitted." },
+      { question: "Does unlocking a PDF alter its formatting?", answer: "Not at all. The underlying layout, images, and text streams are retained in identical visual fidelity." },
+      { question: "Can I unlock PDFs on mobile?", answer: "Yes, LAK PDF works flawlessly on iPhone, iPad, and Android mobile browsers." },
+    ],
+    internalLinks: [
+      { label: "Protect PDF", to: "/protect-pdf" },
+      { label: "Redact PDF", to: "/redact-pdf" },
+      { label: "Compress PDF", to: "/compress" },
+      { label: "Merge PDF", to: "/merge" },
+      { label: "PDF to Word", to: "/pdf-to-word" },
+    ],
+    lastUpdated: "2026-09-23",
+  },
+  "/compress-pdf-to-100kb": {
+    intro: "Compress PDF to 100KB online free with LAK PDF. Government portals, state recruitment boards (UPSC, SSC, State PSC), visa websites, and university admission forms strictly mandate documents under 100 KB. Our smart binary search compressor intelligently balances resolution, color depth, and font subsets to bring your multi-page documents and scanned forms strictly below 100KB while preserving crisp text readability. No server uploads, no privacy risks, and no watermarks.",
+    howToUse: [
+      { step: "Upload Document", detail: "Upload your PDF file. Files of any initial size are accepted." },
+      { step: "Auto-Tune to 100KB", detail: "The compressor calculates optimal image subsampling and stream compression." },
+      { step: "Review Size Stats", detail: "Verify that the final output file size is strictly under 100 KB." },
+      { step: "Download", detail: "Download your portal-ready PDF instantly for immediate submission." },
+    ],
+    benefits: [
+      { title: "Strict 100KB Ceiling", description: "Guarantees output file remains below 100 KB for zero portal rejections.", icon: "target" },
+      { title: "Preserves Text Clarity", description: "Vector text and fonts remain sharp, preventing blurry application prints.", icon: "eye" },
+      { title: "100% Browser Processing", description: "All compression happens locally on your computer or phone.", icon: "shield" },
+      { title: "Instant & Free", description: "No queues, no signup, and no waiting times.", icon: "zap" },
+    ],
+    faqs: [
+      { question: "Why do government portals demand PDFs under 100KB?", answer: "Public sector servers handle millions of applications simultaneously. Imposing a 100KB limit ensures rapid server processing and minimizes bandwidth congestion." },
+      { question: "Will my certificate or marksheet still be readable under 100KB?", answer: "Yes. Our compressor preserves font contours and uses edge-preserving image scaling to keep roll numbers, grades, and candidate details easily legible." },
+      { question: "Can multi-page PDFs be compressed to 100KB?", answer: "Yes, up to 3-5 pages typically fit easily under 100KB. For larger documents with hundreds of pages, consider splitting key pages first." },
+      { question: "Is this tool free without any watermark?", answer: "Yes, 100% free with no watermark or logos added." },
+    ],
+    internalLinks: [
+      { label: "Compress PDF to 200KB", to: "/compress-pdf-to-200kb" },
+      { label: "Compress Image to 50KB", to: "/advance-compress-img" },
+      { label: "FormDocFixer", to: "/form-doc-fixer" },
+      { label: "Merge PDF", to: "/merge" },
+    ],
+    lastUpdated: "2026-09-23",
+  },
+  "/compress-pdf-to-200kb": {
+    intro: "Compress PDF to 200KB online free. Designed specifically for job application portals, HR systems, college admissions, scholarship forms, and Aadhaar card PDF uploads requiring file sizes under 200 KB. LAK PDF compresses PDFs efficiently right in your browser, maintaining document integrity without sending your personal data across the internet.",
+    howToUse: [
+      { step: "Select PDF", detail: "Choose the PDF document you want to optimize." },
+      { step: "Target 200KB", detail: "The engine targets the highest visual quality under 200KB." },
+      { step: "Compress", detail: "Processes locally in seconds." },
+      { step: "Download", detail: "Download your compressed, compliant PDF file." },
+    ],
+    benefits: [
+      { title: "Perfect for Aadhaar & Resumes", description: "Ideal size for dual-sided Aadhaar cards and multi-page CVs.", icon: "check" },
+      { title: "Client-Side Privacy", description: "Your identity files never touch remote servers.", icon: "shield" },
+      { title: "Smart Quality Preservation", description: "Keeps signatures, stamps, and photos clear and distinguishable.", icon: "eye" },
+    ],
+    faqs: [
+      { question: "What documents need to be under 200KB?", answer: "State entrance exams, scholarship portals, and HR applicant tracking systems commonly specify a 200KB maximum." },
+      { question: "Is there any charge or subscription needed?", answer: "No, LAK PDF is completely free with unlimited usage." },
+    ],
+    internalLinks: [
+      { label: "Compress PDF to 100KB", to: "/compress-pdf-to-100kb" },
+      { label: "FormDocFixer", to: "/form-doc-fixer" },
+      { label: "Compress PDF", to: "/compress" },
+    ],
+    lastUpdated: "2026-09-23",
+  },
 };
+
+// Aliases for high-intent search variants
+toolSEOData["/compress-pdf"] = toolSEOData["/compress"];
+toolSEOData["/merge-pdf"] = toolSEOData["/merge"];
+toolSEOData["/split-pdf"] = toolSEOData["/split"];
+toolSEOData["/image-to-pdf"] = toolSEOData["/img-to-pdf"];
+toolSEOData["/jpg-to-pdf"] = toolSEOData["/img-to-pdf"];
+toolSEOData["/compress-image"] = toolSEOData["/compress-img"];
+toolSEOData["/rotate-pdf"] = toolSEOData["/rotate"];
+toolSEOData["/scan-to-pdf"] = toolSEOData["/scan-pdf"];
+toolSEOData["/delete-pages"] = toolSEOData["/delete-page"];
+toolSEOData["/blackout-pdf"] = toolSEOData["/redact-pdf"];
+toolSEOData["/passport-photo"] = toolSEOData["/passport-photo-maker"];
+toolSEOData["/formdocfixer"] = toolSEOData["/form-doc-fixer"];
 
 export default toolSEOData;

@@ -26,9 +26,6 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
     return (
       <div className="tool-story-stage" aria-hidden="true">
         <div className="story-track">
-          {/* Center Morph Sparkle Splash */}
-          <div className="story-center-splash" />
-
           {/* Floating Vessel with Trailing Wake */}
           <div
             className={`story-item story-continuous-ship ${isRotate ? 'story-rotate-ship' : ''
@@ -133,24 +130,25 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
   }
 
 
-  // 7. MERGE PDF: 2 separate boxes (PDF 1 & PDF 2) merge into 1 MERGED PDF box at 50%
-  if (normalizedId === 'merge') {
+  // 7. MERGE PDF: 2 separate floating PDF boxes (0% to 50%) merge into 1 Combined PDF (50% to 100%)
+  if (
+    normalizedId === 'merge' ||
+    normalizedId === 'merge-pdf' ||
+    normalizedId.includes('merge')
+  ) {
     return (
       <div className="tool-story-stage" aria-hidden="true">
         <div className="story-track">
-          {/* Center Morph Sparkle Splash */}
-          <div className="story-center-splash" />
-
           {/* Stage 1: 2 Separate floating boxes (0% to 50%) */}
           <div className="story-item story-merge-box-1">
             <div className="story-wake-foam" />
-            <div className="story-card-badge badge-merge-single">
+            <div className="story-card-badge badge-merge-box-1">
               <span>📄 PDF 1</span>
             </div>
           </div>
           <div className="story-item story-merge-box-2">
             <div className="story-wake-foam" />
-            <div className="story-card-badge badge-merge-single">
+            <div className="story-card-badge badge-merge-box-2">
               <span>📄 PDF 2</span>
             </div>
           </div>
@@ -159,7 +157,7 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
           <div className="story-item story-merge-combined">
             <div className="story-wake-foam" />
             <div className="story-card-badge badge-merge-combined">
-              <span>📚 MERGED PDF</span>
+              <span>📚 1 Merged PDF</span>
             </div>
           </div>
         </div>
@@ -167,15 +165,15 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
     );
   }
 
-
-  // 8. SPLIT PDF: 1 Big PDF (0% to 50%) splits into 2 separate boxes (Page 1 & Page 2) from 50% to 100%
-  if (normalizedId === 'split') {
+  // 8. SPLIT PDF: 1 Big PDF (0% to 50%) splits into 2 separate page boxes from 50% to 100%
+  if (
+    normalizedId === 'split' ||
+    normalizedId === 'split-pdf' ||
+    normalizedId.includes('split')
+  ) {
     return (
       <div className="tool-story-stage" aria-hidden="true">
         <div className="story-track">
-          {/* Center Morph Sparkle Splash */}
-          <div className="story-center-splash" />
-
           {/* Stage 1: 1 Single Big PDF box (0% to 50%) */}
           <div className="story-item story-split-single">
             <div className="story-wake-foam" />
@@ -187,13 +185,13 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
           {/* Stage 2: 2 Separate split boxes (50% to 100%) */}
           <div className="story-item story-split-box-1">
             <div className="story-wake-foam" />
-            <div className="story-card-badge badge-split-child">
+            <div className="story-card-badge badge-split-child-1">
               <span>✂️ Page 1</span>
             </div>
           </div>
           <div className="story-item story-split-box-2">
             <div className="story-wake-foam" />
-            <div className="story-card-badge badge-split-child">
+            <div className="story-card-badge badge-split-child-2">
               <span>✂️ Page 2</span>
             </div>
           </div>
@@ -212,13 +210,26 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
     );
   }
 
-  // 10. ROTATE PDF
-  if (normalizedId === 'rotate') {
-    return renderShipTrack(
-      'badge-morph-rotate',
-      <>🔄 Rotate PDF</>,
-      <>🔄 Rotate PDF</>,
-      true
+  // 10. ROTATE PDF: Continuously rotating page as it sails across
+  if (
+    normalizedId === 'rotate' ||
+    normalizedId === 'rotate-pdf' ||
+    normalizedId.includes('rotate')
+  ) {
+    return (
+      <div className="tool-story-stage" aria-hidden="true">
+        <div className="story-track">
+          {/* Floating Vessel with Trailing Wake */}
+          <div className="story-item story-continuous-ship story-rotate-ship">
+            <div className="story-wake-foam" />
+            <div className="story-card-badge badge-morph-rotate">
+              <span className="story-rotate-doc-icon">📄</span>
+              <span className="morph-stage-start">0° Rotate</span>
+              <span className="morph-stage-end">90° Rotated</span>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -232,7 +243,7 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
     );
   }
 
-  // 12. DELETE PAGES: PDF -> DELETED PDF
+  // 12. DELETE PAGES: 📄 5 Pages -> 🗑️ 4 Pages
   if (
     normalizedId === 'delete-page' ||
     normalizedId === 'delete-pages' ||
@@ -240,8 +251,8 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
   ) {
     return renderShipTrack(
       'badge-morph-delete',
-      <>📄 PDF</>,
-      <>🗑️ DELETED PDF</>
+      <>📄 5 Pages</>,
+      <>🗑️ 4 Pages</>
     );
   }
 
@@ -337,6 +348,147 @@ export const ToolStoryAnimation: React.FC<ToolStoryAnimationProps> = ({ toolId }
       'badge-morph-watermark',
       <>📄 No Watermark</>,
       <>💧 WATERMARKED</>
+    );
+  }
+
+  // 21. FORMDOCFIXER / GOVT EXAM RESIZER: 📸 Raw Photo -> ✅ 20-50KB SSC
+  if (
+    normalizedId === 'govt-exam-resizer' ||
+    normalizedId === 'form-doc-fixer' ||
+    normalizedId === 'formdocfixer' ||
+    normalizedId.includes('sarkari')
+  ) {
+    return renderShipTrack(
+      'badge-morph-govt-exam',
+      <>📸 Raw Photo</>,
+      <>✅ 20-50KB SSC</>
+    );
+  }
+
+  // 22. PASSPORT PHOTO MAKER: 📱 Phone Pic -> 👔 3.5×4.5cm
+  if (
+    normalizedId === 'passport-photo-maker' ||
+    normalizedId === 'passport-photo' ||
+    normalizedId.includes('passport')
+  ) {
+    return renderShipTrack(
+      'badge-morph-passport',
+      <>📱 Phone Pic</>,
+      <>👔 3.5×4.5cm</>
+    );
+  }
+
+  // 23. MAKE PPT (Images to PPT): 🖼️ JPG Images -> 📊 PPTX Slides
+  if (
+    normalizedId === 'make-ppt' ||
+    normalizedId === 'img-to-ppt' ||
+    normalizedId.includes('make-ppt')
+  ) {
+    return renderShipTrack(
+      'badge-morph-make-ppt',
+      <>🖼️ JPG Images</>,
+      <>📊 PPTX Slides</>
+    );
+  }
+
+  // 24. REDACT PDF: 🔒 Aadhaar/PAN -> ⬛ 100% Redacted
+  if (
+    normalizedId === 'redact-pdf' ||
+    normalizedId === 'blackout-pdf' ||
+    normalizedId.includes('redact') ||
+    normalizedId.includes('blackout')
+  ) {
+    return renderShipTrack(
+      'badge-morph-redact',
+      <>🔒 Aadhaar/PAN</>,
+      <>⬛ Redacted</>
+    );
+  }
+
+  // 25. AI SUMMARY / Q&A: 📚 50-Page PDF -> 💡 AI Summary
+  if (
+    normalizedId === 'summarizer-qa' ||
+    normalizedId === 'ai-summary' ||
+    normalizedId.includes('summarizer')
+  ) {
+    return renderShipTrack(
+      'badge-morph-summarizer',
+      <>📚 50-Page PDF</>,
+      <>💡 AI Summary</>
+    );
+  }
+
+  // 26. AI PDF TO MCQ: 📖 Notes PDF -> ❓ 100+ MCQs
+  if (
+    normalizedId === 'ai-pdf-to-mcq' ||
+    normalizedId === 'pdf-to-mcq' ||
+    normalizedId.includes('mcq')
+  ) {
+    return renderShipTrack(
+      'badge-morph-mcq',
+      <>📖 Notes PDF</>,
+      <>❓ 100+ MCQs</>
+    );
+  }
+
+  // 27. AI INTERVIEW GENERATOR: 📄 Resume PDF -> 🎯 Interview Q&A
+  if (
+    normalizedId === 'ai-interview-generator' ||
+    normalizedId === 'ai-interview-prep' ||
+    normalizedId.includes('interview')
+  ) {
+    return renderShipTrack(
+      'badge-morph-interview',
+      <>📄 Resume PDF</>,
+      <>🎯 Interview Q&A</>
+    );
+  }
+
+  // 28. AI EDIT PDF: 📄 PDF Doc -> ✨ AI Edited
+  if (
+    normalizedId === 'ai-edit-pdf' ||
+    normalizedId.includes('ai-edit')
+  ) {
+    return renderShipTrack(
+      'badge-morph-ai-edit',
+      <>📄 PDF Doc</>,
+      <>✨ AI Edited</>
+    );
+  }
+
+  // 29. PROTECT PDF: 🔓 Plain PDF -> 🔐 Password Protected
+  if (
+    normalizedId === 'protect-pdf' ||
+    normalizedId === 'protect'
+  ) {
+    return renderShipTrack(
+      'badge-morph-protect',
+      <>🔓 Plain PDF</>,
+      <>🔐 Protected</>
+    );
+  }
+
+  // 30. UNLOCK PDF: 🔐 Locked PDF -> 🔓 Unlocked PDF
+  if (
+    normalizedId === 'unlock-pdf' ||
+    normalizedId === 'unlock'
+  ) {
+    return renderShipTrack(
+      'badge-morph-unlock',
+      <>🔐 Locked PDF</>,
+      <>🔓 Unlocked</>
+    );
+  }
+
+  // 31. PDF TO TEXT: 📄 PDF Doc -> 📝 Text TXT
+  if (
+    normalizedId === 'pdf-to-text' ||
+    normalizedId.includes('pdf-to-text')
+  ) {
+    return renderShipTrack(
+      'badge-morph-pdf-to-text',
+      <>📄 PDF Doc</>,
+      <>📝 Text TXT</>
     );
   }
 

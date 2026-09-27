@@ -31,7 +31,6 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.2.8",
     "bcryptjs": "^3.0.3",
     "browser-image-compression": "^2.0.2",
     "cookie-parser": "^1.4.7",
@@ -40,8 +39,6 @@
     "docx-preview": "^0.4.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "fabric": "^7.2.0",
-    "file-saver": "2.0.5",
     "google-auth-library": "^9.15.1",
     "html2canvas": "1.4.1",
     "jsonwebtoken": "^9.0.3",
@@ -50,7 +47,6 @@
     "lucide-react": "^0.561.0",
     "mammoth": "^1.11.0",
     "mongodb": "^7.1.0",
-    "nanoid": "^5.1.6",
     "nodemailer": "^8.0.1",
     "openai": "^4.79.2",
     "pdf-lib": "^1.17.1",
@@ -61,8 +57,7 @@
     "react-helmet-async": "^2.0.5",
     "react-router-dom": "^7.10.1",
     "tesseract.js": "5.0.5",
-    "uuid": "^13.0.0",
-    "zustand": "^5.0.10"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

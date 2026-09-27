@@ -1,279 +1,223 @@
-# LAK PDF - Free Online PDF Tools
+# LAKPDF — Modern Client-First PDF & Document Intelligence Suite
 
-A comprehensive suite of PDF utilities built with React, TypeScript, and Tailwind CSS. Features client-side processing for maximum privacy and speed.
+[![Production](https://img.shields.io/badge/status-production-success.svg)](https://lakpdf.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.2-646cff.svg)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4.0-38bdf8.svg)](https://tailwindcss.com/)
 
-## 🚀 Performance Features
+[LAKPDF](https://lakpdf.com) is a high-performance, private-by-design PDF and document utility platform. All core PDF, image, and document operations run 100% client-side in the browser using WebAssembly and Web Workers—files never leave the user's device unless explicitly sent to AI features.
 
-### Ultra Fast Experience
-- **Client-side JavaScript Tools**: All PDF operations happen in the browser - no server uploads required
-- **Lazy Loading**: Pages are loaded on-demand using React.lazy() and Suspense
-- **Web Workers Ready**: Heavy operations can be offloaded to web workers for better performance
-- **Skeleton Loaders**: Beautiful loading states with shimmer animations for better UX
+---
 
-### Code Implementation
-```tsx
-// Lazy loading example
-const Home = lazy(() => import("./pages/Home").then((m) => ({ default: m.Home })));
+## 📑 Table of Contents
+- [Architecture & Core Principles](#architecture--core-principles)
+- [Feature Suite (35+ Tools)](#feature-suite-35-tools)
+- [Directory Structure](#directory-structure)
+- [Tech Stack](#tech-stack)
+- [Environment Configuration](#environment-configuration)
+- [Local Development](#local-development)
+- [Production Deployment](#production-deployment)
+- [Testing & Quality Assurance](#testing--quality-assurance)
 
-// Skeleton component
-export const ToolCardSkeleton: React.FC = () => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200">
-    <Skeleton variant="circular" width={48} height={48} />
-    <Skeleton width="70%" height={24} className="mb-3" />
-    {/* ... */}
-  </div>
-);
-```
+---
 
-## 📱 Mobile First + PWA
+## 🏛️ Architecture & Core Principles
 
-### Features
-- **Bottom Navigation Toolbar**: Mobile-optimized bottom nav with dropdown for tools
-- **Add to Home Screen**: PWA manifest for installable app experience
-- **Offline Support**: Service worker caches static assets for offline usage
-- **Mobile Responsive**: Tailwind CSS with mobile-first breakpoints
+1. **Zero-Upload Privacy First**: All file splitting, merging, rotating, watermarking, redacting, converting, and compressing are executed client-side via `pdf-lib`, `pdfjs-dist`, and HTML5 Canvas.
+2. **Sub-second Navigation & Lazy Loading**: Every page and heavy utility is asynchronously chunked via `React.lazy()` and `safeImport()` with a bulletproof scroll restoration engine.
+3. **Robust Backend API**: An Express.js microservice (`/server`) provides:
+   - User authentication (JWT with HTTP-only cookies, Google OAuth, password reset).
+   - High-throughput AI Document Intelligence with concurrency queues and rate limiting (OpenRouter, Groq, DeepInfra, Gemini).
+   - Comprehensive Admin Portal & Telemetry (Core Web Vitals, active sessions, tool metrics).
+4. **Mobile First PWA**: Service Worker caching, offline fallback (`/offline`), responsive layouts, and installable PWA manifest.
 
-### PWA Manifest (`public/manifest.json`)
-- Standalone display mode
-- App shortcuts for quick access to popular tools
-- Theme colors and icons
-- Splash screen configuration
+---
 
-### Service Worker (`public/sw.js`)
-- Caches static assets on install
-- Offline fallback page
-- Background sync ready
-- Push notification support (future)
+## 🛠️ Feature Suite (35+ Tools)
 
-## 🧠 AI Features (Future Ready)
+### 1. Core PDF Utilities
+- **Merge PDF** (`/merge`): Combine multiple PDFs in custom order with drag-and-drop.
+- **Split PDF** (`/split`): Extract specific pages or split into distinct documents.
+- **Compress PDF** (`/compress`, `/compress-pdf`): Multi-tier compression with preset limits (100KB, 200KB, 500KB).
+- **Organize & Delete Pages** (`/organize-pdf`, `/delete-page`): Visual page sorter and page remover.
+- **Rotate PDF** (`/rotate`): Fix landscape/portrait orientations.
+- **Crop PDF** (`/crop-pdf`): Trim unwanted margins with interactive bounding boxes.
+- **Page Numbers** (`/page-number`): Insert custom numbering formats, positions, and fonts.
+- **Watermark PDF** (`/watermark`): Protect documents with custom text or image watermarks.
+- **Compare PDF** (`/compare-pdf`): Visual side-by-side diffing between two documents.
+- **Detect Duplicate Pages** (`/detect-duplicates`): Identify identical or repetitive pages automatically.
 
-Structure prepared for:
-- AI PDF Summary
-- PDF to Questions Generator
-- Resume Analyzer
-- Invoice Reader
+### 2. Sarkari & Government Exam Utilities (FormDocFixer)
+- **FormDocFixer / Govt Exam Resizer** (`/govt-exam-resizer`):
+  - Pre-configured specifications for SSC CGL/CHSL, UPSC OTR, IBPS, SBI PO, NEET, RRB, and State PSCs.
+  - Photo Resizer (exact 20–50KB JPEG output, 350x450px).
+  - Signature Resizer (exact 10–20KB output).
+  - Integrated Date & Name Stamper (complying with NTA/SSC rules).
+  - Biometric face centering and background cleanup.
+- **Passport Photo Maker** (`/passport-photo-maker`): Biometric face guidelines, 3.5x4.5cm cropping, and printable 4x6 & A4 sheets.
 
-## 📊 User Dashboard
+### 3. Document Security & Redaction
+- **Redact PDF** (`/redact-pdf`): True irreversible pixel-level sanitization for Aadhaar, PAN, bank details, and signatures.
+- **Protect PDF** (`/protect-pdf`): Encrypt PDFs with bank-grade passwords and access restrictions.
+- **Unlock PDF** (`/unlock-pdf`): Remove passwords and permissions from owned PDF files.
 
-### Features
-- **Recent Files**: Track processing history with localStorage
-- **Favorites**: Star your most-used tools
-- **Statistics**: Tools used, files processed, last active
-- **Activity Chart**: Visual breakdown of tool usage
+### 4. Conversion & Office Suite
+- **Image to PDF** (`/img-to-pdf`): Convert JPG, PNG, WEBP into multi-page PDFs.
+- **PDF to Image** (`/pdf-to-img`): High-resolution PNG/JPG extraction from PDF pages.
+- **Make PPT / Image to PowerPoint** (`/make-ppt`): Convert images into formatted 16:9 or 4:3 PPTX slides with auto-fit.
+- **PDF to Word** (`/pdf-to-word`) & **Word to PDF** (`/word-to-pdf`).
+- **PDF to PowerPoint** (`/pdf-to-powerpoint`) & **PowerPoint to PDF** (`/powerpoint-to-pdf`).
+- **OCR & PDF to Text** (`/pdf-to-text`, `/ocr-pdf`): Extract selectable text using OCR.
 
-### Implementation
-```tsx
-// File history hook
-export const useFileHistory = () => {
-  const [history, setHistory] = useLocalStorage<HistoryItem[]>('lakpdf_file_history', []);
-  const addToHistory = useCallback((file) => {
-    setHistory(prev => [newEntry, ...prev.slice(0, 49)]);
-  }, []);
-  return { history, addToHistory };
-};
-```
+### 5. AI Document Intelligence Suite
+- **PDF Summarizer & QA** (`/summarizer-qa`): Interactive chat with documents and executive summaries.
+- **AI PDF to MCQ Generator** (`/ai-pdf-to-mcq`): Generate practice tests, quizzes, and revision flashcards.
+- **AI Interview Question Generator** (`/ai-interview-generator`): Extract technical, HR, and behavioral interview questions from resumes.
 
-## 🌍 Multilingual Support (i18n)
+### 6. Administration & Governance
+- **Admin Dashboard** (`/admin/dashboard`): User management, tool telemetry, system configuration, audit logs, and performance vitals.
 
-### Supported Languages
-- 🇺🇸 English (Default)
-- 🇮🇳 Hindi
-- 🇮🇳 Hinglish (Roman Hindi)
+---
 
-### Implementation
-```ts
-// hooks/useI18n.ts
-export const translations: Translations = {
-  'nav.home': { en: 'Home', hi: 'Home', hinglish: 'Home' },
-  'action.selectFiles': { en: 'Select Files', hi: 'Select Files', hinglish: 'Select Files' },
-  // ... more translations
-};
-```
-
-## 📝 Blog + Tool Combo
-
-### SEO Strategy
-- Blog page at `/blog`
-- Internal linking from blog posts to tools
-- Hindi/Hinglish content for Indian audience
-- SEO-optimized meta tags
-
-### Example Blog Posts
-- "PDF Size Kaise Kam Kare (Free)"
-- "Online PDF Merge Best Tool"
-- "PDF Password Remove Ka Tarika"
-
-## 📈 Conversion Boost Features
-
-### User Trust Elements
-- **Usage Counter**: Shows "15K+ users" badge
-- **Rating System**: Feedback widget after tool usage
-- **No Watermark Badge**: Prominently displayed
-- **Speed Claims**: "Lightning Fast", "100% Secure"
-
-### Implementation
-```tsx
-export const UsageCounter: React.FC = () => {
-  const [count, setCount] = useState(15000);
-  // Grows over time to show popularity
-};
-```
-
-## 🎨 UI/UX Features
-
-### Visual Effects
-- **Glassmorphism Cards**: Semi-transparent cards with blur
-- **Drag & Drop**: Animated file upload zones
-- **Gradient Buttons**: Primary gradient buttons
-- **Micro-animations**: Hover effects, transitions
-- **Shimmer Loading**: Animated skeleton screens
-
-### Components Created
-- `BottomNav.tsx` - Mobile bottom navigation
-- `Skeleton.tsx` - Loading skeletons
-- `FeedbackWidget.tsx` - Rating/feedback system
-- `UsageCounter.tsx` - User count badge
-- `FileUploader.tsx` - Drag & drop file upload
-
-## 📁 Project Structure
+## 📁 Directory Structure
 
 ```
-lak-pdf/
-├── components/
-│   ├── BottomNav.tsx       # Mobile bottom navigation
-│   ├── FileUploader.tsx    # Drag & drop uploader
-│   ├── FeedbackWidget.tsx  # Rating system
-│   ├── Layout.tsx          # Main layout with header/footer
-│   ├── Skeleton.tsx        # Loading skeletons
-│   └── UsageCounter.tsx    # User count badge
-├── hooks/
-│   ├── useHooks.ts         # Custom hooks (useOnlineStatus, etc.)
-│   └── useI18n.ts          # Internationalization
-├── pages/
-│   ├── Blog.tsx            # SEO blog page
-│   ├── Dashboard.tsx       # User dashboard
-│   ├── Home.tsx            # Homepage with tool grid
-│   └── Offline.tsx         # Offline fallback page
-├── public/
-│   ├── manifest.json       # PWA manifest
-│   └── sw.js               # Service worker
-├── App.tsx                 # Main app with routes
-├── index.css               # Global styles & animations
-└── index.html              # Entry point with PWA meta tags
+lakpdf/
+├── admin/                  # Admin portal layouts, dashboards, telemetry & user management
+├── components/             # Reusable UI & infrastructure components
+│   ├── ErrorBoundary.tsx   # React error boundary wrapping every route
+│   ├── GlobalErrorHandler.tsx # Window error, chunk retry & ad error suppressor
+│   ├── Layout.tsx          # Responsive navigation, header, drawer & footer
+│   ├── PageLoader.tsx      # Suspense fallback with graceful timeout
+│   ├── RouteAnalyticsTracker.tsx # Page view and drop-off analytics
+│   ├── RouteSeoManager.tsx # Dynamic document title, meta tags & JSON-LD
+│   ├── ScrollToTop.tsx     # Non-blocking scroll coordinate restoration
+│   └── ...                 # UI widgets (FileUploader, DarkModeToggle, Modals)
+├── config/                 # Application configuration & SEO manifests
+│   ├── adsense.ts          # Google AdSense ad slot configuration
+│   ├── seoRoutes.ts        # Route titles, descriptions & JSON-LD schema
+│   └── toolSEOData.ts      # Comprehensive SEO knowledge data
+├── constants/              # Centralized immutable constants
+│   ├── apiEndpoints.ts     # Backend API route mapping
+│   ├── fileLimits.ts       # File size limits & govt exam specs
+│   ├── routes.ts           # Centralized application routes
+│   └── index.ts            # Barrel exports
+├── hooks/                  # Custom React hooks (auth, i18n, online status, storage)
+├── pages/                  # Routed tool and informational pages
+├── public/                 # Static assets, PWA manifest, service worker
+├── server/                 # Express.js backend API
+│   ├── aiQueue.js          # Asynchronous bounded task queue for AI
+│   ├── aiService.js        # Multi-provider AI interface (OpenRouter, Groq, DeepInfra)
+│   ├── authStore.js        # MongoDB user store & session handling
+│   ├── cluster.js          # Multi-process production cluster manager
+│   └── index.js            # Express server route definitions & middleware
+├── services/               # Client-side business logic & processing services
+│   ├── authService.ts      # Client auth client with refresh token interceptors
+│   ├── govtExamService.ts  # Image compression, cropping & stamping algorithms
+│   ├── pdfService.ts       # Core pdf-lib operations
+│   └── redactService.ts    # Canvas-based true pixel redaction
+├── tests/                  # Playwright end-to-end test suites
+├── utils/                  # Pure utility functions (analytics, formatters, sanitizers)
+├── App.tsx                 # Root application router & lazy route definitions
+├── index.html              # HTML5 entry point with resource hints & PWA meta
+├── package.json            # Node.js dependencies and script commands
+└── vite.config.ts          # Vite build, compression & proxy configuration
 ```
 
-## 🔧 Technical Stack
+---
 
-- **React 19** - UI framework
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Utility-first styling
-- **Vite** - Fast build tool
-- **React Router v7** - Client-side routing
-- **React Helmet Async** - SEO meta tags
-- **pdf-lib** - PDF manipulation
-- **localStorage** - Data persistence
+## 💻 Tech Stack
 
-## 📱 Mobile Features
+- **Frontend**: React 19, TypeScript 5.8, Tailwind CSS 4.0, Vite 6.2, React Router 7.
+- **Client Processing**: `pdf-lib`, `pdfjs-dist`, `tesseract.js`, `pptxgenjs`, HTML5 Canvas.
+- **Backend Server**: Node.js, Express 4, MongoDB (Mongoose), JWT, Cookie-Parser, CORS.
+- **AI Integrations**: OpenRouter, Groq, DeepInfra, Google Gemini.
+- **Testing**: Playwright End-to-End Suite.
 
-### Bottom Navigation
-```tsx
-const navItems = [
-  { path: '/', icon: Home, label: 'Home' },
-  { path: '/merge', icon: FilePlus, label: 'Tools' },
-  { path: '/history', icon: History, label: 'History' },
-  { path: '/profile', icon: User, label: 'Profile' },
-];
-```
+---
 
-### Safe Area Insets
-- Proper padding for notched phones
-- Keyboard-aware scrolling
-- Touch-friendly target sizes (44px+)
+## ⚙️ Environment Configuration
 
-## 🔐 Security Features
-
-- **Client-side processing**: Files never leave the browser
-- **No cookies**: Minimal tracking
-- **HTTPS ready**: Works with SSL certificates
-- **No watermark**: Free tools are truly free
-
-## 🚀 Getting Started
-
+Copy the template configuration file:
 ```bash
-# Install dependencies
-npm install
+cp .env.example .env
+```
 
-# Start development server
+Review `.env.example` to configure:
+- `VITE_API_BASE_URL`: Backend API endpoint (defaults to proxy in local dev).
+- `MONGODB_URI`: MongoDB connection string.
+- `JWT_SECRET`: Secret key for session tokens.
+- `OPENROUTER_API_KEY` / `GROQ_API_KEY`: API keys for document AI features.
+
+---
+
+## 🚀 Local Development
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Run Both Frontend and Backend Concurrently
+```bash
+npm run dev:full
+```
+- **Frontend**: `http://localhost:3000`
+- **Backend API**: `http://localhost:8787`
+
+Or run them individually in separate terminals:
+```bash
+# Frontend only
 npm run dev
 
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
+# Backend API server only
+npm run dev:server
 ```
 
-## 🏭 Production Environment Setup
+---
 
-1. Create production env file:
+## 📦 Production Deployment
+
+### 1. Type Check & Build
 ```bash
-cp .env.production.example .env.production
+npm run type-check
+npm run build
 ```
 
-2. Fill required keys in `.env.production`:
-- `OPENROUTER_API_KEY`
-- `ALLOWED_ORIGINS` (must include your frontend domains)
-
-3. Validate env before deploy:
+### 2. Validate Production Environment
 ```bash
 npm run check:env:prod
 ```
 
-4. Build frontend bundle:
-```bash
-npm run build
-```
-
-5. Start production API server:
+### 3. Run Production Server (Cluster Mode)
 ```bash
 npm run start:prod
 ```
 
-Notes:
-- In production, server now fails fast if required env vars are missing.
-- CORS is strict in production and blocks unknown origins by default.
-- API server runs in cluster mode by default (`server/cluster.js`).
-- AI endpoints are protected with bounded queue + concurrency controls.
+---
 
-Optional tuning vars:
-- `WEB_CONCURRENCY` (cluster workers, default up to 4 based on CPU)
-- `AI_MAX_CONCURRENT_REQUESTS` (per-process active AI calls)
-- `AI_MAX_QUEUE_SIZE` (queued AI requests)
-- `AI_TASK_TIMEOUT_MS` (queue task timeout)
+## 🧪 Testing & Quality Assurance
 
-## 📈 SEO Optimization
+Run type safety verification:
+```bash
+npm run type-check
+```
 
-- Meta descriptions for all pages
-- Open Graph tags for social sharing
-- Canonical URLs
-- Semantic HTML structure
-- Fast page load times (Core Web Vitals)
-- Mobile-friendly responsive design
-- Hindi content for Indian market
+Run Playwright end-to-end tests:
+```bash
+# Run all tests
+npm test
 
-## 🎯 Future Enhancements
+# Run FormDocFixer (Govt Exam Resizer) specific tests
+npx playwright test tests/form-doc-fixer-e2e.spec.ts
 
-- AI-powered PDF summarization
-- Document scanner app integration
-- Team collaboration features
-- API for developers
-- Browser extensions
-- Mobile apps (iOS/Android)
-
-## 📄 License
-
-MIT License - Free for personal and commercial use.
+# Run cross-browser blank-page tests
+npx playwright test tests/cross-browser-blank-page.spec.ts
+```
 
 ---
 
-Built with ❤️ for the Indian market
+## 📄 License
+This project is licensed under the MIT License.

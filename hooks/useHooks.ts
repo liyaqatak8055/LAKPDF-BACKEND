@@ -189,18 +189,28 @@ export const useUsageStats = () => {
   return { stats, incrementUsage };
 };
 
-// Hook for mobile detection
+// Hook for mobile detection - optimized with matchMedia (zero main-thread resize thrashing)
 export const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  });
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(max-width: 767px)');
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+      setIsMobile(mql.matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
     };
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    if (mql.addEventListener) {
+      mql.addEventListener('change', checkMobile);
+      return () => mql.removeEventListener('change', checkMobile);
+    } else {
+      // Fallback for older Safari/iOS
+      mql.addListener(checkMobile);
+      return () => mql.removeListener(checkMobile);
+    }
   }, []);
 
   return isMobile;

@@ -203,8 +203,6 @@
   <!-- Roboto Slab display font for distinctive logo branding (Non-render-blocking) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preload" as="style"
-    href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap"
     media="print" onload="this.media='all'" />
   <noscript>
@@ -248,7 +246,7 @@
       font-style: normal;
       font-weight: 500;
       font-display: optional;
-      src: url('/assets/fonts/inter-latin-500-normal.woff2') format('woff2')
+      src: url('/assets/fonts/inter-latin-400-normal.woff2') format('woff2')
     }
 
     @font-face {
@@ -256,7 +254,7 @@
       font-style: normal;
       font-weight: 600;
       font-display: optional;
-      src: url('/assets/fonts/inter-latin-600-normal.woff2') format('woff2')
+      src: url('/assets/fonts/inter-latin-400-normal.woff2') format('woff2')
     }
 
     @font-face {
@@ -272,7 +270,7 @@
       font-style: normal;
       font-weight: 800;
       font-display: optional;
-      src: url('/assets/fonts/inter-latin-800-normal.woff2') format('woff2')
+      src: url('/assets/fonts/inter-latin-700-normal.woff2') format('woff2')
     }
 
     @font-face {
@@ -280,7 +278,7 @@
       font-style: normal;
       font-weight: 900;
       font-display: optional;
-      src: url('/assets/fonts/inter-latin-900-normal.woff2') format('woff2')
+      src: url('/assets/fonts/inter-latin-700-normal.woff2') format('woff2')
     }
 
     /* Reset */
@@ -554,10 +552,38 @@
   <!-- Critical above-fold CSS is already inlined in the <style> block above -->
 
 
-  <!-- ====== Google AdSense Verification & Auto-Ads ====== -->
+  <!-- ====== Google AdSense Verification & Auto-Ads (Performance Optimized) ====== -->
   <meta name="google-adsense-account" content="ca-pub-9704679803624436" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436"
-    crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      var adsLoaded = false;
+      function injectAdSense() {
+        if (adsLoaded) return;
+        adsLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436';
+        s.crossOrigin = 'anonymous';
+        document.head.appendChild(s);
+      }
+      var triggers = ['scroll', 'touchstart', 'mousemove', 'keydown', 'click'];
+      function onFirstUserGesture() {
+        injectAdSense();
+        triggers.forEach(function (evt) {
+          window.removeEventListener(evt, onFirstUserGesture, { passive: true });
+        });
+      }
+      triggers.forEach(function (evt) {
+        window.addEventListener(evt, onFirstUserGesture, { passive: true, once: true });
+      });
+      // Fallback: If no user gesture happens, load after idle (4s timeout)
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(injectAdSense, { timeout: 4000 });
+      } else {
+        setTimeout(injectAdSense, 3500);
+      }
+    })();
+  </script>
 </head>
 
 <body>
@@ -652,6 +678,49 @@
                 readonly
                 class="w-full rounded-lg border border-slate-200 bg-white px-5 py-3.5 text-slate-700 placeholder:text-slate-400 shadow-sm hero-shell__input" />
             </div>
+          </div>
+        </section>
+        <!-- Pre-rendered Popular Tools Grid for Instant First Paint (<400ms) -->
+        <section class="py-8 px-4 md:px-8 max-w-7xl mx-auto" style="max-width:80rem;margin:0 auto;padding:2rem 1rem;">
+          <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.5rem;">
+            <div style="padding:0.5rem;background:#fee2e2;border-radius:0.5rem;color:#e5323f;display:inline-flex;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            </div>
+            <h2 style="font-size:1.5rem;font-weight:700;color:var(--text-primary);margin:0;">Most Popular Tools</h2>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:0.75rem;">
+            <a href="/merge" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Merge PDF</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Combine multiple PDF files into one</span>
+            </a>
+            <a href="/split" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Split PDF</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Extract pages or split into files</span>
+            </a>
+            <a href="/compress" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Compress PDF</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Reduce PDF file size securely</span>
+            </a>
+            <a href="/pdf-to-word" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">PDF to Word</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Convert PDF to DOCX document</span>
+            </a>
+            <a href="/word-to-pdf" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Word to PDF</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Convert Word DOCX to PDF</span>
+            </a>
+            <a href="/pdf-to-img" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">PDF to Image</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Convert PDF pages to JPG images</span>
+            </a>
+            <a href="/img-to-pdf" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Image to PDF</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Convert JPG, PNG to PDF document</span>
+            </a>
+            <a href="/govt-exam-resizer" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">FormDocFixer</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Fix & prepare photos for Govt exams</span>
+            </a>
           </div>
         </section>
       </main>

@@ -11,34 +11,95 @@ const RECENT_TOOLS_KEY = 'lakpdf_recent_tools';
 const MAX_RECENT_TOOLS = 6;
 
 const TOOL_TITLE_MAP: Record<string, string> = {
+  // Core PDF Tools
   '/merge': 'Merge PDF',
+  '/merge-pdf': 'Merge PDF',
   '/split': 'Split PDF',
+  '/split-pdf': 'Split PDF',
   '/compress': 'Compress PDF',
+  '/compress-pdf': 'Compress PDF',
+  '/compress-pdf-to-100kb': 'Compress PDF to 100KB',
+  '/compress-pdf-to-200kb': 'Compress PDF to 200KB',
+  '/compress-pdf-to-500kb': 'Compress PDF to 500KB',
   '/organize-pdf': 'Organize PDF',
-  '/img-to-pdf': 'Image to PDF',
-  '/pdf-to-img': 'PDF to Image',
-  '/compress-img': 'Compress Image',
-  '/advance-compress-img': 'Compress Image to 50kb',
-  '/convert': 'Convert PDF',
-  '/pdf-to-word': 'PDF to Word',
-  '/pdf-to-powerpoint': 'PDF to PowerPoint',
-  '/word-to-pdf': 'Word to PDF',
-  '/powerpoint-to-pdf': 'PowerPoint to PDF',
   '/rotate': 'Rotate PDF',
+  '/rotate-pdf': 'Rotate PDF',
   '/page-number': 'Add Page Numbers',
+  '/page-numbers': 'Add Page Numbers',
+  '/add-page-numbers-to-pdf': 'Add Page Numbers',
   '/watermark': 'Watermark PDF',
+  '/watermark-pdf': 'Watermark PDF',
   '/crop-pdf': 'Crop PDF',
   '/scan-pdf': 'Scan Document',
+  '/scan-to-pdf': 'Scan Document',
   '/sign-pdf': 'Sign PDF',
   '/ocr-pdf': 'OCR PDF',
   '/compare-pdf': 'Compare PDF',
   '/delete-page': 'Delete Pages',
-  '/summarizer-qa': 'AI Summary',
+  '/delete-pages': 'Delete Pages',
+  '/protect-pdf': 'Protect PDF',
+  '/protect': 'Protect PDF',
+  '/unlock-pdf': 'Unlock PDF',
+  '/unlock': 'Unlock PDF',
   '/detect-duplicates': 'Detect Duplicates',
-  '/ai-pdf-to-mcq': 'AI PDF to MCQ',
+
+  // Conversion Tools
+  '/convert': 'Convert PDF',
+  '/img-to-pdf': 'Image to PDF',
+  '/image-to-pdf': 'Image to PDF',
+  '/jpg-to-pdf': 'JPG to PDF',
+  '/pdf-to-img': 'PDF to Image',
+  '/pdf-to-image': 'PDF to Image',
+  '/pdf-to-jpg': 'PDF to JPG',
+  '/pdf-to-word': 'PDF to Word',
+  '/pdf-to-powerpoint': 'PDF to PowerPoint',
+  '/word-to-pdf': 'Word to PDF',
+  '/powerpoint-to-pdf': 'PowerPoint to PDF',
+  '/make-ppt': 'Make PowerPoint',
+  '/img-to-ppt': 'Image to PowerPoint',
+
+  // Image & Utility Tools
+  '/compress-img': 'Compress Image',
+  '/compress-image': 'Compress Image',
+  '/advance-compress-img': 'Compress Image to 50KB',
+  '/passport-photo-maker': 'Passport Photo Maker',
+  '/passport-photo': 'Passport Photo Maker',
+  '/govt-exam-resizer': 'FormDocFixer',
+  '/sarkari-resizer': 'FormDocFixer',
+  '/exam-document-maker': 'FormDocFixer',
+  '/ssc-photo-resizer': 'FormDocFixer',
+  '/form-doc-fixer': 'FormDocFixer',
+  '/formdocfixer': 'FormDocFixer',
+  '/redact-pdf': 'Redact PDF',
+  '/blackout-pdf': 'Blackout PDF',
+
+  // AI & Editor Tools
   '/pdf-editor': 'PDF Editor',
-  '/ai-interview-generator': 'AI Interview Generator'
+  '/ai-edit-pdf': 'AI PDF Editor',
+  '/pdf-to-text': 'PDF to Text OCR',
+  '/summarizer-qa': 'AI PDF Summarizer',
+  '/ai-pdf-to-mcq': 'AI PDF to MCQ',
+  '/ai-interview-generator': 'AI Interview Generator',
+  '/ai-interview-prep': 'AI Interview Prep',
+
+  // Tools Directory
+  '/tools': 'All Tools',
+  '/all-tools': 'All Tools',
 };
+
+const NON_TOOL_PATHS = new Set([
+  '/',
+  '/dashboard',
+  '/profile',
+  '/about',
+  '/contact',
+  '/blog',
+  '/privacy-policy',
+  '/terms-of-service',
+  '/disclaimer',
+  '/sitemap',
+  '/learn-pdf',
+]);
 
 const TOOL_PATH_SET = new Set(Object.keys(TOOL_TITLE_MAP));
 
@@ -70,7 +131,10 @@ function saveRecentTools(tools: RecentTool[]): void {
 }
 
 export function isToolRoute(path: string): boolean {
-  return TOOL_PATH_SET.has(path);
+  if (!path || NON_TOOL_PATHS.has(path) || path.startsWith('/admin') || path.startsWith('/blog/')) {
+    return false;
+  }
+  return true;
 }
 
 export function getToolTitle(path: string): string {

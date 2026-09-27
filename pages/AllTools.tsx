@@ -182,8 +182,8 @@ const AllTools: React.FC = () => {
     },
     {
       id: "make-ppt",
-      title: "Make PPT from Images",
-      description: "Convert photos and images into PowerPoint (.pptx) with smart aspect ratio auto-fit",
+      title: "Make PPT (PDF & Images)",
+      description: "Convert PDF documents or photos into PowerPoint (.pptx) with smart aspect ratio auto-fit",
       iconName: "Presentation",
       to: "/make-ppt",
       color: "bg-orange-50",
@@ -450,9 +450,14 @@ const AllTools: React.FC = () => {
         {/* Search Bar */}
         <div className="max-w-2xl mx-auto mb-8">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <label htmlFor="search-tools-input" className="sr-only">
+              Search tools
+            </label>
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5 pointer-events-none" />
             <input
+              id="search-tools-input"
               type="text"
+              aria-label="Search tools"
               placeholder="Search tools..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

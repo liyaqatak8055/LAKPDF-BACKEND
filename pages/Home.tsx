@@ -86,13 +86,13 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   IdCard,
 };
 
-// Dynamic Icon Component
-const DynamicIcon: React.FC<{ iconName: string; className: string }> = ({ iconName, className }) => {
+// Dynamic Icon Component (Memoized for high performance)
+const DynamicIcon = React.memo<{ iconName: string; className: string }>(({ iconName, className }) => {
   const IconComponent = iconMap[iconName];
   if (!IconComponent) return null;
 
   return <IconComponent className={className} />;
-};
+});
 
 /**
  * Native CSS content-visibility: auto container.
@@ -181,11 +181,19 @@ const allTools: ToolItem[] = [
     },
     {
       id: "make-ppt",
-      title: "Make PPT from Images",
-      description: "Convert photos and images to PowerPoint (.pptx) with smart aspect ratio auto-fit",
+      title: "Make PPT (PDF & Images)",
+      description: "Convert PDF documents or photos to PowerPoint (.pptx) with smart aspect ratio auto-fit",
       iconName: "Presentation",
       to: "/make-ppt",
       color: "bg-orange-50"
+    },
+    {
+      id: "govt-exam-resizer",
+      title: "FormDocFixer",
+      description: "Fix & prepare photos (20-50KB), signatures, thumb impressions, and certificate PDFs for all Govt exams",
+      iconName: "GraduationCap",
+      to: "/govt-exam-resizer",
+      color: "bg-amber-50"
     },
     {
       id: "passport-photo-maker",
@@ -359,7 +367,7 @@ const allTools: ToolItem[] = [
   ];
 
   // Specific IDs for the popular tools
-  const popularIds = ["img-to-pdf", "compress", "compress-img", "summarizer-qa"];
+  const popularIds = ["govt-exam-resizer", "img-to-pdf", "compress", "compress-img"];
 
   const popularTools = popularIds
     .map(id => allTools.find(t => t.id === id))
@@ -377,14 +385,14 @@ const allTools: ToolItem[] = [
       title: "Convert",
       description: "Move between PDF, image, Word, and PowerPoint formats.",
       iconName: "ArrowRight",
-      toolIds: ["convert", "passport-photo-maker", "make-ppt", "img-to-pdf", "pdf-to-img", "pdf-to-word", "pdf-to-powerpoint", "word-to-pdf", "powerpoint-to-pdf", "scan-pdf"]
+      toolIds: ["convert", "govt-exam-resizer", "passport-photo-maker", "make-ppt", "img-to-pdf", "pdf-to-img", "pdf-to-word", "pdf-to-powerpoint", "word-to-pdf", "powerpoint-to-pdf", "scan-pdf"]
     },
     {
       id: "edit",
       title: "Edit",
       description: "Refine file size, text, layout, and document content.",
       iconName: "PenTool",
-      toolIds: ["compress", "compress-img", "advance-compress-img", "passport-photo-maker", "pdf-editor", "ocr-pdf", "compare-pdf"]
+      toolIds: ["govt-exam-resizer", "compress", "compress-img", "advance-compress-img", "passport-photo-maker", "pdf-editor", "ocr-pdf", "compare-pdf"]
     },
     {
       id: "security",
@@ -409,23 +417,26 @@ const Home: React.FC = () => {
   const searchTrackTimerRef = useRef<number | null>(null);
 
   const query = searchQuery.trim().toLowerCase();
-  const matchesSearch = (tool: (typeof allTools)[number]) => {
+  const matchesSearch = React.useCallback((tool: (typeof allTools)[number]) => {
     if (!query) return true;
     return (
       tool.title.toLowerCase().includes(query) ||
       tool.description.toLowerCase().includes(query)
     );
-  };
-  const matchingTools = allTools.filter(matchesSearch);
-  const visibleCategorySections = categorySections
-    .map((section) => ({
-      ...section,
-      tools: section.toolIds
-        .map((toolId) => toolMap.get(toolId))
-        .filter((tool): tool is (typeof allTools)[number] => Boolean(tool))
-        .filter(matchesSearch)
-    }))
-    .filter((section) => section.tools.length > 0);
+  }, [query]);
+
+  const matchingTools = React.useMemo(() => allTools.filter(matchesSearch), [matchesSearch]);
+  const visibleCategorySections = React.useMemo(() => {
+    return categorySections
+      .map((section) => ({
+        ...section,
+        tools: section.toolIds
+          .map((toolId) => toolMap.get(toolId))
+          .filter((tool): tool is (typeof allTools)[number] => Boolean(tool))
+          .filter(matchesSearch)
+      }))
+      .filter((section) => section.tools.length > 0);
+  }, [matchesSearch]);
 
 
 
@@ -566,10 +577,17 @@ const Home: React.FC = () => {
             </Link>
           </div>
 
-          <div className="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-600 dark:text-dark-text-secondary">
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface">Browser-first core tools</span>
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface">Works in browser</span>
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface">Fast downloads</span>
+          <div className="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-700 dark:text-dark-text-secondary">
+            <span className="rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              100% Private (Zero Cloud Uploads)
+            </span>
+            <span className="rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-semibold">
+              🇮🇳 SSC & UPSC Exam Resizer
+            </span>
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface">
+              Works Offline · No Signup
+            </span>
           </div>
 
           <div className="max-w-lg mx-auto">

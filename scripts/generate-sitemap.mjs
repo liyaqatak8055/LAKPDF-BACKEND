@@ -6,6 +6,8 @@ const SITE_URL = "https://lakpdf.com";
 const staticPaths = [
   "/",
   "/tools",
+  "/all-tools",
+  "/sitemap",
   "/about",
   "/contact",
   "/privacy-policy",
@@ -30,6 +32,8 @@ const toolPaths = [
   "/advance-compress-img",
   "/make-ppt",
   "/passport-photo-maker",
+  "/form-doc-fixer",
+  "/govt-exam-resizer",
   "/redact-pdf",
   "/convert",
   "/pdf-to-word",
@@ -84,6 +88,7 @@ const toolNamesForBlogGuides = [
   "AI PDF to MCQ",
   "PDF Editor",
   "AI Interview Generator",
+  "Govt Exam Resizer",
   "Protect PDF",
   "PDF to Text",
   "AI Edit PDF",
@@ -120,6 +125,7 @@ const getChangefreq = (urlPath) => {
 
 const xml = [
   '<?xml version="1.0" encoding="UTF-8"?>',
+  '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>',
   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
   ...paths.map((urlPath) =>
     [

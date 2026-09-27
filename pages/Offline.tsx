@@ -76,3 +76,4 @@ export const Offline: React.FC = () => {
   );
 };
 
+export default Offline;

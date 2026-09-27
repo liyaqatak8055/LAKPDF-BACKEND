@@ -1,7 +1,18 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Clock, Tag } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { 
+  ArrowLeft, 
+  Clock, 
+  Tag, 
+  Search, 
+  Sparkles, 
+  BookOpen, 
+  CheckCircle2, 
+  ArrowRight, 
+  HelpCircle,
+  FolderOpen
+} from "lucide-react";
 
 interface ToolGuideSeed {
   name: string;
@@ -149,104 +160,17 @@ const getToolUseCases = (post: BlogPost): string[] => {
       "Convert job application letter to PDF for email attachment.",
       "Share presentation draft as PDF to preserve formatting.",
     ],
-    "/sign-pdf": [
-      "Add digital signature to offer letter before emailing HR.",
-      "Sign NDA or contract PDF without printing.",
-      "Add your signature to a bank or legal document PDF.",
-      "Sign agreement documents for freelance projects.",
-    ],
-    "/pdf-editor": [
-      "Add text, highlights, and shape annotations to any PDF.",
-      "Use editor controls with undo/redo and page navigation.",
-      "Draw and write on PDF documents for review and feedback.",
-      "Annotate study material with notes and highlights.",
-    ],
-    "/ocr-pdf": [
-      "Extract searchable text from a scanned PDF document.",
-      "Convert image-based PDF to text for copy-paste.",
-      "Make scanned textbook pages searchable for study.",
-      "Extract data from scanned invoices or receipts.",
-    ],
-    "/summarizer-qa": [
-      "Summarize a lengthy research paper in seconds.",
-      "Ask questions from a PDF textbook chapter for quick answers.",
-      "Generate key points from a business report PDF.",
-      "Quickly understand a legal document with AI Q&A.",
-    ],
-    "/ai-pdf-to-mcq": [
-      "Generate multiple choice questions from study notes PDF.",
-      "Create practice test from chapter PDF for exam revision.",
-      "Auto-generate quiz questions from training material.",
-      "Make MCQs from NCERT or textbook PDF chapters.",
-    ],
-    "/ai-interview-generator": [
-      "Generate technical interview questions from your resume.",
-      "Get HR and behavioral questions based on your experience.",
-      "Prepare domain-specific questions from job description PDF.",
-      "Practice interview preparation with AI-generated questions.",
-    ],
-    "/organize-pdf": [
-      "Reorder pages in a scanned PDF for correct reading order.",
-      "Move specific pages to correct position before sharing.",
-      "Rearrange chapters in a merged PDF document.",
-      "Sort pages in a legal document for proper sequence.",
-    ],
-    "/watermark": [
-      "Add company logo watermark to confidential documents.",
-      "Mark PDF as DRAFT or CONFIDENTIAL before sharing.",
-      "Brand your PDF reports with company name watermark.",
-      "Protect your original work with a custom watermark.",
-    ],
-    "/rotate": [
-      "Fix upside-down scanned pages in a PDF.",
-      "Rotate landscape pages to portrait for consistent viewing.",
-      "Correct orientation of specific pages before sharing.",
-      "Fix mobile-scanned documents with wrong rotation.",
-    ],
-    "/page-number": [
-      "Add page numbers to a merged PDF before submission.",
-      "Number pages in a research paper or report PDF.",
-      "Add custom styled page numbers to presentation PDF.",
-      "Format page numbers in thesis or assignment document.",
-    ],
-    "/crop-pdf": [
-      "Remove extra white margins from a scanned PDF.",
-      "Crop unwanted border areas from PDF pages.",
-      "Trim oversized PDF pages to standard paper size.",
-      "Clean up poorly scanned document pages.",
-    ],
-    "/scan-pdf": [
-      "Scan physical documents using phone camera and save as PDF.",
-      "Create PDF from notebook pages for digital storage.",
-      "Digitize printed handouts into shareable PDF format.",
-      "Scan receipts and bills into organized PDF documents.",
-    ],
-    "/compare-pdf": [
-      "Find differences between two versions of a contract.",
-      "Compare old and new draft of a legal document.",
-      "Verify changes between original and edited PDF report.",
-      "Spot edits between two versions of an academic paper.",
-    ],
-    "/delete-page": [
-      "Remove blank or duplicate pages from a scanned PDF.",
-      "Delete irrelevant pages before sharing a report.",
-      "Remove cover page from a PDF before sending.",
-      "Clean up a merged PDF by deleting unwanted pages.",
-    ],
-    "/detect-duplicates": [
-      "Find and remove duplicate pages in a large merged PDF.",
-      "Clean up scanned document with repeated pages.",
-      "Detect duplicate content in combined reports.",
-      "Remove redundant pages before archiving documents.",
-    ],
   };
-  if (byPath[post.toolPath]) return byPath[post.toolPath];
+
+  if (byPath[post.toolPath]) {
+    return byPath[post.toolPath];
+  }
   if (post.category === "AI Tools") {
     return [
-      `Generate smart output from your document using ${post.toolName}.`,
-      "Speed up revision and analysis for learning workflows.",
-      "Save hours of manual work with AI-powered processing.",
-      "Get structured output from unstructured PDF content.",
+      `Use ${post.toolName} to analyze and extract information instantly with AI.`,
+      "Save hours of manual reading and note taking.",
+      "Generate test questions, summaries or interview practice from your notes.",
+      "Private and safe — document text processed only for your request.",
     ];
   }
   if (post.category === "Conversion") {
@@ -266,11 +190,12 @@ const getToolUseCases = (post: BlogPost): string[] => {
 };
 
 const StepCard: React.FC<{
+  stepNumber: number;
   title: string;
   subtitle: string;
   image: { src: string; alt: string };
   fallbackImage: { src: string; alt: string };
-}> = ({ title, subtitle, image, fallbackImage }) => {
+}> = ({ stepNumber, title, subtitle, image, fallbackImage }) => {
   const [src, setSrc] = React.useState(image.src);
   const [alt, setAlt] = React.useState(image.alt);
 
@@ -280,43 +205,84 @@ const StepCard: React.FC<{
   }, [image.src, image.alt]);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5">
-      <h4 className="text-lg font-semibold text-slate-900 mb-2">{title}</h4>
-      <p className="text-slate-600 mb-3">{subtitle}</p>
-      <p className="text-sm font-medium text-slate-700 mb-2">📷 {alt}</p>
-      <img
-        src={src}
-        alt={alt}
-        className="w-full rounded-lg border border-slate-200"
-        loading="lazy"
-        onError={() => {
-          if (src !== fallbackImage.src) {
-            setSrc(fallbackImage.src);
-            setAlt(fallbackImage.alt);
-          }
-        }}
-      />
+    <div className="bg-white dark:bg-dark-surface border border-slate-200/90 dark:border-dark-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-start gap-4 mb-4">
+        <div className="w-9 h-9 rounded-xl bg-primary-500 text-white font-bold flex items-center justify-center text-sm flex-shrink-0 shadow-sm">
+          {stepNumber}
+        </div>
+        <div>
+          <h4 className="text-lg font-bold text-slate-900 dark:text-white leading-snug">{title}</h4>
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1">{subtitle}</p>
+        </div>
+      </div>
+      
+      <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-slate-900/50">
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-auto object-cover"
+          loading="lazy"
+          onError={() => {
+            if (src !== fallbackImage.src) {
+              setSrc(fallbackImage.src);
+              setAlt(fallbackImage.alt);
+            }
+          }}
+        />
+      </div>
     </div>
   );
 };
 
 export const Blog: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    blogPosts.forEach((post) => set.add(post.category));
+    return ["All", ...Array.from(set)];
+  }, []);
+
+  const filteredPosts = useMemo(() => {
+    return blogPosts.filter((post) => {
+      const matchesSearch = 
+        post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        post.toolName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        post.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesCategory = 
+        selectedCategory === "All" || post.category === selectedCategory;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchQuery, selectedCategory]);
+
   return (
     <>
       <Helmet>
-        <title>PDF Tools Blog – Free Step-by-Step Guides | LAK PDF</title>
+        <title>PDF Tools Blog & Guides – Step-by-Step Tutorials | LAK PDF</title>
         <meta
           name="description"
-          content="Free step-by-step guides for every PDF tool on LAK PDF. Learn how to merge, compress, convert, sign and edit PDF files online with screenshots and FAQs."
+          content="Comprehensive step-by-step guides for every PDF tool on LAK PDF. Learn how to merge, compress, convert, sign, and edit PDFs online for free with screenshots and FAQs."
         />
-        <meta name="keywords" content="merge pdf guide, compress pdf tutorial, pdf to word how to, split pdf steps, sign pdf free guide, pdf tools tutorial" />
+        <meta name="keywords" content="merge pdf guide, compress pdf tutorial, pdf to word how to, split pdf steps, sign pdf free guide, pdf tools tutorial, lakpdf guides" />
         <meta name="robots" content="index, follow" />
         <link rel="canonical" href="https://lakpdf.com/blog" />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "Blog",
-          "name": "LAK PDF Blog",
-          "description": "Free step-by-step guides for PDF tools including merge, compress, convert, sign and edit PDF.",
+          "name": "LAK PDF Blog & Guides",
+          "description": "Comprehensive step-by-step guides for PDF tools including merge, compress, convert, sign, and edit PDF.",
           "url": "https://lakpdf.com/blog",
           "publisher": {
             "@type": "Organization",
@@ -326,43 +292,179 @@ export const Blog: React.FC = () => {
         })}</script>
       </Helmet>
 
-      <div className="max-w-5xl mx-auto px-4 py-12">
-        <div className="text-center mb-10">
-          <Link to="/" className="inline-flex items-center gap-2 text-primary-500 hover:text-primary-600 mb-6">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Home
-          </Link>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 mb-3">LAK PDF Blog</h1>
-          <p className="text-slate-600 max-w-3xl mx-auto">
-            Every tool has a dedicated guide page with introduction, image-based steps, and FAQs.
-          </p>
-        </div>
+      <div className="min-h-screen py-8 md:py-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Back Button */}
+          <div className="mb-6 sm:mb-8">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-dark-surface border border-slate-200/90 dark:border-dark-border shadow-xs hover:shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1 text-slate-500 dark:text-slate-400 group-hover:text-primary-500" />
+              <span>Back</span>
+            </button>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {blogPosts.map((post) => (
-            <article key={post.slug} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-medium text-primary-500 bg-primary-50 px-2 py-1 rounded">{post.category}</span>
-                <span className="text-slate-400 text-xs flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {post.readTime}
-                </span>
+          {/* ── HEADER ── */}
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-50 dark:bg-primary-950/60 border border-primary-200/80 dark:border-primary-800/60 text-primary-700 dark:text-primary-300 text-xs font-semibold uppercase tracking-wider mb-5">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Free Knowledge Hub</span>
+            </div>
+
+            <h1 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-4">
+              LAK PDF Guides & Tutorials
+            </h1>
+
+            <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed font-normal">
+              Step-by-step tutorials, practical use-cases, and pro tips to help you master digital documents in seconds.
+            </p>
+          </div>
+
+          {/* ── SEARCH & CATEGORY FILTER BAR ── */}
+          <div className="bg-white dark:bg-dark-surface p-4 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-dark-border shadow-sm mb-12 space-y-4">
+            
+            {/* Search Input */}
+            <div className="relative">
+              <label htmlFor="search-blog-input" className="sr-only">
+                Search guides
+              </label>
+              <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                id="search-blog-input"
+                type="text"
+                aria-label="Search guides"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search guides (e.g. merge, compress, word, government form, sign)..."
+                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Category Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1 flex-shrink-0">
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>Topic:</span>
+              </span>
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
+                    selectedCategory === cat
+                      ? "bg-primary-500 text-white shadow-sm"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Result count */}
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-100 dark:border-dark-border/60">
+              <span>Showing {filteredPosts.length} of {blogPosts.length} guides</span>
+              {selectedCategory !== "All" && (
+                <span>Filtered by: <strong>{selectedCategory}</strong></span>
+              )}
+            </div>
+          </div>
+
+          {/* ── GUIDES GRID ── */}
+          {filteredPosts.length === 0 ? (
+            <div className="text-center py-16 bg-white dark:bg-dark-surface rounded-3xl border border-slate-200 dark:border-dark-border">
+              <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+                <Search className="w-6 h-6" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">{post.title}</h2>
-              <p className="text-slate-600 text-sm mb-3">{post.excerpt}</p>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {post.tags.slice(0, 3).map((tag) => (
-                  <span key={tag} className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                    <Tag className="w-3 h-3" />
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <Link to={`/blog/${post.slug}`} className="text-primary-500 font-medium hover:text-primary-600">
-                Read Guide →
-              </Link>
-            </article>
-          ))}
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">No matching guides found</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                Try searching with a different keyword or selecting 'All' topics.
+              </p>
+              <button
+                onClick={() => { setSearchQuery(""); setSelectedCategory("All"); }}
+                className="px-4 py-2 rounded-xl bg-primary-500 text-white text-xs font-bold"
+              >
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+              {filteredPosts.map((post) => (
+                <article 
+                  key={post.slug} 
+                  className="bg-white dark:bg-dark-surface rounded-3xl border border-slate-200/80 dark:border-dark-border p-6 hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-700 transition-all flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="text-[11px] font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/60 px-2.5 py-1 rounded-lg">
+                        {post.category}
+                      </span>
+                      <span className="text-slate-400 text-xs flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{post.readTime}</span>
+                      </span>
+                    </div>
+
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2 leading-snug group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                      {post.title}
+                    </h2>
+
+                    <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm line-clamp-2 mb-4 leading-relaxed">
+                      {post.excerpt}
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {post.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-medium">
+                          <Tag className="w-2.5 h-2.5" />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    <Link 
+                      to={`/blog/${post.slug}`} 
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-primary-600 dark:text-primary-400 group-hover:gap-2.5 transition-all"
+                    >
+                      <span>Read Step-by-Step Guide</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {/* ── BOTTOM DIRECT TOOL ACCESS CALLOUT ── */}
+          <div className="bg-gradient-to-r from-primary-500 via-primary-600 to-indigo-600 rounded-3xl p-8 sm:p-10 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg shadow-primary-500/20">
+            <div className="space-y-2 text-center md:text-left">
+              <h3 className="text-2xl font-extrabold tracking-tight">Prefer to Jump Right In?</h3>
+              <p className="text-white/80 text-xs sm:text-sm max-w-xl">
+                All 30+ tools are ready to use immediately without downloading guides or signing up.
+              </p>
+            </div>
+            <Link
+              to="/tools"
+              className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all flex items-center gap-2 flex-shrink-0"
+            >
+              <span>Browse All Tools</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
         </div>
       </div>
     </>
@@ -370,20 +472,36 @@ export const Blog: React.FC = () => {
 };
 
 export const BlogPost: React.FC = () => {
+  const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const post = blogPosts.find((item) => item.slug === slug);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/blog');
+    }
+  };
+
   if (!post) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
         <Helmet>
           <title>Guide Not Found | LAK PDF Blog</title>
           <meta name="robots" content="noindex, follow" />
         </Helmet>
-        <h1 className="text-3xl font-bold text-slate-900 mb-3">Guide Not Found</h1>
-        <p className="text-slate-600 mb-6">The requested blog guide does not exist.</p>
-        <Link to="/blog" className="inline-flex items-center gap-2 bg-primary-500 text-white px-5 py-2.5 rounded-lg">
-          Back to Blog
+        <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
+          <HelpCircle className="w-8 h-8" />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">Guide Not Found</h1>
+        <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">The requested step-by-step tutorial does not exist.</p>
+        <Link 
+          to="/blog" 
+          className="inline-flex items-center gap-2 bg-primary-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to All Guides</span>
         </Link>
       </div>
     );
@@ -401,7 +519,7 @@ export const BlogPost: React.FC = () => {
         name: `Is ${post.toolName} free on lakpdf.com?`,
         acceptedAnswer: {
           "@type": "Answer",
-          text: `Yes, ${post.toolName} can be used online with a simple workflow on lakpdf.com.`
+          text: `Yes, ${post.toolName} is 100% free with unlimited usage on lakpdf.com.`
         }
       },
       {
@@ -409,7 +527,7 @@ export const BlogPost: React.FC = () => {
         name: `How long does ${post.toolName} processing take?`,
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Processing time depends on file size and device performance, but usually completes quickly."
+          text: "Processing is powered by in-browser WebAssembly and usually finishes in 2 to 5 seconds without server upload wait queues."
         }
       },
       {
@@ -417,15 +535,15 @@ export const BlogPost: React.FC = () => {
         name: "Can I use this process on mobile?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Yes, lakpdf.com tools are mobile friendly and can be used on modern browsers."
+          text: "Yes, lakpdf.com tools are fully mobile-responsive and work on iPhone, Android, and tablets in any modern browser."
         }
       },
       {
         "@type": "Question",
-        name: "What if processing fails?",
+        name: "Are my files safe during processing?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Retry with a smaller file, stable network, and supported format. You can also refresh and try again."
+          text: "Yes. Your files are processed locally inside your browser and are not permanently stored on any cloud server."
         }
       }
     ]
@@ -474,112 +592,187 @@ export const BlogPost: React.FC = () => {
         })}</script>
       </Helmet>
 
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <Link to="/blog" className="inline-flex items-center gap-2 text-primary-500 hover:text-primary-600 mb-6">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Blog
-        </Link>
-
-        <article className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">{post.title}</h1>
-          <p className="text-sm text-slate-500 mb-6">{post.date} • {post.readTime}</p>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-3">What is {post.toolName}?</h2>
-            <p className="text-slate-700 leading-7">
-              <strong>{post.toolName}</strong> is a free online tool available on{" "}
-              <a href="https://lakpdf.com" className="text-primary-500 hover:underline">lakpdf.com</a> that lets you
-              process PDF files directly in your browser — no software installation, no account required.
-              This guide explains exactly how to use it step by step with screenshots and real-world examples.
-            </p>
-            <p className="text-slate-700 leading-7 mt-3">
-              Whether you are a student, professional, or working from home, this tool helps you complete
-              your document task in under 2 minutes for free.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-3">Common Use Cases</h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              {useCases.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="mb-8 space-y-5">
-            <h2 className="text-2xl font-semibold text-slate-900">Step-by-Step Process (With Images)</h2>
-
-            <StepCard
-              title="Step 1: Visit lakpdf.com"
-              subtitle="Open lakpdf.com and go to the required tool from Home or All Tools."
-              image={stepImages[0]}
-              fallbackImage={defaultStepImages[0]}
-            />
-
-            <StepCard
-              title="Step 2: Upload your PDF"
-              subtitle="Use upload box to add your input file (or files, based on tool)."
-              image={stepImages[1]}
-              fallbackImage={defaultStepImages[1]}
-            />
-
-            <StepCard
-              title={`Step 3: Click ${post.actionLabel}`}
-              subtitle="Choose settings if needed, then run processing."
-              image={stepImages[2]}
-              fallbackImage={defaultStepImages[2]}
-            />
-
-            <StepCard
-              title="Step 4: Download File"
-              subtitle="After processing completes, download and verify final output."
-              image={stepImages[3]}
-              fallbackImage={defaultStepImages[3]}
-            />
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900 mb-3">Frequently Asked Questions</h2>
-            <div className="space-y-4 text-slate-700">
-              <div className="border border-slate-200 rounded-lg p-4">
-                <h3 className="font-semibold text-slate-900">1. Is {post.toolName} free to use on LAK PDF?</h3>
-                <p className="mt-1">Yes, {post.toolName} is completely free on lakpdf.com. No signup, no subscription, and no hidden fees. Just upload and go.</p>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-4">
-                <h3 className="font-semibold text-slate-900">2. Is my file safe when using LAK PDF?</h3>
-                <p className="mt-1">Yes. Your files are processed in your browser and are not stored on any server permanently. They are automatically deleted after processing.</p>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-4">
-                <h3 className="font-semibold text-slate-900">3. Why is processing slow sometimes?</h3>
-                <p className="mt-1">Large file size, older device hardware, or unstable internet can increase processing time. Try with a smaller file or a faster network connection.</p>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-4">
-                <h3 className="font-semibold text-slate-900">4. Can I use {post.toolName} on mobile?</h3>
-                <p className="mt-1">Yes, LAK PDF is fully mobile-responsive. The {post.toolName} tool works on iPhone, Android, and tablets in any modern browser.</p>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-4">
-                <h3 className="font-semibold text-slate-900">5. What file formats are supported?</h3>
-                <p className="mt-1">LAK PDF supports common formats including PDF, JPG, PNG, DOCX, PPT and more depending on the tool. Check the upload area for supported types.</p>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-4">
-                <h3 className="font-semibold text-slate-900">6. What if the output is not correct?</h3>
-                <p className="mt-1">Retry with a clean, uncorrupted file. Make sure the file is not password-protected. If the issue persists, try a different browser or contact support.</p>
-              </div>
-            </div>
-          </section>
-
-          <div className="bg-primary-50 border border-primary-100 rounded-xl p-5">
-            <h3 className="font-semibold text-slate-900 mb-2">Open the tool now</h3>
-            <p className="text-slate-700 mb-4">Apply this guide directly on LAK PDF in one flow.</p>
-            <Link
-              to={post.toolPath}
-              className="inline-flex items-center gap-2 bg-primary-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-primary-600 transition-colors"
+      <div className="min-h-screen py-8 md:py-16">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          
+          {/* Back & Breadcrumb Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-dark-surface border border-slate-200/90 dark:border-dark-border shadow-xs hover:shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
             >
-              Open {post.toolName}
-            </Link>
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1 text-slate-500 dark:text-slate-400 group-hover:text-primary-500" />
+              <span>Back</span>
+            </button>
+
+            {/* Breadcrumb Navigation */}
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <Link to="/" className="hover:text-primary-500 transition-colors">Home</Link>
+              <span>/</span>
+              <Link to="/blog" className="hover:text-primary-500 transition-colors">Blog & Guides</Link>
+              <span>/</span>
+              <span className="text-slate-700 dark:text-slate-200 truncate max-w-[200px] sm:max-w-xs">{post.toolName} Guide</span>
+            </div>
           </div>
-        </article>
+
+          <article className="bg-white dark:bg-dark-surface border border-slate-200/90 dark:border-dark-border rounded-3xl p-6 sm:p-10 shadow-sm">
+            
+            {/* Meta badges */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="text-xs font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/60 px-3 py-1 rounded-lg">
+                {post.category}
+              </span>
+              <span className="text-slate-400 text-xs flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{post.readTime}</span>
+              </span>
+              <span className="text-slate-400 text-xs">• Free Tutorial</span>
+            </div>
+
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-4 tracking-tight leading-tight">
+              {post.title}
+            </h1>
+
+            <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base leading-relaxed mb-8 pb-6 border-b border-slate-100 dark:border-dark-border">
+              {post.excerpt}
+            </p>
+
+            {/* Quick Action Top Pill */}
+            <div className="bg-primary-50/60 dark:bg-primary-950/30 border border-primary-200/70 dark:border-primary-900/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 mb-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary-500 text-white flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Ready to run this tool now?</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Free, private, zero installation needed.</p>
+                </div>
+              </div>
+              <Link
+                to={post.toolPath}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-primary-500/20 transition-all"
+              >
+                <span>Launch {post.toolName}</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* Section 1: Overview */}
+            <section className="mb-10">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-3">
+                What is {post.toolName}?
+              </h2>
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-sm sm:text-base">
+                <strong>{post.toolName}</strong> is a high-speed, browser-first online utility provided for free on{" "}
+                <a href="https://lakpdf.com" className="text-primary-500 font-semibold hover:underline">lakpdf.com</a>. It allows you to process, convert, or optimize PDF documents directly on your device without downloading any software or paying for an expensive subscription.
+              </p>
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-sm sm:text-base mt-3">
+                Whether you are a student submitting academic assignments, a job applicant preparing official documents, or a professional sharing contracts, this guide shows you how to get it done in under two minutes.
+              </p>
+            </section>
+
+            {/* Section 2: Common Use Cases */}
+            <section className="mb-10">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                Common Use Cases
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {useCases.map((item, idx) => (
+                  <div 
+                    key={idx}
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-dark-border flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Section 3: Step-by-Step Instructions */}
+            <section className="mb-12 space-y-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                Step-by-Step Process (With Visuals)
+              </h2>
+
+              <StepCard
+                stepNumber={1}
+                title="Step 1: Visit LAK PDF"
+                subtitle="Navigate to lakpdf.com and select the tool from the Home or All Tools directory."
+                image={stepImages[0]}
+                fallbackImage={defaultStepImages[0]}
+              />
+
+              <StepCard
+                stepNumber={2}
+                title="Step 2: Upload Your File"
+                subtitle="Click the upload button or drag and drop your PDF or image files into the working canvas."
+                image={stepImages[1]}
+                fallbackImage={defaultStepImages[1]}
+              />
+
+              <StepCard
+                stepNumber={3}
+                title={`Step 3: Click '${post.actionLabel}'`}
+                subtitle="Adjust formatting preferences if needed, then initiate client-side processing."
+                image={stepImages[2]}
+                fallbackImage={defaultStepImages[2]}
+              />
+
+              <StepCard
+                stepNumber={4}
+                title="Step 4: Download Your Result"
+                subtitle="Your processed document is ready instantly. Click Download to save it to your device."
+                image={stepImages[3]}
+                fallbackImage={defaultStepImages[3]}
+              />
+            </section>
+
+            {/* Section 4: FAQs */}
+            <section className="mb-10">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                Frequently Asked Questions
+              </h2>
+              <div className="space-y-3">
+                <div className="border border-slate-200 dark:border-dark-border rounded-xl p-4">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">1. Is {post.toolName} free on LAK PDF?</h3>
+                  <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                    Yes, {post.toolName} is 100% free with unlimited conversions on lakpdf.com. No account or credit card required.
+                  </p>
+                </div>
+                <div className="border border-slate-200 dark:border-dark-border rounded-xl p-4">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">2. Are my documents kept private and secure?</h3>
+                  <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                    Yes. Files are processed locally inside your browser using WebAssembly. Your files are not stored on any remote cloud server.
+                  </p>
+                </div>
+                <div className="border border-slate-200 dark:border-dark-border rounded-xl p-4">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">3. Can I use this tool on my smartphone?</h3>
+                  <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                    Yes, LAK PDF is fully responsive and works smoothly on iOS Safari, Android Chrome, and tablets.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Bottom Call to Action */}
+            <div className="bg-gradient-to-br from-primary-500 to-indigo-600 rounded-2xl p-6 sm:p-8 text-white text-center space-y-4">
+              <h3 className="text-xl font-bold">Start Using {post.toolName} Now</h3>
+              <p className="text-xs sm:text-sm text-white/80 max-w-md mx-auto">
+                No sign-up. No credit card. Experience lightning-fast, secure document editing right now.
+              </p>
+              <Link
+                to={post.toolPath}
+                className="inline-flex items-center gap-2 bg-white text-slate-900 px-6 py-2.5 rounded-xl font-bold text-xs hover:bg-slate-100 transition-colors shadow-md"
+              >
+                <span>Open {post.toolName}</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+          </article>
+        </div>
       </div>
     </>
   );

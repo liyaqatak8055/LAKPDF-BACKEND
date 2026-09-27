@@ -180,7 +180,7 @@ const TOOL_THEMES: Record<string, { gradient: string; shadow: string; accent: st
   },
 };
 
-export const ToolCard: React.FC<ToolCardProps> = ({
+const ToolCardComponent: React.FC<ToolCardProps> = ({
   title,
   description,
   to,
@@ -188,6 +188,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   popular = false,
   comingSoon = false,
 }) => {
+  const [isHovered, setIsHovered] = React.useState(false);
   const theme = TOOL_THEMES[to] || {
     gradient: 'from-primary-500 to-rose-600',
     shadow: 'shadow-primary-500/25',
@@ -197,6 +198,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   return (
     <Link
       to={to}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
       className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white p-3.5 transition-transform transition-shadow duration-200 ease-out hover:-translate-y-1.5 hover:shadow-xl dark:bg-dark-surface md:p-5 water-tank-card tool-card-grid-item ${comingSoon
           ? 'border-indigo-200/70 bg-gradient-to-b from-white to-indigo-50/20 hover:border-indigo-400 hover:shadow-indigo-100/50 dark:border-indigo-900/40 dark:from-dark-surface dark:to-indigo-950/20'
           : popular
@@ -204,20 +209,23 @@ export const ToolCard: React.FC<ToolCardProps> = ({
             : 'border-slate-200/90 hover:border-sky-300 hover:shadow-sky-100/50 dark:border-dark-border dark:hover:border-sky-700/50'
         }`}
     >
-      {/* ── Water Tank Dynamic Liquid ── */}
-      <div className="water-tank-body" aria-hidden="true">
-        <div className="water-wave-layer-3" />
-        <div className="water-wave-layer-2" />
-        <div className="water-wave-layer-1" />
-        <div className="water-surface-highlight" />
-        <div className="water-bubble water-bubble-1" />
-        <div className="water-bubble water-bubble-2" />
-        <div className="water-bubble water-bubble-3" />
-        <div className="water-bubble water-bubble-4" />
-      </div>
+      {/* ── Water Tank Dynamic Liquid & Micro-Story (Loaded strictly on-demand on interaction) ── */}
+      {isHovered && (
+        <>
+          <div className="water-tank-body" aria-hidden="true">
+            <div className="water-wave-layer-3" />
+            <div className="water-wave-layer-2" />
+            <div className="water-wave-layer-1" />
+            <div className="water-surface-highlight" />
+            <div className="water-bubble water-bubble-1" />
+            <div className="water-bubble water-bubble-2" />
+            <div className="water-bubble water-bubble-3" />
+            <div className="water-bubble water-bubble-4" />
+          </div>
 
-      {/* ── Micro-Story Transformation Animation on Water ── */}
-      <ToolStoryAnimation toolId={to} />
+          <ToolStoryAnimation toolId={to} />
+        </>
+      )}
 
       <div className="relative z-10 flex h-full flex-col">
         {comingSoon ? (
@@ -248,7 +256,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           {description}
         </p>
 
-        <div className={`mt-auto flex items-center text-xs font-semibold md:text-sm ${comingSoon
+        <div className={`mt-auto pt-6 flex items-center text-xs font-semibold md:text-sm ${comingSoon
             ? 'text-indigo-500 group-hover:text-indigo-600 dark:text-indigo-400'
             : 'text-primary-500 group-hover:text-primary-600 dark:text-primary-400'
           }`}>
@@ -267,4 +275,5 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     </Link>
   );
 };
+export const ToolCard = React.memo(ToolCardComponent);
 

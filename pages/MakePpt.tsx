@@ -16,6 +16,7 @@ import {
   Sliders,
   Maximize2,
   FileImage,
+  FileText,
   Layers,
   Palette,
   RefreshCw,
@@ -35,21 +36,31 @@ import {
 import { formatBytes } from '../services/fileHelpers';
 import { ToolSEOContent } from '../components/ToolSEOContent';
 import { trackEvent } from '../utils/analytics';
+import { pdfjs } from '../services/pdfService';
 
 interface ImageCardItem extends ImageInputItem {
   id: string;
-  file: File;
+  file?: File;
   previewUrl: string;
   size: number;
+  sourceType?: 'image' | 'pdf';
+  pageNumber?: number;
 }
 
 export const MakePpt: React.FC = () => {
   const [items, setItems] = useState<ImageCardItem[]>([]);
-  const [layout, setLayout] = useState<'wide' | 'standard'>('wide');
+  const [layout, setLayout] = useState<'auto' | 'portrait' | 'wide' | 'standard'>('auto');
   const [imagesPerSlide, setImagesPerSlide] = useState<1 | 2 | 4>(1);
   const [backgroundColor, setBackgroundColor] = useState<string>('FFFFFF');
-  const [margin, setMargin] = useState<'none' | 'small' | 'medium'>('small');
+  const [margin, setMargin] = useState<'none' | 'small' | 'medium'>('none');
   const [includeTitles, setIncludeTitles] = useState<boolean>(false);
+
+  const [isExtractingPdf, setIsExtractingPdf] = useState<boolean>(false);
+  const [extractingStatus, setExtractingStatus] = useState<{ current: number; total: number; fileName: string }>({
+    current: 0,
+    total: 0,
+    fileName: ''
+  });
 
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -60,64 +71,156 @@ export const MakePpt: React.FC = () => {
   const [resultFileName, setResultFileName] = useState<string>('presentation.pptx');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // Clean up object URLs on unmount
   useEffect(() => {
     return () => {
       items.forEach((it) => {
-        if (it.previewUrl) URL.revokeObjectURL(it.previewUrl);
+        if (it.previewUrl && it.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(it.previewUrl);
+        }
       });
       if (resultUrl) URL.revokeObjectURL(resultUrl);
     };
   }, []);
 
-  // Handle file selections
-  const handleFiles = (fileList: FileList | File[]) => {
+  // Handle file selections (both images and PDF documents)
+  const handleFiles = async (fileList: FileList | File[]) => {
     const validFiles: File[] = [];
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
-      if (file.type.startsWith('image/')) {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isImg = file.type.startsWith('image/');
+      if (isPdf || isImg) {
         validFiles.push(file);
       }
     }
 
     if (validFiles.length === 0) {
-      alert('Please upload image files (JPG, PNG, WEBP, etc.)');
+      alert('Please upload PDF documents or image files (JPG, PNG, WEBP, etc.)');
       return;
     }
 
-    validFiles.forEach((file) => {
-      const previewUrl = URL.createObjectURL(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = (e.target?.result as string) || previewUrl;
-        const img = new Image();
-        img.onload = () => {
-          const newItem: ImageCardItem = {
-            id: Math.random().toString(36).substring(2, 9),
-            file,
-            name: file.name,
-            size: file.size,
-            dataUrl,
-            previewUrl,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            rotation: 0,
-            title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
-          };
-          setItems((prev) => [...prev, newItem]);
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
-    });
+    const pdfFiles = validFiles.filter(
+      (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+    );
+    const imageFiles = validFiles.filter(
+      (f) => f.type.startsWith('image/') && !f.name.toLowerCase().endsWith('.pdf')
+    );
 
-    // Reset results if adding more photos
+    // Reset results if adding more files
     if (resultBlob) {
       setResultBlob(null);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       setResultUrl(null);
+    }
+
+    // 1. Process Images
+    if (imageFiles.length > 0) {
+      imageFiles.forEach((file) => {
+        const previewUrl = URL.createObjectURL(file);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = (e.target?.result as string) || previewUrl;
+          const img = new Image();
+          img.onload = () => {
+            const newItem: ImageCardItem = {
+              id: Math.random().toString(36).substring(2, 9),
+              file,
+              name: file.name,
+              size: file.size,
+              dataUrl,
+              previewUrl,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              rotation: 0,
+              title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+              sourceType: 'image'
+            };
+            setItems((prev) => [...prev, newItem]);
+          };
+          img.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 2. Process PDFs
+    if (pdfFiles.length > 0) {
+      setIsExtractingPdf(true);
+      try {
+        for (const pdfFile of pdfFiles) {
+          setExtractingStatus({
+            current: 0,
+            total: 0,
+            fileName: pdfFile.name
+          });
+
+          const arrayBuffer = await pdfFile.arrayBuffer();
+          const pdfDoc = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+          const totalPages = pdfDoc.numPages;
+          const baseName = pdfFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+
+          const fileExtractedItems: ImageCardItem[] = [];
+          for (let p = 1; p <= totalPages; p++) {
+            setExtractingStatus({
+              current: p,
+              total: totalPages,
+              fileName: pdfFile.name
+            });
+
+            const page = await pdfDoc.getPage(p);
+            // 2.0x scale gives ultra-crisp ~200 DPI resolution, perfect for small handwriting & text
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.floor(viewport.width));
+            canvas.height = Math.max(1, Math.floor(viewport.height));
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              await page.render({ canvasContext: ctx, viewport }).promise;
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+              const approxSize = Math.round(dataUrl.length * 0.75);
+
+              const newItem: ImageCardItem = {
+                id: Math.random().toString(36).substring(2, 9) + `-${p}`,
+                file: pdfFile,
+                name: `${pdfFile.name} (Page ${p})`,
+                size: approxSize,
+                dataUrl,
+                previewUrl: dataUrl,
+                width: canvas.width,
+                height: canvas.height,
+                rotation: 0,
+                title: `${baseName} - Slide ${p}`,
+                sourceType: 'pdf',
+                pageNumber: p
+              };
+              fileExtractedItems.push(newItem);
+
+              // Batch render updates every 5 pages or on final page for snappy performance
+              if (fileExtractedItems.length >= 5 || p === totalPages) {
+                const chunkToAdd = [...fileExtractedItems];
+                fileExtractedItems.length = 0;
+                setItems((prev) => [...prev, ...chunkToAdd]);
+              }
+            }
+            page.cleanup();
+          }
+        }
+      } catch (err: any) {
+        console.error('PDF extraction error:', err);
+        const errMsg = err?.name === 'PasswordException'
+          ? 'This PDF is password-protected. Please remove the password first.'
+          : (err?.message || 'Could not load PDF document.');
+        alert(errMsg);
+      } finally {
+        setIsExtractingPdf(false);
+      }
     }
   };
 
@@ -156,7 +259,9 @@ export const MakePpt: React.FC = () => {
   const removeItem = (id: string) => {
     setItems((prev) => {
       const item = prev.find((it) => it.id === id);
-      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      if (item?.previewUrl && item.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
       return prev.filter((it) => it.id !== id);
     });
   };
@@ -164,7 +269,9 @@ export const MakePpt: React.FC = () => {
   // Clear all
   const clearAll = () => {
     items.forEach((it) => {
-      if (it.previewUrl) URL.revokeObjectURL(it.previewUrl);
+      if (it.previewUrl && it.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(it.previewUrl);
+      }
     });
     setItems([]);
     if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -185,7 +292,7 @@ export const MakePpt: React.FC = () => {
 
     setIsProcessing(true);
     setProgressPercent(10);
-    setProgressText('Preparing images & calculating aspect ratios...');
+    setProgressText('Preparing slides & calculating aspect ratios...');
 
     try {
       const options: ImageToPptOptions = {
@@ -212,7 +319,10 @@ export const MakePpt: React.FC = () => {
 
       const blob = await convertImagesToPowerPoint(inputItems, options);
       const url = URL.createObjectURL(blob);
-      const baseName = items[0]?.name ? items[0].name.replace(/\.[^/.]+$/, '') : 'presentation';
+      const firstItem = items[0];
+      const baseName = firstItem?.file?.name
+        ? firstItem.file.name.replace(/\.[^/.]+$/, '')
+        : (firstItem?.name ? firstItem.name.replace(/\.[^/.]+$/, '') : 'presentation');
 
       setResultBlob(blob);
       setResultUrl(url);
@@ -223,7 +333,7 @@ export const MakePpt: React.FC = () => {
       trackEvent({
         category: 'MakePpt',
         action: 'convert_success',
-        label: `${items.length}_images_${layout}`,
+        label: `${items.length}_slides_${layout}`,
       });
     } catch (err: any) {
       console.error('Make PPT error:', err);
@@ -251,33 +361,35 @@ export const MakePpt: React.FC = () => {
   };
 
   const totalSlides = Math.ceil(items.length / imagesPerSlide);
+  const pdfCount = items.filter((it) => it.sourceType === 'pdf').length;
+  const imgCount = items.filter((it) => it.sourceType !== 'pdf').length;
 
   return (
     <>
       <Helmet>
-        <title>Make PPT Online Free | Images to PowerPoint Converter - LAK PDF</title>
+        <title>Make PPT Online Free | PDF & Images to PowerPoint Converter - LAK PDF</title>
         <meta
           name="description"
-          content="Convert JPG, PNG, WEBP and photos to PowerPoint (.pptx) online free. Smart aspect ratio prevents stretching. Custom 16:9 widescreen or 4:3 layouts. 100% private."
+          content="Convert PDF documents, JPG, PNG, WEBP and photos to PowerPoint (.pptx) online free. Smart aspect ratio prevents stretching. Custom 16:9 widescreen or 4:3 layouts. 100% private."
         />
         <meta
           name="keywords"
-          content="make ppt online free, images to ppt converter, convert jpg to powerpoint, photo to pptx, png to ppt converter, photo slideshow ppt, create powerpoint from images, picture to presentation"
+          content="pdf to ppt, make ppt online free, pdf to powerpoint converter, images to ppt converter, convert jpg to powerpoint, photo to pptx, png to ppt converter, photo slideshow ppt, create powerpoint from images, picture to presentation"
         />
         <link rel="canonical" href="https://lakpdf.com/make-ppt" />
-        <meta property="og:title" content="Make PPT Online Free | Images to PowerPoint Converter - LAK PDF" />
+        <meta property="og:title" content="Make PPT Online Free | PDF & Images to PowerPoint Converter - LAK PDF" />
         <meta
           property="og:description"
-          content="Turn JPG, PNG, and photos into neatly formatted PowerPoint slides (.pptx). Smart aspect-ratio auto-fit, multiple images per slide, 100% free and client-side."
+          content="Turn PDF documents, JPG, PNG, and photos into neatly formatted PowerPoint slides (.pptx). Smart aspect-ratio auto-fit, multiple images per slide, 100% free and client-side."
         />
         <meta property="og:url" content="https://lakpdf.com/make-ppt" />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="LAKPDF" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Make PPT Online Free | Images to PowerPoint Converter - LAK PDF" />
+        <meta name="twitter:title" content="Make PPT Online Free | PDF & Images to PowerPoint Converter - LAK PDF" />
         <meta
           name="twitter:description"
-          content="Convert photos to PowerPoint slides (.pptx) with smart aspect ratio auto-fit. No distortion, 16:9 and 4:3 layouts, 100% free."
+          content="Convert PDF documents and photos to PowerPoint slides (.pptx) with smart aspect ratio auto-fit. No distortion, 16:9 and 4:3 layouts, 100% free."
         />
         {/* BreadcrumbList Schema */}
         <script type="application/ld+json">
@@ -314,7 +426,7 @@ export const MakePpt: React.FC = () => {
               worstRating: '1',
             },
             description:
-              'Convert images and photos into professional PowerPoint presentations online for free with smart aspect-ratio auto-fit.',
+              'Convert PDF documents and images into professional PowerPoint presentations online for free with smart aspect-ratio auto-fit.',
           })}
         </script>
       </Helmet>
@@ -325,21 +437,51 @@ export const MakePpt: React.FC = () => {
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900 text-orange-600 dark:text-orange-400 text-xs sm:text-sm font-semibold mb-3 shadow-sm">
               <Presentation className="w-4 h-4 text-orange-500 animate-pulse" />
-              <span>Smart Aspect Ratio Auto-Fit • 16:9 HD & 4:3 PPTX</span>
+              <span>PDF & Images to PowerPoint • 16:9 HD & 4:3 PPTX</span>
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-3">
-              Make <span className="text-orange-500">PowerPoint PPT</span> from Images
+              Make <span className="text-orange-500">PowerPoint PPT</span> from PDF & Images
             </h1>
 
             <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
-              Apni photos aur images ko professionally adjusted PowerPoint (.pptx) presentation me convert karein.
-              Har image bina khinche (aspect ratio maintain karke) slide me perfectly fit aur center hogi.
+              Apni PDF document ya photos ko professionally formatted PowerPoint (.pptx) presentation me convert karein.
+              Har page aur photo bina khinche (smart aspect ratio maintain karke) slide me perfectly fit aur center hogi.
             </p>
           </div>
 
-          {/* Upload Area (If no images uploaded yet) */}
-          {items.length === 0 && (
+          {/* PDF Extraction Progress Overlay */}
+          {isExtractingPdf && (
+            <div className="bg-white dark:bg-dark-surface rounded-3xl border border-orange-200 dark:border-orange-900/50 p-8 sm:p-10 text-center shadow-lg mb-6 space-y-4 animate-in fade-in">
+              <div className="w-16 h-16 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-orange-500 flex items-center justify-center mx-auto shadow-inner">
+                <FileText className="w-8 h-8 animate-pulse text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+                  Reading & Extracting PDF Pages...
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                  {extractingStatus.total > 0
+                    ? `Rendering slide ${extractingStatus.current} of ${extractingStatus.total} from ${extractingStatus.fileName}`
+                    : `Loading ${extractingStatus.fileName || 'PDF Document'}...`}
+                </p>
+              </div>
+              <div className="w-full max-w-md mx-auto bg-slate-100 dark:bg-dark-bg rounded-full h-3 overflow-hidden border border-slate-200 dark:border-dark-border">
+                <div
+                  className="h-full bg-orange-500 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${extractingStatus.total > 0 ? Math.round((extractingStatus.current / extractingStatus.total) * 100) : 40}%`
+                  }}
+                />
+              </div>
+              <span className="text-xs text-slate-400 font-mono">
+                {extractingStatus.total > 0 ? `${Math.round((extractingStatus.current / extractingStatus.total) * 100)}%` : 'Processing...'}
+              </span>
+            </div>
+          )}
+
+          {/* Upload Area (If no items uploaded yet and not extracting) */}
+          {items.length === 0 && !isExtractingPdf && (
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -352,24 +494,54 @@ export const MakePpt: React.FC = () => {
               onDrop={handleDrop}
               className={`bg-white dark:bg-dark-surface rounded-3xl border-2 border-dashed ${
                 isDragOver ? 'border-orange-500 scale-[1.01]' : 'border-slate-300 dark:border-dark-border hover:border-orange-400'
-              } p-8 sm:p-14 text-center shadow-sm transition-all cursor-pointer`}
-              onClick={() => fileInputRef.current?.click()}
+              } p-8 sm:p-14 text-center shadow-sm transition-all`}
             >
               <div className="flex flex-col items-center justify-center">
-                <div className="w-20 h-20 rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-orange-500 flex items-center justify-center mb-5 shadow-inner">
-                  <Presentation className="w-10 h-10" />
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-500 flex items-center justify-center shadow-inner">
+                    <FileText className="w-7 h-7" />
+                  </div>
+                  <div className="w-16 h-16 rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-orange-500 flex items-center justify-center shadow-inner">
+                    <Presentation className="w-8 h-8" />
+                  </div>
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-950/30 text-blue-500 flex items-center justify-center shadow-inner">
+                    <FileImage className="w-7 h-7" />
+                  </div>
                 </div>
 
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                  Photos Upload Karein
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                  PDF Document ya Photos Upload Karein
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-md">
-                  Ek ya multiple photos (JPG, PNG, WEBP) drag & drop karein ya select karein.
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-lg leading-relaxed">
+                  Apna PDF document ya multiple photos (JPG, PNG, WEBP) drag & drop karein. Har PDF page aur image automatically PowerPoint (.pptx) slide me transform ho jayegi.
                 </p>
 
-                <div className="inline-flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 px-8 py-4 text-base font-bold text-white shadow-xl shadow-orange-500/25 transition-all">
-                  <Plus className="w-5 h-5 mr-2" />
-                  <span>Choose Images</span>
+                <div className="flex flex-wrap items-center justify-center gap-3.5">
+                  <button
+                    type="button"
+                    onClick={() => pdfInputRef.current?.click()}
+                    className="inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 px-7 py-3.5 text-sm sm:text-base font-bold text-white shadow-xl shadow-red-600/25 transition-all"
+                  >
+                    <FileText className="w-5 h-5 mr-2" />
+                    <span>Choose PDF File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="inline-flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 px-7 py-3.5 text-sm sm:text-base font-bold text-white shadow-xl shadow-orange-500/25 transition-all"
+                  >
+                    <FileImage className="w-5 h-5 mr-2" />
+                    <span>Choose Images</span>
+                  </button>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
+                  <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">✓ 100% Private In-Browser</span>
+                  <span>•</span>
+                  <span>✓ 16:9 Widescreen & 4:3 PPTX</span>
+                  <span>•</span>
+                  <span>✓ Reorder, Rotate & Remove Pages</span>
                 </div>
               </div>
             </div>
@@ -382,27 +554,40 @@ export const MakePpt: React.FC = () => {
               <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border p-4 sm:p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/30 text-orange-500">
-                    <FileImage className="w-6 h-6" />
+                    <Presentation className="w-6 h-6" />
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                      {items.length} {items.length === 1 ? 'Image' : 'Images'} Selected
+                      {pdfCount === 0
+                        ? `${items.length} ${items.length === 1 ? 'Image' : 'Images'} Selected`
+                        : imgCount === 0
+                        ? `${items.length} ${items.length === 1 ? 'PDF Page' : 'PDF Pages'} Selected`
+                        : `${items.length} Slides Selected (${pdfCount} PDF pages, ${imgCount} images)`}
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Total ~{totalSlides} {totalSlides === 1 ? 'Slide' : 'Slides'} will be created
+                      Total ~{totalSlides} {totalSlides === 1 ? 'Slide' : 'Slides'} will be created in your presentation
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-slate-300 dark:border-dark-border"
+                    onClick={() => pdfInputRef.current?.click()}
+                    className="border-slate-300 dark:border-dark-border text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                   >
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    Add More
+                    <FileText className="w-4 h-4 mr-1.5" />
+                    + Add PDF
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="border-slate-300 dark:border-dark-border text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                  >
+                    <FileImage className="w-4 h-4 mr-1.5" />
+                    + Add Images
                   </Button>
                   <Button
                     variant="ghost"
@@ -428,10 +613,39 @@ export const MakePpt: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Aspect Ratio */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Slide Ratio (Screen Size)
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>Slide Ratio / Orientation</span>
+                      {layout === 'auto' && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                          Smallpdf Style
+                        </span>
+                      )}
                     </label>
                     <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-dark-bg p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setLayout('auto')}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          layout === 'auto'
+                            ? 'bg-white dark:bg-dark-surface text-orange-600 dark:text-orange-400 shadow-sm ring-1 ring-orange-400/40'
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                        title="Auto-detects document ratio (Portrait notes stay full-bleed portrait like Smallpdf)"
+                      >
+                        Auto (Fit Doc)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLayout('portrait')}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          layout === 'portrait'
+                            ? 'bg-white dark:bg-dark-surface text-orange-600 dark:text-orange-400 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                        title="Portrait A4 vertical layout"
+                      >
+                        Portrait (A4)
+                      </button>
                       <button
                         type="button"
                         onClick={() => setLayout('wide')}
@@ -441,7 +655,7 @@ export const MakePpt: React.FC = () => {
                             : 'text-slate-600 dark:text-slate-400'
                         }`}
                       >
-                        16:9 Widescreen
+                        16:9 Wide
                       </button>
                       <button
                         type="button"
@@ -457,15 +671,15 @@ export const MakePpt: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Images per slide */}
+                  {/* Content per slide */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Photos Per Slide
+                      Content Per Slide
                     </label>
                     <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-dark-bg p-1 rounded-xl">
                       {[
-                        { val: 1, label: '1 Photo' },
-                        { val: 2, label: '2 Photos' },
+                        { val: 1, label: '1 per Slide' },
+                        { val: 2, label: '2 per Slide' },
                         { val: 4, label: '4 Grid' },
                       ].map((opt) => (
                         <button
@@ -526,9 +740,9 @@ export const MakePpt: React.FC = () => {
                         onChange={(e) => setMargin(e.target.value as 'none' | 'small' | 'medium')}
                         className="flex-1 text-xs font-semibold py-2 px-2.5 rounded-xl border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-slate-800 dark:text-white"
                       >
-                        <option value="none">No Margins (Edge-to-edge)</option>
-                        <option value="small">Clean Margin (Recommended)</option>
-                        <option value="medium">Spacious Margin</option>
+                        <option value="none">Edge-to-Edge (Smallpdf Style)</option>
+                        <option value="small">Clean Margin (Small)</option>
+                        <option value="medium">Spacious Margin (Wide)</option>
                       </select>
 
                       <button
@@ -548,25 +762,39 @@ export const MakePpt: React.FC = () => {
                 </div>
               </div>
 
-              {/* Uploaded Images List / Reorderable Grid */}
+              {/* Uploaded Items List / Reorderable Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {items.map((item, idx) => (
                   <div
                     key={item.id}
                     className="group relative bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border overflow-hidden shadow-sm flex flex-col hover:shadow-md transition-all"
                   >
-                    {/* Slide Number Badge */}
-                    <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-white text-[10px] font-bold">
-                      Slide {Math.floor(idx / imagesPerSlide) + 1}
+                    {/* Slide Number & Type Badge */}
+                    <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-white text-[10px] font-bold">
+                        Slide {Math.floor(idx / imagesPerSlide) + 1}
+                      </span>
+                      {item.sourceType === 'pdf' ? (
+                        <span className="px-1.5 py-0.5 rounded-md bg-red-600 text-white text-[9px] font-bold tracking-wider uppercase">
+                          PDF P.{item.pageNumber}
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded-md bg-blue-600 text-white text-[9px] font-bold tracking-wider uppercase">
+                          Photo
+                        </span>
+                      )}
                     </div>
 
-                    {/* Image Preview */}
-                    <div className="relative w-full h-36 bg-slate-100 dark:bg-dark-bg flex items-center justify-center p-2 overflow-hidden">
+                    {/* Image / Slide Preview */}
+                    <div
+                      className="relative w-full h-36 flex items-center justify-center p-2 overflow-hidden transition-colors"
+                      style={{ backgroundColor: `#${backgroundColor}` }}
+                    >
                       <img
                         src={item.previewUrl}
                         alt={item.name}
                         style={{ transform: `rotate(${item.rotation || 0}deg)` }}
-                        className="max-w-full max-h-full object-contain transition-transform"
+                        className="max-w-full max-h-full object-contain transition-transform shadow-xs"
                       />
                     </div>
 
@@ -621,7 +849,7 @@ export const MakePpt: React.FC = () => {
                           type="button"
                           onClick={() => removeItem(item.id)}
                           className="p-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                          title="Remove Image"
+                          title="Remove Slide"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -705,14 +933,37 @@ export const MakePpt: React.FC = () => {
             </div>
           )}
 
-          {/* Hidden File Input */}
+          {/* Hidden File Inputs */}
           <input
             ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf,application/pdf"
+            multiple
+            onChange={(e) => {
+              if (e.target.files) handleFiles(e.target.files);
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            multiple
+            onChange={(e) => {
+              if (e.target.files) handleFiles(e.target.files);
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+          <input
+            ref={imageInputRef}
             type="file"
             accept="image/*"
             multiple
             onChange={(e) => {
               if (e.target.files) handleFiles(e.target.files);
+              e.target.value = '';
             }}
             className="hidden"
           />
@@ -725,27 +976,27 @@ export const MakePpt: React.FC = () => {
               </div>
               <div>
                 <h4 className="font-bold text-sm text-slate-900 dark:text-white">Smart Aspect Ratio</h4>
-                <p className="text-xs text-slate-500">Images never stretch; auto-fits cleanly on 16:9 & 4:3</p>
+                <p className="text-xs text-slate-500">PDF pages and photos never stretch; auto-fits cleanly on 16:9 & 4:3</p>
               </div>
             </div>
 
             <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/30 text-orange-500">
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-500">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white">PDF & Photos Supported</h4>
+                <p className="text-xs text-slate-500">Convert entire PDF documents, individual photos, or mix both</p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white">100% Private & Free</h4>
-                <p className="text-xs text-slate-500">Generates in-browser without server uploads</p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/30 text-orange-500">
-                <Zap className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white">Universal PowerPoint</h4>
-                <p className="text-xs text-slate-500">Opens in MS PowerPoint, Google Slides & Keynote</p>
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white">100% Client-Side Privacy</h4>
+                <p className="text-xs text-slate-500">Converts entirely inside your browser without server uploads</p>
               </div>
             </div>
           </div>
@@ -819,14 +1070,15 @@ export const MakePpt: React.FC = () => {
               </div>
             </div>
 
-            {/* 2. Supported Image Formats */}
+            {/* 2. Supported Formats */}
             <div className="bg-white dark:bg-dark-surface rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-dark-border shadow-sm">
               <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2.5">
-                <FileImage className="w-6 h-6 text-orange-500" />
-                Supported Image Formats & High-Resolution Quality
+                <Presentation className="w-6 h-6 text-orange-500" />
+                Supported Document & Image Formats
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
                 {[
+                  { format: "PDF Documents", desc: "Multi-page documents extracted page-by-page into slides" },
                   { format: "JPG / JPEG", desc: "Digital camera photos, mobile captures, and scans" },
                   { format: "PNG", desc: "Transparent graphics, vector exports, and diagrams" },
                   { format: "WEBP", desc: "Modern lightweight web photos with rich colors" },

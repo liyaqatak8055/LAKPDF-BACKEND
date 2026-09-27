@@ -9,8 +9,8 @@ import { NextStepPanel, RelatedActions, ToolStartPanel } from '../components/Too
 import { Helmet } from 'react-helmet-async';
 import { ToolSEOContent } from '../components/ToolSEOContent';
 
-type LayoutType = 'standard' | 'wide';
-type FitType = 'contain' | 'cover';
+type LayoutType = 'auto' | 'portrait' | 'standard' | 'wide';
+type FitType = 'fill' | 'contain' | 'cover';
 type QualityPreset = 'compact' | 'balanced' | 'high';
 
 export const PdfToPowerPoint: React.FC = () => {
@@ -18,8 +18,8 @@ export const PdfToPowerPoint: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [pageRange, setPageRange] = useState<string>('all');
-  const [layout, setLayout] = useState<LayoutType>('wide');
-  const [fit, setFit] = useState<FitType>('contain');
+  const [layout, setLayout] = useState<LayoutType>('auto');
+  const [fit, setFit] = useState<FitType>('fill');
   const [quality, setQuality] = useState<QualityPreset>('balanced');
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
@@ -187,21 +187,43 @@ export const PdfToPowerPoint: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="border border-slate-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3 text-sm font-semibold text-slate-700">
-                  <Monitor className="w-4 h-4" /> Slide Layout
+                <div className="flex items-center justify-between mb-3 text-sm font-semibold text-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="w-4 h-4" /> Slide Layout
+                  </div>
+                  {layout === 'auto' && (
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      Smallpdf Style
+                    </span>
+                  )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLayout('auto')}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left flex items-center justify-between cursor-pointer transition-all ${layout === 'auto' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    <span>Auto (Match PDF Page)</span>
+                    <span className="text-[10px] opacity-80">Full-bleed</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLayout('portrait')}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left cursor-pointer transition-all ${layout === 'portrait' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    Portrait (A4/Letter)
+                  </button>
                   <button
                     type="button"
                     onClick={() => setLayout('wide')}
-                    className={`w-full px-3 py-2 text-sm rounded-md border cursor-pointer ${layout === 'wide' ? 'bg-orange-600 text-white border-orange-600' : 'bg-white border-slate-200 text-slate-700'}`}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left cursor-pointer transition-all ${layout === 'wide' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                   >
                     Widescreen (16:9)
                   </button>
                   <button
                     type="button"
                     onClick={() => setLayout('standard')}
-                    className={`w-full px-3 py-2 text-sm rounded-md border cursor-pointer ${layout === 'standard' ? 'bg-orange-600 text-white border-orange-600' : 'bg-white border-slate-200 text-slate-700'}`}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left cursor-pointer transition-all ${layout === 'standard' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                   >
                     Standard (4:3)
                   </button>
@@ -212,20 +234,28 @@ export const PdfToPowerPoint: React.FC = () => {
                 <div className="flex items-center gap-2 mb-3 text-sm font-semibold text-slate-700">
                   <LayoutTemplate className="w-4 h-4" /> Fit Mode
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setFit('fill')}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left flex items-center justify-between cursor-pointer transition-all ${fit === 'fill' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    <span>Fill Slide (Edge-to-Edge)</span>
+                    <span className="text-[10px] opacity-80">Recommended</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setFit('contain')}
-                    className={`w-full px-3 py-2 text-sm rounded-md border cursor-pointer ${fit === 'contain' ? 'bg-orange-600 text-white border-orange-600' : 'bg-white border-slate-200 text-slate-700'}`}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left cursor-pointer transition-all ${fit === 'contain' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                   >
-                    Fit Entire Page
+                    Fit Entire Page (Keep Borders)
                   </button>
                   <button
                     type="button"
                     onClick={() => setFit('cover')}
-                    className={`w-full px-3 py-2 text-sm rounded-md border cursor-pointer ${fit === 'cover' ? 'bg-orange-600 text-white border-orange-600' : 'bg-white border-slate-200 text-slate-700'}`}
+                    className={`w-full px-3 py-1.5 text-xs font-semibold rounded-md border text-left cursor-pointer transition-all ${fit === 'cover' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                   >
-                    Fill Slide Area
+                    Cover Slide (Crop Overflows)
                   </button>
                 </div>
               </div>
@@ -272,7 +302,7 @@ export const PdfToPowerPoint: React.FC = () => {
             </div>
 
             <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 text-xs text-orange-900">
-              Note: PDF pages are converted into high-resolution slide layouts.
+              Note: PDF pages are converted into high-resolution slide layouts matching original page dimensions.
             </div>
         </div>
 
@@ -287,11 +317,21 @@ export const PdfToPowerPoint: React.FC = () => {
               <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Layout:</span>
-                  <span className="font-semibold text-slate-800">{layout === 'wide' ? 'Widescreen (16:9)' : 'Standard (4:3)'}</span>
+                  <span className="font-semibold text-slate-800">
+                    {layout === 'auto'
+                      ? 'Auto (Match PDF Page)'
+                      : layout === 'portrait'
+                      ? 'Portrait (A4/Letter)'
+                      : layout === 'wide'
+                      ? 'Widescreen (16:9)'
+                      : 'Standard (4:3)'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Fit:</span>
-                  <span className="font-semibold text-slate-800">{fit === 'contain' ? 'Fit Page' : 'Fill Slide'}</span>
+                  <span className="font-semibold text-slate-800">
+                    {fit === 'fill' ? 'Fill (Edge-to-Edge)' : fit === 'contain' ? 'Fit Page' : 'Cover Slide'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Quality:</span>

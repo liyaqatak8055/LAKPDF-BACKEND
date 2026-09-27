@@ -155,7 +155,7 @@ export default defineConfig(({ mode }) => {
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || `http://localhost:${Number.isFinite(backendPort) ? backendPort : 8787}`;
   const isHttps = process.env.HTTPS === 'true' || process.env.VITE_HTTPS === 'true';
 
-  const cspHeader = `default-src 'self'; ${isHttps ? 'upgrade-insecure-requests; ' : ''}script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com; object-src 'none'; base-uri 'self';`;
+  const cspHeader = `default-src 'self'; ${isHttps ? 'upgrade-insecure-requests; ' : ''}script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://*.adtrafficquality.google https://*.google https://adservice.google.com https://googleads.g.doubleclick.net https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: blob: data: https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com https://*.adtrafficquality.google https://*.google https://googleads.g.doubleclick.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; frame-src 'self' blob: https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com https://*.adtrafficquality.google https://*.google; object-src 'none'; base-uri 'self';`;
 
   return {
     server: {
@@ -433,20 +433,14 @@ export default defineConfig(({ mode }) => {
             if (id.includes('xlsx')) return 'vendor-xlsx';
 
             // ── Canvas / image stack ─────────────────────────────
-            if (id.includes('fabric')) return 'vendor-fabric';
             if (id.includes('html2canvas')) return 'vendor-canvas';
 
             // ── UI icons — separate so unused icons tree-shake ──
             if (id.includes('lucide-react')) return 'vendor-icons';
 
-            // ── State management — only on auth/dashboard pages, keep lazy ─
-            if (id.includes('zustand')) return 'vendor-state';
-
             // ── Utilities ────────────────────────────────────────
             if (id.includes('jszip') ||
-                id.includes('file-saver') ||
-                id.includes('/uuid/') ||
-                id.includes('/nanoid/')) {
+                id.includes('/uuid/')) {
               return 'vendor-utils';
             }
 
@@ -501,7 +495,6 @@ export default defineConfig(({ mode }) => {
       // Don't pre-bundle heavy browser-only worker deps
       exclude: [
         'pdfjs-dist',
-        'fabric',
       ],
     },
   };

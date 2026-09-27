@@ -65,6 +65,79 @@ test.describe("Deep Tool Result & Functional Verification", () => {
     expect(criticalErrors).toEqual([]);
   });
 
+  test("Make PPT: converts PDF document pages to PowerPoint presentation (.pptx) via /pdf-to-ppt", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
+
+    await page.goto("/pdf-to-ppt", { waitUntil: "domcontentloaded" });
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(samplePdf3);
+
+    // Check that PDF pages are extracted into list
+    await expect(page.getByText(/3 PDF Pages Selected/i)).toBeVisible({ timeout: 20_000 });
+
+    // Click Convert to PowerPoint (.pptx) button
+    const makePptBtn = page.getByRole("button", { name: /Convert to PowerPoint/i }).first();
+    await expect(makePptBtn).toBeVisible({ timeout: 10_000 });
+    await makePptBtn.click();
+
+    // Verify PPTX is generated and download button appears
+    await expect(page.getByRole("button", { name: /Download/i }).first()).toBeVisible({ timeout: 25_000 });
+
+    const criticalErrors = pageErrors.filter(
+      (m) => !/adsbygoogle|googlesyndication|doubleclick|cross-origin|SecurityError|ResizeObserver loop/i.test(m)
+    );
+    expect(criticalErrors).toEqual([]);
+  });
+
+  test("Make PPT: all layout, background, margin, titles and content-per-slide controls work 100%", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
+
+    await page.goto("/make-ppt", { waitUntil: "domcontentloaded" });
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles([sampleJpg, samplePng]);
+
+    // Check that items are loaded
+    await expect(page.getByText(/2 Images Selected/i)).toBeVisible({ timeout: 15_000 });
+
+    // 1. Test Slide Ratio buttons
+    await page.getByRole("button", { name: /Auto \(Fit Doc\)/i }).click();
+    await page.getByRole("button", { name: /Portrait \(A4\)/i }).click();
+    await page.getByRole("button", { name: /16:9 Wide/i }).click();
+    await page.getByRole("button", { name: /4:3 Standard/i }).click();
+    await page.getByRole("button", { name: /Auto \(Fit Doc\)/i }).click();
+
+    // 2. Test Content Per Slide
+    await page.getByRole("button", { name: /2 per Slide/i }).click();
+    await expect(page.getByText(/Total ~1 Slide will be created/i)).toBeVisible();
+    await page.getByRole("button", { name: /1 per Slide/i }).click();
+    await expect(page.getByText(/Total ~2 Slides will be created/i)).toBeVisible();
+
+    // 3. Test Slide Background
+    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await page.getByRole("button", { name: "Light", exact: true }).click();
+    await page.getByRole("button", { name: "White", exact: true }).click();
+
+    // 4. Test Margins & Titles
+    const marginSelect = page.locator("select").first();
+    await marginSelect.selectOption("none");
+    await page.getByRole("button", { name: /Titles/i }).click();
+
+    // 5. Convert to PowerPoint
+    const makePptBtn = page.getByRole("button", { name: /Convert to PowerPoint/i }).first();
+    await expect(makePptBtn).toBeVisible({ timeout: 10_000 });
+    await makePptBtn.click();
+
+    // Verify PPTX is generated and download button appears
+    await expect(page.getByRole("button", { name: /Download/i }).first()).toBeVisible({ timeout: 25_000 });
+
+    const criticalErrors = pageErrors.filter(
+      (m) => !/adsbygoogle|googlesyndication|doubleclick|cross-origin|SecurityError|ResizeObserver loop/i.test(m)
+    );
+    expect(criticalErrors).toEqual([]);
+  });
+
   test("PDF to Text: extracts text from PDF and enables copy/download", async ({ page }) => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(err.message));

@@ -14,7 +14,9 @@ const localWorkerSrc = pdfWorkerSrc || `${import.meta.env.BASE_URL}pdf.worker.mi
 // Initialize PDF.js worker
 if (typeof window !== 'undefined' && pdfjs) {
   pdfjs.GlobalWorkerOptions.workerSrc = localWorkerSrc;
-  console.log('PDF.js worker loaded from local asset:', localWorkerSrc, `(pdfjs ${pdfjsVersion})`);
+  if (import.meta.env.DEV) {
+    console.log('PDF.js worker loaded from local asset:', localWorkerSrc, `(pdfjs ${pdfjsVersion})`);
+  }
 }
 
 // Export pdfjs for use in components

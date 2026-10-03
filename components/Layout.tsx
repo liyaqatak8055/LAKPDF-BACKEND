@@ -186,7 +186,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </picture>
               <span
                 className="text-[1.75rem] sm:text-[2.05rem] md:text-[2.25rem] tracking-tight leading-none text-slate-900 dark:text-white flex items-center gap-1 sm:gap-1.5 font-black"
-                style={{ fontFamily: '"Roboto Slab", Georgia, serif', fontWeight: 900 }}
               >
                 <span className="font-black">LAK</span>
                 <span className="text-primary-600 dark:text-primary-400 font-black">PDF</span>
@@ -437,7 +436,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     height={36}
                     loading="lazy"
                     decoding="async"
-                    className="w-9 h-9 object-contain animate-heartbeat transition-transform hover:scale-110"
+                    className="w-9 h-9 object-contain hover:animate-heartbeat transition-transform hover:scale-110"
                   />
                 </picture>
                 <span className="font-extrabold text-lg text-white tracking-tight">LAK PDF</span>
@@ -446,7 +445,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 Free, privacy-first online PDF tools. Merge, compress, convert, sign, and manage documents securely in your browser.
               </p>
               <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-dot" />
                 <span>100% Client-Side Privacy</span>
               </div>
             </div>

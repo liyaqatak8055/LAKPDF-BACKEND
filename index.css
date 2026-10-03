@@ -95,6 +95,31 @@ body {
   -webkit-backface-visibility: hidden;
 }
 
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.pulse-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  animation: pulseDot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 img,
 video,
 canvas,
@@ -276,8 +301,8 @@ html.dark * {
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 @keyframes bounce {
@@ -2316,4 +2341,22 @@ nav, header {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   AdSense: Container & Unfilled Auto-Collapse (Dark Mode Friendly)
+   ══════════════════════════════════════════════════════════════════════ */
+.ad-container {
+  background: transparent !important;
+}
+
+.ad-container iframe {
+  background-color: transparent !important;
+  color-scheme: light dark;
+}
+
+ins.adsbygoogle[data-ad-status="unfilled"],
+.ad-container:has(ins[data-ad-status="unfilled"]),
+div[role="region"][aria-label="Advertising"]:has(ins[data-ad-status="unfilled"]) {
+  display: none !important;
 }

@@ -36,6 +36,6 @@ scratch/
 tmp/
 tests/*.png
 tests/*.jpg
-tests/lighthouse-report.json
+tests/*.json
 test-results/
 *.traineddata

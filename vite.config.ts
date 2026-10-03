@@ -455,10 +455,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes('services/authService')) return 'service-auth';
             if (id.includes('utils/analytics')) return 'util-analytics';
 
-
-            // ── axios — deferred ──────────────────────────────────────────────
-            if (id.includes('/axios/')) return 'vendor-axios';
-
             // ── All other node_modules: shared vendor chunk ──────
             if (id.includes('node_modules')) return 'vendor-misc';
           },

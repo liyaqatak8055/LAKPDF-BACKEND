@@ -44,6 +44,14 @@ export const AdUnit: React.FC<AdUnitProps> = ({
   const retryTimer = useRef<number | null>(null);
   const [isVisible, setIsVisible] = useState(!lazy);
   const [hasError, setHasError] = useState(false);
+  const [isUnfilled, setIsUnfilled] = useState(false);
+
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname.startsWith("192.168.") ||
+      window.location.hostname.endsWith(".local"));
 
   const MAX_RETRIES = 2;
 
@@ -89,7 +97,8 @@ export const AdUnit: React.FC<AdUnitProps> = ({
   };
 
   const loadAd = useCallback(() => {
-    if (!adRef.current || loaded.current || hasError) return;
+    if (isLocalhost) return;
+    if (!adRef.current || loaded.current || hasError || isUnfilled) return;
 
     const containerWidth = adRef.current.clientWidth;
     if (containerWidth < minWidth) {
@@ -118,10 +127,10 @@ export const AdUnit: React.FC<AdUnitProps> = ({
       logger.debug("[AdUnit] AdSense blocked (AdBlock enabled)");
       setHasError(true);
     }
-  }, [slotId, format, layout, minWidth, hasError]);
+  }, [slotId, format, layout, minWidth, hasError, isUnfilled, isLocalhost]);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (isLocalhost || !isVisible) return;
 
     const timer = window.setTimeout(loadAd, delay);
 
@@ -129,7 +138,30 @@ export const AdUnit: React.FC<AdUnitProps> = ({
       clearTimeout(timer);
       if (retryTimer.current) clearTimeout(retryTimer.current);
     };
-  }, [isVisible, delay, loadAd]);
+  }, [isVisible, delay, loadAd, isLocalhost]);
+
+  useEffect(() => {
+    if (isLocalhost) return;
+    const adNode = adRef.current;
+    if (!adNode) return;
+    const ins = adNode.querySelector("ins.adsbygoogle");
+    if (!ins) return;
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type === "attributes" && m.attributeName === "data-ad-status") {
+          const status = (ins as HTMLElement).getAttribute("data-ad-status");
+          if (status === "unfilled") {
+            setIsUnfilled(true);
+            observer.disconnect();
+          }
+        }
+      }
+    });
+
+    observer.observe(ins, { attributes: true, attributeFilter: ["data-ad-status"] });
+    return () => observer.disconnect();
+  }, [isVisible, isLocalhost]);
 
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
@@ -168,7 +200,21 @@ export const AdUnit: React.FC<AdUnitProps> = ({
     };
   }, []);
 
-  if (hasError) {
+  if (isLocalhost) {
+    if (!reserveSpace) return null;
+    return (
+      <div className={`w-full flex justify-center my-2 ${className}`} aria-hidden="true">
+        <div
+          className={`w-full ${layoutStyles[layout]} rounded-xl border border-dashed border-slate-300 dark:border-dark-border p-3 text-center text-xs text-slate-400 dark:text-dark-text-muted flex items-center justify-center`}
+          style={{ minHeight: `${minHeightByLayout[layout]}px` }}
+        >
+          <span>Ad Slot ({format}) · Live in Production</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isUnfilled || hasError) {
     if (!reserveSpace) return null;
     return (
       <div className={`w-full flex justify-center my-4 ${className}`} aria-hidden="true">

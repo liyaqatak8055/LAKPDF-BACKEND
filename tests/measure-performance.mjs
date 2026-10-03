@@ -54,6 +54,18 @@ async function measure() {
         if (p.name === 'first-contentful-paint') result.fcp = p.startTime;
       }
 
+      // Measure Cumulative Layout Shift (CLS)
+      let clsValue = 0;
+      try {
+        const layoutShifts = performance.getEntriesByType('layout-shift') || [];
+        for (const entry of layoutShifts) {
+          if (!entry.hadRecentInput) {
+            clsValue += entry.value;
+          }
+        }
+      } catch (e) {}
+      result.cls = clsValue;
+
       // Check long tasks
       let totalLongTaskDuration = 0;
       let longTaskCount = 0;
@@ -87,6 +99,7 @@ async function measure() {
   console.log('\n=== PERFORMANCE METRICS (Mobile 4x CPU Throttling + 4G) ===');
   console.log(`TTFB: ${Math.round(metrics.ttfb)} ms`);
   console.log(`FCP: ${Math.round(metrics.fcp)} ms`);
+  console.log(`CLS: ${metrics.cls !== undefined ? metrics.cls.toFixed(4) : 'N/A'}`);
   console.log(`DOM Content Loaded: ${Math.round(metrics.domContentLoaded)} ms`);
   console.log(`Load Event: ${Math.round(metrics.load)} ms`);
   console.log(`JS Heap Used: ${(cdpMetrics.JSHeapUsedSize / 1024 / 1024).toFixed(2)} MB`);

@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Zap, Sparkles } from 'lucide-react';
-import { ToolStoryAnimation } from './ToolStoryAnimation';
+
+const ToolStoryAnimation = lazy(() =>
+  import('./ToolStoryAnimation').then((m) => ({ default: m.ToolStoryAnimation }))
+);
 
 interface ToolCardProps {
   title: string;
@@ -223,7 +226,9 @@ const ToolCardComponent: React.FC<ToolCardProps> = ({
             <div className="water-bubble water-bubble-4" />
           </div>
 
-          <ToolStoryAnimation toolId={to} />
+          <Suspense fallback={null}>
+            <ToolStoryAnimation toolId={to} />
+          </Suspense>
         </>
       )}
 
@@ -257,8 +262,8 @@ const ToolCardComponent: React.FC<ToolCardProps> = ({
         </p>
 
         <div className={`mt-auto pt-6 flex items-center text-xs font-semibold md:text-sm ${comingSoon
-            ? 'text-indigo-500 group-hover:text-indigo-600 dark:text-indigo-400'
-            : 'text-primary-500 group-hover:text-primary-600 dark:text-primary-400'
+            ? 'text-indigo-700 group-hover:text-indigo-800 dark:text-indigo-300'
+            : 'text-primary-700 group-hover:text-primary-800 dark:text-primary-300'
           }`}>
           {comingSoon ? (
             <>

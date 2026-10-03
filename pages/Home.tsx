@@ -571,7 +571,7 @@ const Home: React.FC = () => {
           <div className="mb-4 flex justify-center">
             <Link
               to="/tools"
-              className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-6 py-3 text-sm sm:text-base font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+              className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-6 py-3 text-sm sm:text-base font-semibold text-white shadow-sm transition-[background-color] duration-150 hover:bg-primary-700"
             >
               Choose a PDF tool
             </Link>
@@ -579,7 +579,7 @@ const Home: React.FC = () => {
 
           <div className="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-700 dark:text-dark-text-secondary">
             <span className="rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
               100% Private (Zero Cloud Uploads)
             </span>
             <span className="rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-semibold">
@@ -822,12 +822,12 @@ const Home: React.FC = () => {
       </Suspense>
 
       {/* Custom CTA Section */}
-      <section className="py-8 md:py-12 bg-primary-50 border-t border-slate-100">
+      <section className="py-8 md:py-12 bg-primary-50/70 border-t border-slate-100 dark:bg-dark-surface dark:border-dark-border">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-2.5">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-dark-text-primary mb-2.5">
             Free Online PDF Tools - No Registration Required
           </h2>
-          <p className="text-sm sm:text-base md:text-lg text-slate-600 mb-5 max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base md:text-lg text-slate-600 dark:text-dark-text-secondary mb-5 max-w-2xl mx-auto">
             Convert, compress, merge, split, and edit PDF files online with simple browser-first workflows and clear privacy handling.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -840,7 +840,7 @@ const Home: React.FC = () => {
             </Link>
             <Link
               to="/compress"
-              className="inline-flex items-center justify-center px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg border border-slate-200 transition-colors shadow-sm text-sm sm:text-base"
+              className="inline-flex items-center justify-center px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg border border-slate-200 transition-colors shadow-sm text-sm sm:text-base dark:bg-dark-bg dark:border-dark-border dark:text-dark-text-primary dark:hover:bg-dark-hover"
             >
               Compress PDF Online
             </Link>
@@ -849,86 +849,86 @@ const Home: React.FC = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-8 md:py-12 bg-white">
+      <section className="py-8 md:py-12 bg-white dark:bg-dark-bg border-t border-slate-100 dark:border-dark-border">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-6 md:mb-8">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-dark-text-primary mb-2">
               PDF Tools FAQ - Everything You Need to Know
             </h2>
-            <p className="text-sm sm:text-base text-slate-600">
+            <p className="text-sm sm:text-base text-slate-600 dark:text-dark-text-secondary">
               Common questions about free online PDF tools, security, and file processing
             </p>
           </div>
 
           <div className="space-y-3 sm:space-y-3.5">
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 Are LAK PDF tools completely free to use?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 Core tools are available without registration. Some features may depend on account access or service availability as the product evolves.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 Is my data safe and secure when using PDF tools online?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 Most core PDF processing runs directly in your browser. AI features are different: extracted text may be sent to configured AI APIs to generate responses. Files and text are handled only for the workflow you request.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 What file formats does LAK PDF support?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 Current tools support PDF, JPG, PNG, BMP, DOC, DOCX, PPT, and PPTX workflows. Check the individual tool page for the exact input types accepted by that tool.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 What's the maximum file size for PDF processing?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 For best results, keep files reasonably sized for your device and browser. Browser-side workflows depend on available memory, file complexity, and your device performance.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 Can I use PDF tools on my mobile phone or tablet?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 Yes. The interface is responsive and supports current mobile browsers, though larger files are usually easier to process on more capable devices.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 Do I need to sign up or create an account to use PDF tools?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 You can use core tools without signing in. Account features are available where the product provides them, such as profile and activity workflows.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 How fast are your online PDF processing tools?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 Speed depends on file size, tool type, browser, and device. Browser-side tools avoid an upload step for many everyday workflows, while AI tools also depend on API response time.
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 sm:p-5 border border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">
+            <div className="bg-slate-50 dark:bg-dark-surface rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-dark-border">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dark-text-primary mb-1.5">
                 Can I process PDFs online without installing software?
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-dark-text-secondary leading-relaxed">
                 Yes. Many everyday tools, including merge, split, compress, rotate, delete pages, watermark, and image conversion workflows, run directly in the browser.
               </p>
             </div>
@@ -936,19 +936,19 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="py-8 md:py-10 bg-white border-t border-slate-100">
+      <section className="py-8 md:py-10 bg-white border-t border-slate-100 dark:bg-dark-surface dark:border-dark-border">
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 text-center">
           <div>
-            <h3 className="text-base md:text-lg font-bold text-slate-900 mb-1.5">Browser-first</h3>
-            <p className="text-xs sm:text-sm text-slate-500">Most everyday PDF tools are designed to run in your browser before you download the result.</p>
+            <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-dark-text-primary mb-1.5">Browser-first</h3>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-dark-text-secondary">Most everyday PDF tools are designed to run in your browser before you download the result.</p>
           </div>
           <div>
-            <h3 className="text-base md:text-lg font-bold text-slate-900 mb-1.5">AI disclosed</h3>
-            <p className="text-xs sm:text-sm text-slate-500">AI features may send extracted text to configured AI providers so responses can be generated.</p>
+            <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-dark-text-primary mb-1.5">AI disclosed</h3>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-dark-text-secondary">AI features may send extracted text to configured AI providers so responses can be generated.</p>
           </div>
           <div>
-            <h3 className="text-base md:text-lg font-bold text-slate-900 mb-1.5">Policy visible</h3>
-            <p className="text-xs sm:text-sm text-slate-500">Privacy Policy and Terms are published openly so handling rules are easy to review.</p>
+            <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-dark-text-primary mb-1.5">Policy visible</h3>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-dark-text-secondary">Privacy Policy and Terms are published openly so handling rules are easy to review.</p>
           </div>
         </div>
       </section>

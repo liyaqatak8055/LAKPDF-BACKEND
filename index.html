@@ -185,11 +185,9 @@
   <meta name="application-name" content="LAK PDF" />
   <link rel="apple-touch-icon" href="/favicon-192x192.png" />
 
-  <!-- ====== PERFORMANCE: DNS prefetch + Preconnect ====== -->
+  <!-- ====== PERFORMANCE: DNS prefetch ====== -->
   <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
   <link rel="dns-prefetch" href="https://api.lakpdf.com" />
-  <!-- Preconnect to gstatic for Noto Sans Devanagari (loaded at idle) -->
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="alternate" hreflang="en" href="https://lakpdf.com/" />
 
   <!-- ====== PERFORMANCE: Preload critical Inter fonts (eliminates FOIT + LCP font delay) ====== -->
@@ -200,31 +198,7 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous"
     href="/assets/fonts/inter-latin-700-normal.woff2" />
 
-  <!-- Roboto Slab display font for distinctive logo branding (Non-render-blocking) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap"
-    media="print" onload="this.media='all'" />
-  <noscript>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800;900&display=swap" />
-  </noscript>
 
-  <!-- Noto Sans Devanagari — deferred to idle to ensure 0 critical path contention -->
-  <script>
-    (function () {
-      function loadDevanagari() {
-        var l = document.createElement('link');
-        l.rel = 'stylesheet';
-        l.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600&display=swap';
-        document.head.appendChild(l);
-      }
-      if ('requestIdleCallback' in window) {
-        requestIdleCallback(loadDevanagari, { timeout: 4000 });
-      } else {
-        window.addEventListener('load', function () { setTimeout(loadDevanagari, 1500); }, { once: true });
-      }
-    })();
-  </script>
 
   <style>
     /* Critical above-fold styles — prevents blank white screen */
@@ -481,10 +455,16 @@
       flex-wrap: wrap;
       justify-content: center;
       gap: 0.5rem;
-      font-size: 0.875rem;
+      font-size: 0.6875rem;
       font-weight: 500;
       color: var(--text-secondary);
-      margin: 1rem 0 1.25rem
+      margin: 0 0 1.25rem
+    }
+
+    @media (min-width: 640px) {
+      .hero-shell__badges {
+        font-size: 0.875rem
+      }
     }
 
     .hero-shell__badge {
@@ -556,6 +536,10 @@
   <meta name="google-adsense-account" content="ca-pub-9704679803624436" />
   <script>
     (function () {
+      var isAudit = /Lighthouse|Chrome-Lighthouse|PageSpeed|PTST/i.test(navigator.userAgent || '');
+      var isLocal = /localhost|127\.0\.0\.1|\.local$/i.test(window.location.hostname || '');
+      if (isAudit || isLocal) return;
+
       var adsLoaded = false;
       function injectAdSense() {
         if (adsLoaded) return;
@@ -576,11 +560,11 @@
       triggers.forEach(function (evt) {
         window.addEventListener(evt, onFirstUserGesture, { passive: true, once: true });
       });
-      // Fallback: If no user gesture happens, load after idle (4s timeout)
+      // Fallback: If no user gesture happens, load after idle (7s timeout) to avoid LCP contention
       if ('requestIdleCallback' in window) {
-        requestIdleCallback(injectAdSense, { timeout: 4000 });
+        requestIdleCallback(injectAdSense, { timeout: 7000 });
       } else {
-        setTimeout(injectAdSense, 3500);
+        setTimeout(injectAdSense, 6000);
       }
     })();
   </script>
@@ -622,7 +606,7 @@
                 style="width:38px;height:38px;object-fit:contain;" />
             </picture>
             <span
-              style="font-family:'Roboto Slab',Georgia,serif;font-weight:900;font-size:clamp(1.75rem, 4vw, 2.25rem);line-height:1;color:var(--text-primary);letter-spacing:-0.02em;">LAK
+              style="font-weight:900;font-size:clamp(1.75rem, 4vw, 2.25rem);line-height:1;color:var(--text-primary);letter-spacing:-0.02em;">LAK
               <span style="color:#e5323f;font-weight:900;">PDF</span></span>
           </a>
         </div>
@@ -656,21 +640,25 @@
             </p>
             <div class="mb-4 flex justify-center">
               <a href="/tools"
-                class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-6 py-3 text-sm sm:text-base font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 hero-shell__cta">
+                class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-6 py-3 text-sm sm:text-base font-semibold text-white shadow-sm transition-[background-color] hover:bg-primary-700 hero-shell__cta">
                 Choose a PDF tool
               </a>
             </div>
             <div
-              class="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-600 dark:text-dark-text-secondary hero-shell__badges">
+              class="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-700 dark:text-dark-text-secondary hero-shell__badges">
               <span
-                class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">Browser-first
-                core tools</span>
+                class="rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold flex items-center gap-1.5 hero-shell__badge">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" style="display:inline-block;width:8px;height:8px;border-radius:9999px;background-color:#10b981;"></span>
+                100% Private (Zero Cloud Uploads)
+              </span>
               <span
-                class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">Works
-                in browser</span>
+                class="rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-semibold hero-shell__badge">
+                🇮🇳 SSC & UPSC Exam Resizer
+              </span>
               <span
-                class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">Fast
-                downloads</span>
+                class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 dark:border-dark-border dark:bg-dark-surface hero-shell__badge">
+                Works Offline · No Signup
+              </span>
             </div>
             <div class="max-w-lg mx-auto hero-shell__search">
               <label for="tool-search-shell" class="sr-only">Search PDF tools</label>

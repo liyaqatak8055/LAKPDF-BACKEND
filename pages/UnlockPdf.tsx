@@ -168,7 +168,7 @@ export const UnlockPdf: React.FC = () => {
                         <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
                         <div>
                           <p className="font-semibold text-emerald-900 dark:text-emerald-200 text-sm">PDF Unlocked Successfully!</p>
-                          <p className="text-xs text-emerald-700 dark:text-emerald-300">All passwords and editing restrictions have been permanently removed.</p>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-300">All passwords and editing restrictions removed. Original vector text and layout 100% preserved.</p>
                         </div>
                       </div>
 

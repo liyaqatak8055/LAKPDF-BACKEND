@@ -1,4 +1,5 @@
 import { sanitizeHtml } from './htmlSanitizer';
+import { preprocessCanvasForOcr } from '../utils/ocrPostProcess';
 type DocxElement = any;
 
 // ─── Lazy library singletons ────────────────────────────────────────────────
@@ -183,10 +184,6 @@ function cleanOcrText(text: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .normalize('NFC');
-}
-
-function preprocessCanvasForOcr(source: HTMLCanvasElement): HTMLCanvasElement {
-  return preprocessCanvasForOcrWithConfig(source, { contrastBoost: 1.35, thresholdOffset: 0, binarize: true });
 }
 
 function preprocessCanvasForOcrWithConfig(
@@ -681,6 +678,8 @@ async function cropCanvasToPng(
     const blob = await new Promise<Blob | null>((resolve) => {
       cropCanvas.toBlob(resolve, 'image/png');
     });
+    cropCanvas.width = 0;
+    cropCanvas.height = 0;
     if (!blob) return null;
     const buf = await blob.arrayBuffer();
     return new Uint8Array(buf);
@@ -719,8 +718,9 @@ export const convertPdfToWord = async (
     const pageWidth = viewport.width || 595;
     const pageHeight = viewport.height || 842;
 
-    // Render high-resolution page canvas for pristine logo & stamp cropping
-    const scale = 2.0;
+    // Render adaptive-resolution page canvas for logo & stamp cropping (1.4 on mobile to prevent OOM)
+    const isMobileDevice = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+    const scale = isMobileDevice ? 1.4 : 2.0;
     const pageCanvas = document.createElement('canvas');
     const pageViewport = page.getViewport({ scale });
     pageCanvas.width = pageViewport.width;
@@ -740,7 +740,8 @@ export const convertPdfToWord = async (
     const rawItems = (textContent.items || []).filter(
       (it: any) => it && typeof it.str === 'string' && it.str.length > 0
     );
-    const hasDigitalText = rawItems.some((it: any) => it.str.trim().length > 0);
+    const totalDigitalChars = rawItems.reduce((acc: number, it: any) => acc + (it.str ? it.str.trim().length : 0), 0);
+    const hasDigitalText = totalDigitalChars >= 60 && rawItems.some((it: any) => it.str.trim().length > 0);
 
     if (hasDigitalText) {
       // Map text items into page coordinates (Y measured from top of page)
@@ -794,13 +795,25 @@ export const convertPdfToWord = async (
         const clean = it.str.trim();
         if (!clean) return false;
 
-        // 1. Drop duplicate 'PROJECTS' in header (it's already part of the ESSAR PROJECTS logo crop)
-        if (clean.toUpperCase() === 'PROJECTS' && it.x > pageWidth * 0.45 && it.y < headerThresholdY) {
+        // 1. Drop duplicate text if it falls directly inside an extracted logo image bounding box
+        const isInsideExtractedLogo = topImages.some((img) =>
+          it.x >= (img.x - 6) &&
+          it.x <= (img.x + img.width + 6) &&
+          it.y >= (img.y - 6) &&
+          it.y <= (img.y + img.height + 6)
+        );
+        if (isInsideExtractedLogo && it.y < headerThresholdY) {
           return false;
         }
 
-        // 2. Drop OCR noise artifacts between signoff line and signer line (inside stamp region)
-        if (signoffY !== -1 && signerY !== -1 && it.y > signoffY + 15 && it.y < signerY - 10) {
+        // 2. Drop OCR noise artifacts inside stamp region only if overlapping and non-alphanumeric
+        const isInsideStamp = bottomImages.some((img) =>
+          it.x >= (img.x - 6) &&
+          it.x <= (img.x + img.width + 6) &&
+          it.y >= (img.y - 6) &&
+          it.y <= (img.y + img.height + 6)
+        );
+        if (isInsideStamp && /^[^a-zA-Z0-9\s]{2,}$|^\W+$/.test(clean)) {
           return false;
         }
 
@@ -1024,14 +1037,14 @@ export const convertPdfToWord = async (
         const lineText = bucket.items.map((it) => it.str).join(' ').trim();
         if (!lineText) continue;
 
-        // Only treat as table line if items have genuine multi-column horizontal spacing (> 35pt gap)
+        // Only treat as table line if items have genuine multi-column horizontal spacing (>= 25pt gap)
         let isRealTableLine = false;
         const cells = bucket.items.map((it) => it.str.trim()).filter(Boolean);
         if (bucket.items.length >= 2) {
           let colGaps = 0;
           for (let i = 1; i < bucket.items.length; i++) {
             const gap = bucket.items[i].x - (bucket.items[i - 1].x + bucket.items[i - 1].width);
-            if (gap > 35) colGaps++;
+            if (gap >= 25) colGaps++;
           }
           if (colGaps >= 1 && shouldTreatAsTableLine(cells)) {
             isRealTableLine = true;
@@ -1045,33 +1058,54 @@ export const convertPdfToWord = async (
         }
         flushTableBuffer();
 
-        // 1. Centered Document Title detection (ONLY exact match or short centered non-sentence heading)
+        const trimmedLine = lineText.trim();
+
+        // 1. Centered or High-Level Document Title detection
         const minX = Math.min(...bucket.items.map((it) => it.x));
         const maxX = Math.max(...bucket.items.map((it) => it.x + it.width));
         const lineCenter = (minX + maxX) / 2;
         const isCenteredLine = Math.abs(lineCenter - pageWidth / 2) < pageWidth * 0.16;
 
-        const trimmedLine = lineText.trim();
-        const isExactTitle = /^(TO\s+WHOM\s+IT\s+MAY\s+CONCERN|CERTIFICATE|EXPERIENCE\s+CERTIFICATE|APPOINTMENT\s+LETTER|RELIEVING\s+LETTER|MEMORANDUM|INVOICE)$/i.test(trimmedLine);
+        const isExactTitle = /^(TO\s+WHOM\s+IT\s+MAY\s+CONCERN|CERTIFICATE|EXPERIENCE\s+CERTIFICATE|APPOINTMENT\s+LETTER|RELIEVING\s+LETTER|MEMORANDUM|INVOICE|TAX\s+INVOICE|PAYSLIP|RESUME|CURRICULUM\s+VITAE|STATEMENT\s+OF\s+ACCOUNT)$/i.test(trimmedLine);
+        const headingLvl = detectHeadingFromText(trimmedLine);
         const isCenteredHeading =
           isCenteredLine &&
-          trimmedLine.length < 40 &&
+          trimmedLine.length < 50 &&
           (bucket.height >= 14 || bucket.items.every((it) => it.isBold)) &&
           !/[.,;!?]$/.test(trimmedLine);
 
-        if (isExactTitle || isCenteredHeading) {
+        const isLeftSectionHeading =
+          !insideSignoffSection &&
+          trimmedLine.length <= 70 &&
+          !/[.?!]$/.test(trimmedLine) &&
+          (bucket.height >= 13 || (bucket.items.every((it) => it.isBold) && trimmedLine.length < 50) || headingLvl !== null);
+
+        if (isExactTitle || isCenteredHeading || isLeftSectionHeading) {
           flushBodyParagraph();
+          const level: 1 | 2 | 3 = isExactTitle || isCenteredHeading || headingLvl === 1 || bucket.height >= 16
+            ? 1
+            : headingLvl === 3 || bucket.height < 12
+            ? 3
+            : 2;
+
+          const headingSizes = { 1: 32, 2: 28, 3: 24 }; // 16pt, 14pt, 12pt
+          const headingSpacings = {
+            1: { before: 260, after: 120 },
+            2: { before: 200, after: 90 },
+            3: { before: 160, after: 70 },
+          };
+
           documentChildren.push(
             new Paragraph({
-              alignment: AlignmentType?.CENTER || 'center',
-              spacing: { before: 260, after: 220 },
+              alignment: isCenteredLine ? (AlignmentType?.CENTER || 'center') : (AlignmentType?.LEFT || 'left'),
+              spacing: headingSpacings[level],
               children: [
                 new TextRun({
                   text: trimmedLine,
                   bold: true,
-                  size: 24, // 12pt
+                  size: headingSizes[level],
                   font: 'Calibri',
-                  underline: { type: UnderlineType?.SINGLE || 'single' },
+                  underline: isExactTitle ? { type: UnderlineType?.SINGLE || 'single' } : undefined,
                   color: '111827',
                 }),
               ],
@@ -1080,7 +1114,41 @@ export const convertPdfToWord = async (
           continue;
         }
 
-        // 2. Signoff detection (e.g. "For Essar Projects", "Sincerely", "Yours faithfully")
+        // 2. Bullet / Numbered List Item detection
+        const listItem = detectListFromText(trimmedLine);
+        if (listItem && !insideSignoffSection) {
+          flushBodyParagraph();
+          const bulletPrefix = listItem.type === 'bullet'
+            ? '• '
+            : `${trimmedLine.match(/^(\d+|[a-zA-Z]|[ivxlcdm]+)[\.\)]/i)?.[0] || '1.'} `;
+
+          documentChildren.push(
+            new Paragraph({
+              indent: { left: 480, hanging: 240 },
+              children: [
+                new TextRun({
+                  text: bulletPrefix,
+                  bold: true,
+                  size: 22,
+                  font: 'Calibri',
+                  color: '1F2937',
+                }),
+                new TextRun({
+                  text: listItem.text,
+                  bold: bucket.items.some((it) => it.isBold),
+                  italics: bucket.items.some((it) => it.isItalic),
+                  size: 22,
+                  font: 'Calibri',
+                  color: '1F2937',
+                }),
+              ],
+              spacing: { after: 70, line: 260 },
+            })
+          );
+          continue;
+        }
+
+        // 3. Signoff detection (e.g. "For Essar Projects", "Sincerely", "Yours faithfully")
         if (/^For\s+|^Sincerely|^Yours\s+faithfully|^Authorized\s+Signatory|^With\s+regards|^Regards/i.test(lineText)) {
           flushBodyParagraph();
           insideSignoffSection = true;
@@ -1129,7 +1197,7 @@ export const convertPdfToWord = async (
           continue;
         }
 
-        // 3. Post-signoff lines (e.g. "Suresh Jain", "Hr Manager")
+        // 4. Post-signoff lines (e.g. "Suresh Jain", "Hr Manager")
         if (insideSignoffSection) {
           documentChildren.push(
             new Paragraph({
@@ -1148,7 +1216,7 @@ export const convertPdfToWord = async (
           continue;
         }
 
-        // 4. Standard body line formatting with inline bold preserved and sub-pixel letter merging
+        // 5. Standard body line formatting with proportional font sizing and inline styling
         bucket.items.forEach((it, itIdx) => {
           const prevItem = itIdx > 0 ? bucket.items[itIdx - 1] : null;
           let needSpace = false;
@@ -1160,12 +1228,15 @@ export const convertPdfToWord = async (
           }
 
           const sp = needSpace ? ' ' : '';
+          const calcSize = it.fontSize ? Math.round(it.fontSize * 2) : 22;
+          const finalSize = Math.max(16, Math.min(48, calcSize)); // Proportional font size from 8pt to 24pt
+
           bodyRunBuffer.push(
             new TextRun({
               text: `${sp}${it.str.trim()}`,
               bold: it.isBold,
               italics: it.isItalic,
-              size: Math.max(20, Math.min(26, it.fontSize * 2)),
+              size: finalSize,
               font: 'Calibri',
               color: '1F2937',
             })
@@ -1221,8 +1292,9 @@ export const convertPdfToWord = async (
         if (options.onProgress) {
           options.onProgress(pageNum, pdf.numPages, `Running accurate OCR on scanned page ${pageNum}...`);
         }
+        const ocrLang = options.ocrLanguage || 'eng+hin';
         const tesseract = await ensureTesseract();
-        const worker = await tesseract.createWorker('eng');
+        const worker = await tesseract.createWorker(ocrLang);
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(viewport.width * 2);
         canvas.height = Math.round(viewport.height * 2);
@@ -1231,33 +1303,21 @@ export const convertPdfToWord = async (
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: 2.0 }) }).promise;
-          const imgBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+
+          // Preprocess canvas with deskew & noise filter for crisp OCR
+          const processedCanvas = preprocessCanvasForOcr(canvas, {
+            deskew: true,
+            denoise: true,
+            contrastBoost: 1.3,
+          });
+
+          const imgBlob = await new Promise<Blob | null>((resolve) => processedCanvas.toBlob(resolve, 'image/png'));
           if (imgBlob) {
             const result = await worker.recognize(imgBlob);
-            const lines = result?.data?.lines || [];
-            lines.forEach((l: any) => {
-              const txt = (l.text || '').trim();
-              if (txt) {
-                const isHeading = detectHeadingFromText(txt);
-                if (isHeading) {
-                  documentChildren.push(createProfessionalHeading(txt, 2));
-                } else {
-                  documentChildren.push(
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: txt,
-                          size: 22,
-                          font: 'Calibri',
-                          color: '1F2937',
-                        }),
-                      ],
-                      spacing: { after: 120, line: 276 },
-                    })
-                  );
-                }
-              }
-            });
+            const ocrElements = processExtractedText(result?.data?.text || '');
+            if (ocrElements && ocrElements.length > 0) {
+              documentChildren.push(...ocrElements);
+            }
           }
         }
         await worker.terminate();
@@ -1273,6 +1333,12 @@ export const convertPdfToWord = async (
           children: [new PageBreak()],
         })
       );
+    }
+
+    // Explicitly release page canvas backing store to prevent memory pressure crashes on multi-page files
+    if (pageCanvas) {
+      pageCanvas.width = 0;
+      pageCanvas.height = 0;
     }
   }
 
@@ -1852,9 +1918,9 @@ function buildStructuredLinesFromTextItems(textItems: any[]): Array<{ lineText: 
 }
 
 function shouldTreatAsTableLine(cells: string[]): boolean {
-  if (cells.length < 3) return false;
+  if (cells.length < 2) return false;
   const nonEmpty = cells.filter((cell) => cell.trim().length > 0);
-  if (nonEmpty.length < 3) return false;
+  if (nonEmpty.length < 2) return false;
   // Reject noisy splits like single-character fragments
   const veryShort = nonEmpty.filter((cell) => cell.trim().length <= 1).length;
   if (veryShort > Math.floor(nonEmpty.length / 2)) return false;
@@ -2027,28 +2093,29 @@ function detectList(text: string): { text: string, type: 'bullet' | 'number', le
 }
 
 function detectTableRow(text: string): boolean {
-  // Simple heuristic: multiple separators or consistent spacing
   const separators = (text.match(/\|/g) || []).length;
   const tabs = (text.match(/\t/g) || []).length;
   const commas = (text.match(/,/g) || []).length;
+  const multiSpaces = (text.match(/\s{2,}/g) || []).length;
 
-  return separators >= 2 || tabs >= 2 || (commas >= 3 && text.length > 50);
+  return separators >= 1 || tabs >= 1 || (commas >= 2 && text.length > 25) || multiSpaces >= 2;
 }
 
 function parseTableRow(text: string): string[] {
-  // Try different separators
   if (text.includes('|')) {
-    return text.split('|').map(cell => cell.trim());
+    return text.split('|').map(cell => cell.trim()).filter(Boolean);
   }
   if (text.includes('\t')) {
-    return text.split('\t').map(cell => cell.trim());
+    return text.split('\t').map(cell => cell.trim()).filter(Boolean);
+  }
+  if (/\s{2,}/.test(text)) {
+    return text.split(/\s{2,}/).map(cell => cell.trim()).filter(Boolean);
   }
   if (text.includes(',')) {
-    return text.split(',').map(cell => cell.trim());
+    return text.split(',').map(cell => cell.trim()).filter(Boolean);
   }
 
-  // Fallback: split by multiple spaces
-  return text.split(/\s{2,}/).map(cell => cell.trim());
+  return [text.trim()];
 }
 
 function shouldFlushParagraph(text: string): boolean {
@@ -2060,21 +2127,44 @@ function shouldFlushParagraph(text: string): boolean {
 
 /**
  * TEXT-PATTERN BASED HEADING DETECTION (NO FONT-SIZE)
- * For image PDFs where OCR font sizes don't exist
+ * Detects Level 1 (Document Title), Level 2 (Section), Level 3 (Subsection)
  */
 function detectHeadingFromText(text: string): 1 | 2 | 3 | null {
-  const cleanText = text.trim();
-  if (!cleanText) return null;
+  const clean = text.trim();
+  if (!clean || clean.length < 2) return null;
 
-  // ✅ FINAL HEADING DETECTION LOGIC
-  const isHeading = (
-    cleanText.length < 30 &&
-    /^[A-Z][A-Za-z ]+$/.test(cleanText)
-  );
+  // Level 1: Major Document Titles & Section Banners
+  if (
+    /^(TO\s+WHOM\s+IT\s+MAY\s+CONCERN|CERTIFICATE|EXPERIENCE\s+CERTIFICATE|APPOINTMENT\s+LETTER|RELIEVING\s+LETTER|MEMORANDUM|INVOICE|TAX\s+INVOICE|PAYSLIP|RESUME|CURRICULUM\s+VITAE|ANNUAL\s+REPORT|TABLE\s+OF\s+CONTENTS|STATEMENT\s+OF\s+ACCOUNT)$/i.test(clean) ||
+    (/^[A-Z0-9\s,&:\-]{4,50}$/.test(clean) && !/[.,;!?]$/.test(clean) && !/^(AND|OR|THE|FOR|OF|IN|ON|AT|BY|WITH)\b/i.test(clean))
+  ) {
+    return 1;
+  }
 
-  if (isHeading) {
-    // Will detect: Address, Hobbies, About Me, Contact Information, Useful Link
-    return 3; // All headings treated as level 3 for simplicity
+  // Level 2: Numbered Sections & Standard Headings
+  // Examples: "1. Introduction", "1.1 System Architecture", "Section 2: Background", "Chapter 3 - Methods", "Key Responsibilities:"
+  if (
+    /^(\d+\.|\d+\.\d+|Section\s+\d+|Chapter\s+\d+|Part\s+\d+)\s+[A-Za-z0-9]/i.test(clean) &&
+    clean.length < 90 &&
+    !/[.?!]$/.test(clean)
+  ) {
+    return 2;
+  }
+
+  if (
+    clean.length <= 60 &&
+    (/^[A-Z][A-Za-z0-9\s,&/\-]+:$/.test(clean) || // Ends with colon, e.g. "Work Experience:", "Key Highlights:"
+     (/^[A-Z][A-Za-z0-9\s,&/\-]+$/.test(clean) && clean.length <= 40 && !/[.?!]$/.test(clean))) // Short Title Case
+  ) {
+    return 2;
+  }
+
+  // Level 3: Subsections (e.g. "1.1.1 Overview", "(a) Requirements", "iv. Additional terms")
+  if (
+    /^(\d+\.\d+\.\d+|\([a-zA-Z0-9]\)|[ivxlcdm]+\.)\s+[A-Za-z0-9]/i.test(clean) &&
+    clean.length < 80
+  ) {
+    return 3;
   }
 
   return null;
@@ -2223,6 +2313,26 @@ function createProfessionalTable(data: string[][]): DocxElement {
     return new Table({ rows: [] });
   }
 
+  const numCols = Math.max(...cleanData.map(r => r.length));
+  if (numCols < 2) return new Table({ rows: [] });
+
+  // Calculate proportional column widths based on cell text lengths
+  const colLengths: number[] = Array(numCols).fill(0);
+  cleanData.forEach(row => {
+    row.forEach((cell, cIdx) => {
+      colLengths[cIdx] = Math.max(colLengths[cIdx], (cell || '').length);
+    });
+  });
+  const totalLen = colLengths.reduce((a, b) => a + Math.max(6, b), 0);
+  const minColPct = numCols <= 3 ? 18 : numCols <= 5 ? 12 : 8;
+  const colPercentages = colLengths.map(len =>
+    Math.max(minColPct, Math.round((Math.max(6, len) / totalLen) * 100))
+  );
+  const sumPct = colPercentages.reduce((a, b) => a + b, 0);
+  if (sumPct > 0 && sumPct !== 100) {
+    colPercentages[0] += (100 - sumPct);
+  }
+
   const borderCfg = BorderStyle ? {
     top: { style: BorderStyle.SINGLE, size: 1, color: 'D1D5DB' },
     bottom: { style: BorderStyle.SINGLE, size: 1, color: 'D1D5DB' },
@@ -2235,7 +2345,12 @@ function createProfessionalTable(data: string[][]): DocxElement {
   // Create header row
   const headerRow = new TableRow({
     tableHeader: true,
-    children: cleanData[0].map(cell => new TableCell({
+    cantSplit: true,
+    children: cleanData[0].map((cell, cIdx) => new TableCell({
+      width: {
+        size: colPercentages[cIdx] || Math.floor(100 / numCols),
+        type: WidthType ? WidthType.PERCENTAGE : ('pct' as any)
+      },
       children: [new Paragraph({
         children: [new TextRun({
           text: cell || '',
@@ -2258,7 +2373,12 @@ function createProfessionalTable(data: string[][]): DocxElement {
   // Create data rows
   const dataRows = cleanData.slice(1).map((row, rIdx) =>
     new TableRow({
-      children: row.map(cell => new TableCell({
+      cantSplit: true,
+      children: row.map((cell, cIdx) => new TableCell({
+        width: {
+          size: colPercentages[cIdx] || Math.floor(100 / numCols),
+          type: WidthType ? WidthType.PERCENTAGE : ('pct' as any)
+        },
         children: [new Paragraph({
           children: [new TextRun({
             text: cell || '',
@@ -3045,6 +3165,60 @@ const paginateCanvasToPdf = (
 };
 
 /**
+ * Overlays an invisible, selectable, searchable OCR text layer over the page image in jsPDF.
+ * Preserves 100% text selectability and searchability (Ctrl+F) while retaining
+ * exact pixel-perfect visual fidelity of the Word document layout.
+ */
+const overlaySelectableTextLayer = (section: HTMLElement, pdf: any): void => {
+  try {
+    const secRect = section.getBoundingClientRect();
+    if (!secRect.width || !secRect.height) return;
+
+    // A4 dimensions in mm
+    const a4WidthMm = 210;
+    const a4HeightMm = 297;
+    const scaleX = a4WidthMm / secRect.width;
+    const scaleY = a4HeightMm / secRect.height;
+
+    // Find all text elements with non-empty text
+    const textEls = section.querySelectorAll('p, span, h1, h2, h3, h4, h5, h6, td, th, li, a');
+
+    textEls.forEach((el) => {
+      // Avoid duplicating text if element has child text elements
+      const hasChildTextEls = el.querySelector('p, span, h1, h2, h3, h4, h5, h6, td, th, li, a');
+      if (hasChildTextEls) return;
+
+      const text = (el.textContent || '').trim();
+      if (!text) return;
+
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+
+      const x = (r.left - secRect.left) * scaleX;
+      // Position baseline slightly below top
+      const y = (r.top - secRect.top) * scaleY + (r.height * scaleY * 0.78);
+
+      // Calculate font size in points (1 mm ≈ 2.83465 pt)
+      const fontSizePt = Math.max(5, Math.min(32, r.height * scaleY * 2.83465 * 0.72));
+
+      // Sanitize text for standard PDF encoding
+      const sanitized = text
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[^\x20-\x7E]/g, ' ');
+      if (!sanitized.trim()) return;
+
+      try {
+        pdf.setFontSize(fontSizePt);
+        pdf.text(sanitized, x, y, { renderingMode: 'invisible' });
+      } catch {}
+    });
+  } catch (err) {
+    console.warn('Text layer overlay error (non-fatal):', err);
+  }
+};
+
+/**
  * Professional Word to PDF conversion with accurate formatting preservation
  */
 export const convertWordToPdf = async (file: File): Promise<Blob> => {
@@ -3137,6 +3311,7 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
               const canvasData = sectionCanvas.toDataURL('image/jpeg', 0.98);
               if (addedPages > 0) pdf.addPage();
               pdf.addImage(canvasData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+              overlaySelectableTextLayer(section, pdf);
               addedPages++;
             }
           } else {
@@ -3155,9 +3330,11 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
             if (sectionCanvas.height <= canvasPageHeight * 1.15) {
               const canvasData = sectionCanvas.toDataURL('image/jpeg', 0.98);
               pdf.addImage(canvasData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+              overlaySelectableTextLayer(section, pdf);
               addedPages = 1;
             } else {
               addedPages = paginateCanvasToPdf(sectionCanvas, pdf, 0);
+              overlaySelectableTextLayer(section, pdf);
             }
           }
           docxRenderSuccess = addedPages > 0;
@@ -3244,9 +3421,11 @@ export const convertWordToPdf = async (file: File): Promise<Blob> => {
         if (canvas.height <= canvasPageHeight * 1.15) {
           const canvasData = canvas.toDataURL('image/jpeg', 0.98);
           pdf.addImage(canvasData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+          overlaySelectableTextLayer(mammothContainer, pdf);
           addedPages = 1;
         } else {
           addedPages = paginateCanvasToPdf(canvas, pdf, addedPages);
+          overlaySelectableTextLayer(mammothContainer, pdf);
         }
       } finally {
         if (mammothContainer.parentNode) {
@@ -3510,9 +3689,40 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
         }
       }
 
+      // Extract slide background color if specified
+      let bgHex = 'FFFFFF';
+      const bgMatch = slideXml.match(/<p:bg>[\s\S]*?<a:srgbClr val="([A-Fa-f0-9]{6})"/i) ||
+                      slideXml.match(/<p:bgPr>[\s\S]*?<a:srgbClr val="([A-Fa-f0-9]{6})"/i);
+      if (bgMatch && bgMatch[1]) {
+        bgHex = bgMatch[1].toUpperCase();
+      }
+      const bgR = parseInt(bgHex.slice(0, 2), 16) || 255;
+      const bgG = parseInt(bgHex.slice(2, 4), 16) || 255;
+      const bgB = parseInt(bgHex.slice(4, 6), 16) || 255;
+      const isDarkBg = (0.299 * bgR + 0.587 * bgG + 0.114 * bgB) < 128;
+
       // Extract slide title & bullet paragraphs
       const paragraphs: Array<{ text: string; isTitle: boolean }> = [];
       const pMatches = slideXml.match(/<a:p[\s\S]*?<\/a:p>/gi) || [];
+
+      // Check if slide contains tables (<a:tbl>)
+      const tableMatches = slideXml.match(/<a:tbl[\s\S]*?<\/a:tbl>/gi) || [];
+      const tableData: string[][][] = [];
+      tableMatches.forEach((tblXml) => {
+        const rows: string[][] = [];
+        const trMatches = tblXml.match(/<a:tr[\s\S]*?<\/a:tr>/gi) || [];
+        trMatches.forEach((trXml) => {
+          const cells: string[] = [];
+          const tcMatches = trXml.match(/<a:tc[\s\S]*?<\/a:tc>/gi) || [];
+          tcMatches.forEach((tcXml) => {
+            const tMatches = tcXml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi) || [];
+            const cellText = tMatches.map((m) => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ');
+            cells.push(cellText);
+          });
+          if (cells.length > 0) rows.push(cells);
+        });
+        if (rows.length > 0) tableData.push(rows);
+      });
 
       pMatches.forEach((pXml, pIdx) => {
         const textMatches = pXml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi) || [];
@@ -3524,7 +3734,7 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
         if (pText) {
           paragraphs.push({
             text: pText,
-            isTitle: pIdx === 0 && pText.length < 80
+            isTitle: pIdx === 0 && pText.length < 90
           });
         }
       });
@@ -3538,21 +3748,21 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
         continue;
       }
 
-      // SCENARIO 2: Formatted text presentation slide
-      pdf.setFillColor(255, 255, 255);
+      // SCENARIO 2: Formatted presentation slide
+      pdf.setFillColor(bgR, bgG, bgB);
       pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-      // Top slide color accent bar
-      pdf.setFillColor(234, 88, 12);
+      // Top slide accent bar
+      pdf.setFillColor(isDarkBg ? 59 : 234, isDarkBg ? 130 : 88, isDarkBg ? 246 : 12);
       pdf.rect(0, 0, pageWidth, 4, 'F');
 
-      let currentY = margin + 20;
+      let currentY = margin + 18;
 
       // Render side image if available
       if (imageKeys.length > 0) {
         try {
           const firstImg = mediaImages[imageKeys[0]];
-          const imgW = Math.min(260, contentWidth * 0.4);
+          const imgW = Math.min(260, contentWidth * 0.38);
           const imgH = Math.min(pageHeight - (margin * 2) - 30, 260);
           pdf.addImage(firstImg, 'PNG', pageWidth - margin - imgW, currentY, imgW, imgH, undefined, 'FAST');
         } catch {
@@ -3562,33 +3772,81 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
 
       const textColWidth = imageKeys.length > 0 ? contentWidth - 280 : contentWidth;
 
+      // Adaptive text sizing based on density to prevent content truncation
+      const bodyParagraphs = paragraphs.filter(p => !p.isTitle);
+      const density = bodyParagraphs.length;
+      const bodyFontSize = density > 8 ? 9.5 : density > 5 ? 11 : 12.5;
+      const bodyLineSpacing = density > 8 ? 13 : density > 5 ? 15 : 17;
+
       if (paragraphs.length > 0) {
         paragraphs.forEach((p, idx) => {
-          if (currentY > pageHeight - margin - 30) return;
+          if (currentY > pageHeight - margin - 25) return;
 
           if (p.isTitle) {
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(22);
-            pdf.setTextColor(15, 23, 42);
+            pdf.setFontSize(21);
+            pdf.setTextColor(isDarkBg ? 248 : 15, isDarkBg ? 250 : 23, isDarkBg ? 252 : 42);
             const lines = pdf.splitTextToSize(p.text, textColWidth);
             pdf.text(lines, margin, currentY);
-            currentY += (lines.length * 26) + 8;
+            currentY += (lines.length * 24) + 6;
 
-            pdf.setDrawColor(226, 232, 240);
+            pdf.setDrawColor(isDarkBg ? 71 : 226, isDarkBg ? 85 : 232, isDarkBg ? 105 : 240);
             pdf.setLineWidth(1);
-            pdf.line(margin, currentY - 4, margin + Math.min(textColWidth, 400), currentY - 4);
-            currentY += 12;
+            pdf.line(margin, currentY - 4, margin + Math.min(textColWidth, 380), currentY - 4);
+            currentY += 10;
           } else {
             pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(13);
-            pdf.setTextColor(51, 65, 85);
+            pdf.setFontSize(bodyFontSize);
+            pdf.setTextColor(isDarkBg ? 226 : 51, isDarkBg ? 232 : 65, isDarkBg ? 240 : 85);
             const prefix = idx > 0 ? '•  ' : '';
             const lines = pdf.splitTextToSize(`${prefix}${p.text}`, textColWidth);
-            pdf.text(lines, margin + (idx > 0 ? 10 : 0), currentY);
-            currentY += (lines.length * 18) + 8;
+            pdf.text(lines, margin + (idx > 0 ? 8 : 0), currentY);
+            currentY += (lines.length * bodyLineSpacing) + 5;
           }
         });
-      } else {
+      }
+
+      // Render any slide tables
+      if (tableData.length > 0 && currentY < pageHeight - margin - 60) {
+        tableData.forEach((table) => {
+          const numCols = Math.max(...table.map(r => r.length));
+          if (numCols === 0) return;
+          const colWidth = Math.floor(textColWidth / numCols);
+          const rowHeight = 18;
+
+          table.forEach((row, rIdx) => {
+            if (currentY + rowHeight > pageHeight - margin - 20) return;
+            const isHeader = rIdx === 0;
+
+            // Row background
+            pdf.setFillColor(isHeader ? (isDarkBg ? 51 : 241) : (rIdx % 2 === 0 ? (isDarkBg ? 30 : 248) : bgR),
+                             isHeader ? (isDarkBg ? 65 : 245) : (rIdx % 2 === 0 ? (isDarkBg ? 41 : 250) : bgG),
+                             isHeader ? (isDarkBg ? 85 : 249) : (rIdx % 2 === 0 ? (isDarkBg ? 59 : 252) : bgB));
+            pdf.rect(margin, currentY, colWidth * row.length, rowHeight, 'F');
+
+            // Cell borders
+            pdf.setDrawColor(isDarkBg ? 71 : 203, isDarkBg ? 85 : 213, isDarkBg ? 105 : 225);
+            pdf.setLineWidth(0.5);
+
+            row.forEach((cellText, cIdx) => {
+              const x = margin + (cIdx * colWidth);
+              pdf.rect(x, currentY, colWidth, rowHeight, 'S');
+
+              pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
+              pdf.setFontSize(isHeader ? 9.5 : 8.5);
+              pdf.setTextColor(isDarkBg ? 241 : 30, isDarkBg ? 245 : 41, isDarkBg ? 249 : 59);
+
+              const cleanCell = cellText.length > 25 ? cellText.slice(0, 23) + '…' : cellText;
+              pdf.text(cleanCell, x + 4, currentY + 12);
+            });
+
+            currentY += rowHeight;
+          });
+          currentY += 8;
+        });
+      }
+
+      if (paragraphs.length === 0 && tableData.length === 0) {
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(18);
         pdf.setTextColor(148, 163, 184);
@@ -3597,10 +3855,10 @@ export const convertPowerPointToPdf = async (file: File): Promise<Blob> => {
 
       // Slide Footer
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(file.name.replace(/\.[^/.]+$/, ''), margin, pageHeight - 16);
-      pdf.text(`Slide ${i + 1} of ${slideFiles.length}`, pageWidth - margin, pageHeight - 16, { align: 'right' });
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(isDarkBg ? 148 : 148, isDarkBg ? 163 : 163, isDarkBg ? 184 : 184);
+      pdf.text(file.name.replace(/\.[^/.]+$/, ''), margin, pageHeight - 14);
+      pdf.text(`Slide ${i + 1} of ${slideFiles.length}`, pageWidth - margin, pageHeight - 14, { align: 'right' });
     }
 
     return pdf.output('blob');

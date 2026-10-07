@@ -291,46 +291,47 @@ export const PdfSummarizerQA: React.FC = () => {
   };
 
   // Sample document for instant 1-click test
+  // Sample document for instant 1-click test
   const handleSampleDoc = async () => {
     const sampleData: StructuredSummaryData = {
-      title: "NCISM Elective Courses - FAQs Summary",
-      document_type: "policy",
+      title: "Cloud Infrastructure & AI Platform Proposal - Executive Summary",
+      document_type: "proposal",
       bullets: [
         {
-          heading: "Electives Definition",
-          text: "Optional courses in B.A.M.S./B.U.M.S./B.S.M.S./B.S.R.M.S. for interdisciplinary exposure.",
-          topic: "Electives Definition",
-          detail: "Optional courses in B.A.M.S./B.U.M.S./B.S.M.S./B.S.R.M.S. for interdisciplinary exposure.",
+          heading: "Architecture Scope",
+          text: "Multi-region distributed cluster with 99.99% high-availability SLA and automatic failover.",
+          topic: "Architecture Scope",
+          detail: "Multi-region distributed cluster with 99.99% high-availability SLA and automatic failover.",
         },
         {
-          heading: "Mandatory Requirement",
-          text: "Students must complete a minimum of 3 electives per session; 9 before the final exam.",
-          topic: "Mandatory Requirement",
-          detail: "Students must complete a minimum of 3 electives per session; 9 before the final exam.",
+          heading: "Data Privacy & Security",
+          text: "Zero-knowledge client-side encryption with strict TLS 1.3 in-transit and AES-256 storage protection.",
+          topic: "Data Privacy & Security",
+          detail: "Zero-knowledge client-side encryption with strict TLS 1.3 in-transit and AES-256 storage protection.",
         },
         {
-          heading: "Structure & Hours",
-          text: "Each elective consists of 5 modules (45 hours total), earning academic credits.",
-          topic: "Structure & Hours",
-          detail: "Each elective consists of 5 modules (45 hours total), earning academic credits.",
+          heading: "Cost Optimization",
+          text: "Reduced monthly compute expenditure by 34% via edge caching and intelligent serverless auto-scaling.",
+          topic: "Cost Optimization",
+          detail: "Reduced monthly compute expenditure by 34% via edge caching and intelligent serverless auto-scaling.",
         },
         {
-          heading: "Marks Addition",
-          text: "Elective marks contribute directly to viva marks in respective subjects.",
-          topic: "Marks Addition",
-          detail: "Elective marks contribute directly to viva marks in respective subjects.",
+          heading: "Compliance Standards",
+          text: "Fully compliant with ISO/IEC 27001, SOC2 Type II, and regional data protection regulations.",
+          topic: "Compliance Standards",
+          detail: "Fully compliant with ISO/IEC 27001, SOC2 Type II, and regional data protection regulations.",
         },
         {
-          heading: "Course Fee",
-          text: "INR 500 per elective, payable before semester results are issued.",
-          topic: "Course Fee",
-          detail: "INR 500 per elective, payable before semester results are issued.",
+          heading: "Deployment Roadmap",
+          text: "Phased rollout across 4 sprint cycles with zero customer downtime.",
+          topic: "Deployment Roadmap",
+          detail: "Phased rollout across 4 sprint cycles with zero customer downtime.",
         },
       ],
       suggestedQuestions: [
-        "What are elective courses?",
-        "What is the fee for elective courses?",
-        "How many electives are mandatory before the final exam?",
+        "What is the planned SLA and failover strategy?",
+        "How does the proposal handle client data privacy?",
+        "What are the key cost optimization measures?",
       ],
       formattedMarkdown: "",
     };
@@ -347,15 +348,15 @@ export const PdfSummarizerQA: React.FC = () => {
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      page.drawText("NCISM FAQ'S ON ELECTIVES (Sample Document)", {
+      page.drawText("CLOUD ARCHITECTURE & SECURITY PROPOSAL (Sample Document)", {
         x: 50,
         y: 790,
-        size: 15,
+        size: 14,
         font: fontBold,
         color: rgb(0.1, 0.2, 0.45),
       });
 
-      page.drawText("National Commission for Indian System of Medicine", {
+      page.drawText("Enterprise Infrastructure & Platform Engineering Group", {
         x: 50,
         y: 770,
         size: 10,
@@ -365,23 +366,24 @@ export const PdfSummarizerQA: React.FC = () => {
 
       let yPos = 730;
       const lines = [
-        "1. What are Electives or Elective Courses?",
-        "Electives are courses which can be chosen from a pool of papers. They may be very specific or",
-        "advanced, supportive to the discipline, providing an expanded scope, or enabling an exposure to",
-        "some other discipline or domain. They nurture student's proficiency and skill.",
+        "1. Executive Overview & System Architecture:",
+        "This proposal outlines the high-availability cloud architecture for global scale.",
+        "The system incorporates multi-region redundancy, serverless edge compute, and automated",
+        "health failovers to maintain consistent sub-50ms round-trip latency.",
         "",
-        "2. Mandatory Requirement for Students:",
-        "Each student must complete a minimum of three electives per session, totalling nine electives",
-        "before appearing in the final professional examination.",
+        "2. Data Privacy, Encryption & Sovereignty:",
+        "All data processing adheres to zero-knowledge protocols. Sensitive documents are sanitized",
+        "in-memory with ephemeral lifecycles, backed by AES-256 storage encryption.",
         "",
-        "3. Elective Modules & Duration:",
-        "Each elective course consists of five modules, each module with nine hours of learning (45 hours total).",
+        "3. Performance & Cost Optimization:",
+        "Intelligent edge caching and dynamic resource pooling reduce operational infrastructure",
+        "expenses by an estimated 34% compared to dedicated instance baselines.",
         "",
-        "4. Marks Addition in University Results:",
-        "Elective marks shall contribute towards the viva marks in the respective subject examination.",
+        "4. Regulatory Compliance & Governance:",
+        "The infrastructure satisfies ISO/IEC 27001, SOC2 Type II, and international data privacy laws.",
         "",
-        "5. Fee Structure:",
-        "The fee for each elective is INR 500, payable before the issuance of course results.",
+        "5. Phased Rollout Roadmap:",
+        "Staged deployment across 4 bi-weekly sprints with automated canary testing.",
       ];
 
       for (const line of lines) {
@@ -400,7 +402,7 @@ export const PdfSummarizerQA: React.FC = () => {
       }
 
       const pdfBytes = await pdfDoc.save();
-      const dummyFile = new File([pdfBytes], "FAQ's Electives 06_10_2025.pdf", {
+      const dummyFile = new File([pdfBytes], "Platform_Architecture_Proposal_Sample.pdf", {
         type: "application/pdf",
       });
 
@@ -413,7 +415,7 @@ export const PdfSummarizerQA: React.FC = () => {
       });
       setGeneratedSummary(sampleData);
     } catch {
-      const dummyFile = new File([sampleData.formattedMarkdown], "FAQ's Electives 06_10_2025.txt", {
+      const dummyFile = new File([sampleData.formattedMarkdown], "Platform_Architecture_Proposal_Sample.txt", {
         type: "text/plain",
       });
       setFile(dummyFile);

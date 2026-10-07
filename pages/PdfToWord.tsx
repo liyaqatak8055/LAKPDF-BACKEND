@@ -26,6 +26,7 @@ export const PdfToWord: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [readyDocx, setReadyDocx] = useState<{ blob: Blob; name: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [ocrLanguage, setOcrLanguage] = useState<'eng+hin' | 'eng' | 'hin'>('eng+hin');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +54,7 @@ export const PdfToWord: React.FC = () => {
       // 2. Perform direct high-accuracy conversion
       const docxBlob = await convertPdfToWord(selectedFile, {
         method: 'auto',
+        ocrLanguage,
         preserveLayout: true,
         onProgress: (current, total, msg) => {
           const pct = Math.min(95, Math.max(15, Math.round((current / total) * 90)));
@@ -217,6 +219,22 @@ export const PdfToWord: React.FC = () => {
                   Select PDF Document
                 </Button>
 
+                <div
+                  className="mt-6 inline-flex items-center gap-2 p-1.5 bg-white border border-slate-200 rounded-xl shadow-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="text-xs font-semibold text-slate-500 pl-2">OCR Fallback Language:</span>
+                  <select
+                    value={ocrLanguage}
+                    onChange={(e) => setOcrLanguage(e.target.value as any)}
+                    className="text-xs font-medium text-slate-700 bg-transparent border-0 focus:ring-0 cursor-pointer pr-2"
+                  >
+                    <option value="eng+hin">English + Hindi (Default)</option>
+                    <option value="eng">English Only</option>
+                    <option value="hin">Hindi Only</option>
+                  </select>
+                </div>
+
                 <div className="mt-8 flex flex-wrap justify-center items-center gap-6 text-xs text-slate-500 font-medium">
                   <span className="flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-amber-500" />
@@ -304,6 +322,26 @@ export const PdfToWord: React.FC = () => {
                   <span className="text-xs font-bold text-emerald-600 bg-emerald-100/70 px-2.5 py-1 rounded-full shrink-0">
                     Ready
                   </span>
+                </div>
+
+                {/* Layout Fidelity Verification */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600 max-w-md mx-auto">
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                    <span className="font-bold text-slate-900 block text-xs">Typography</span>
+                    <span className="text-[11px] text-slate-500">Proportional Sizing</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                    <span className="font-bold text-slate-900 block text-xs">Tables</span>
+                    <span className="text-[11px] text-slate-500">Native DOCX Grids</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                    <span className="font-bold text-slate-900 block text-xs">Headings</span>
+                    <span className="text-[11px] text-slate-500">Document Outline</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                    <span className="font-bold text-slate-900 block text-xs">Bilingual OCR</span>
+                    <span className="text-[11px] text-slate-500">Scanned Fallback</span>
+                  </div>
                 </div>
 
                 {/* Action Buttons */}

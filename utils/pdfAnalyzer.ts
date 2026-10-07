@@ -5,7 +5,7 @@ import { logger } from './logger';
 
 // Configure PDF.js to use worker file from public directory
 // This works perfectly in main thread!
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`;
 
 // Page limit hard-cap
 const MAX_ANALYZE_PAGES = 10;

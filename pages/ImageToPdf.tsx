@@ -298,7 +298,7 @@ export const ImageToPdf: React.FC = () => {
                     type="button"
                     onClick={toggleSort}
                     title={`Sort by Name (${sortAsc ? 'A-Z' : 'Z-A'})`}
-                    className="flex h-9 items-center gap-1.5 px-3 rounded-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-xs transition-all text-xs font-semibold"
+                    className="flex h-9 items-center gap-1.5 px-3 rounded-full border border-slate-300 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-hover hover:text-slate-900 dark:hover:text-white shadow-xs transition-all text-xs font-semibold"
                   >
                     <ArrowUpDown className="h-3.5 w-3.5" />
                     <span>{sortAsc ? 'A → Z' : 'Z → A'}</span>
@@ -312,7 +312,7 @@ export const ImageToPdf: React.FC = () => {
                   >
                     <Plus className="h-4 w-4" />
                     <span>Add Images</span>
-                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-black text-white ring-2 ring-white">
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-dark-surface">
                       {files.length}
                     </span>
                   </button>
@@ -329,10 +329,10 @@ export const ImageToPdf: React.FC = () => {
                     onDragEnter={() => onDragEnter(index)}
                     onDragEnd={onDragEnd}
                     onDragOver={(e) => e.preventDefault()}
-                    className={`group relative flex flex-col rounded-xl border-2 bg-white p-2 transition-all cursor-grab active:cursor-grabbing select-none shadow-xs ${
+                    className={`group relative flex flex-col rounded-xl border-2 bg-white dark:bg-dark-surface p-2 transition-all cursor-grab active:cursor-grabbing select-none shadow-xs ${
                       dragOver === index
                         ? 'border-primary-500 shadow-md scale-[1.03]'
-                        : 'border-slate-200 hover:border-primary-400 hover:shadow-sm'
+                        : 'border-slate-200 dark:border-dark-border hover:border-primary-400 hover:shadow-sm'
                     }`}
                   >
                     {/* Page Number Badge */}
@@ -407,13 +407,13 @@ export const ImageToPdf: React.FC = () => {
 
                     {/* File Meta */}
                     <div className="mt-2 px-1">
-                      <p className="truncate text-xs font-semibold text-slate-800" title={file.name}>
+                      <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200" title={file.name}>
                         {file.name}
                       </p>
-                      <p className="text-[10px] text-slate-400 flex items-center justify-between">
+                      <p className="text-[10px] text-slate-400 dark:text-dark-text-secondary flex items-center justify-between">
                         <span>{formatBytes(file.size)}</span>
                         {file.rotation !== 0 && (
-                          <span className="text-primary-600 font-bold">Rotated {file.rotation}°</span>
+                          <span className="text-primary-600 dark:text-primary-400 font-bold">Rotated {file.rotation}°</span>
                         )}
                       </p>
                     </div>
@@ -424,11 +424,11 @@ export const ImageToPdf: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 hover:bg-white hover:border-primary-400 text-slate-400 hover:text-primary-600 transition-all group ${
+                  className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-dark-border bg-white/70 dark:bg-dark-surface/50 hover:bg-white dark:hover:bg-dark-surface hover:border-primary-400 text-slate-400 dark:text-slate-500 hover:text-primary-600 transition-all group ${
                     orientation === 'landscape' ? 'aspect-[4/3]' : 'aspect-[3/4]'
                   }`}
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 group-hover:bg-primary-50 transition-colors mb-2">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 dark:bg-dark-bg group-hover:bg-primary-50 dark:group-hover:bg-primary-950/30 transition-colors mb-2">
                     <Plus className="h-6 w-6" />
                   </div>
                   <span className="text-xs font-bold">Add more</span>
@@ -437,15 +437,15 @@ export const ImageToPdf: React.FC = () => {
             </div>
 
             {/* ── RIGHT COLUMN: Sticky Settings Sidebar (iLovePDF Style) ── */}
-            <div className="sticky top-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-black text-slate-900 tracking-tight pb-4 border-b border-slate-100">
+            <div className="sticky top-6 rounded-2xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-6 shadow-sm">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight pb-4 border-b border-slate-100 dark:border-dark-border">
                 Image to PDF options
               </h2>
 
               <div className="mt-6 space-y-6">
                 {/* 1. Page Orientation */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2.5">
                     Page orientation
                   </label>
                   <div className="grid grid-cols-2 gap-3">
@@ -458,16 +458,16 @@ export const ImageToPdf: React.FC = () => {
                       }}
                       className={`flex flex-col items-center justify-center rounded-xl p-3.5 text-center transition-all ${
                         orientation === 'portrait'
-                          ? 'border-2 border-[#e5323f] bg-red-50/40 text-slate-900 shadow-xs ring-1 ring-[#e5323f]'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-2 border-[#e5323f] bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-white shadow-xs ring-1 ring-[#e5323f]'
+                          : 'border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       {/* Vertical Rectangle Icon */}
                       <div
                         className={`mb-2 h-8 w-5.5 rounded-xs border-2 ${
                           orientation === 'portrait'
-                            ? 'border-[#e5323f] bg-red-100/60'
-                            : 'border-slate-400'
+                            ? 'border-[#e5323f] bg-red-100/60 dark:bg-red-900/40'
+                            : 'border-slate-400 dark:border-slate-500'
                         }`}
                       />
                       <span className="text-xs font-bold">Portrait</span>
@@ -482,16 +482,16 @@ export const ImageToPdf: React.FC = () => {
                       }}
                       className={`flex flex-col items-center justify-center rounded-xl p-3.5 text-center transition-all ${
                         orientation === 'landscape'
-                          ? 'border-2 border-[#e5323f] bg-red-50/40 text-slate-900 shadow-xs ring-1 ring-[#e5323f]'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-2 border-[#e5323f] bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-white shadow-xs ring-1 ring-[#e5323f]'
+                          : 'border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       {/* Horizontal Rectangle Icon */}
                       <div
                         className={`mb-2 h-5.5 w-8 rounded-xs border-2 ${
                           orientation === 'landscape'
-                            ? 'border-[#e5323f] bg-red-100/60'
-                            : 'border-slate-400'
+                            ? 'border-[#e5323f] bg-red-100/60 dark:bg-red-900/40'
+                            : 'border-slate-400 dark:border-slate-500'
                         }`}
                       />
                       <span className="text-xs font-bold">Landscape</span>
@@ -501,7 +501,7 @@ export const ImageToPdf: React.FC = () => {
 
                 {/* 2. Page Size */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2.5">
                     Page size
                   </label>
                   <select
@@ -510,7 +510,7 @@ export const ImageToPdf: React.FC = () => {
                       setPageSize(e.target.value as PageSize);
                       setReadyResult(null);
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-800 shadow-xs outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                    className="w-full rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-bg px-3.5 py-3 text-sm font-semibold text-slate-800 dark:text-white shadow-xs outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   >
                     {PAGE_SIZE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -522,7 +522,7 @@ export const ImageToPdf: React.FC = () => {
 
                 {/* 3. Margin Options (3 boxes with icons) */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2.5">
                     Margin
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -535,15 +535,15 @@ export const ImageToPdf: React.FC = () => {
                       }}
                       className={`flex flex-col items-center justify-center rounded-xl p-2.5 text-center transition-all ${
                         margin === 'none'
-                          ? 'border-2 border-[#e5323f] bg-red-50/40 text-slate-900 shadow-xs'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-2 border-[#e5323f] bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-white shadow-xs'
+                          : 'border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       <div
                         className={`mb-1.5 flex h-7 w-7 items-center justify-center rounded border ${
                           margin === 'none'
-                            ? 'border-[#e5323f] bg-red-100/60 text-[#e5323f]'
-                            : 'border-slate-300 text-slate-400'
+                            ? 'border-[#e5323f] bg-red-100/60 dark:bg-red-900/40 text-[#e5323f]'
+                            : 'border-slate-300 dark:border-slate-500 text-slate-400'
                         }`}
                       >
                         <ImageIcon className="h-4 w-4" />
@@ -560,15 +560,15 @@ export const ImageToPdf: React.FC = () => {
                       }}
                       className={`flex flex-col items-center justify-center rounded-xl p-2.5 text-center transition-all ${
                         margin === 'small'
-                          ? 'border-2 border-[#e5323f] bg-red-50/40 text-slate-900 shadow-xs'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-2 border-[#e5323f] bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-white shadow-xs'
+                          : 'border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       <div
                         className={`mb-1.5 flex h-7 w-7 items-center justify-center rounded border border-dashed ${
                           margin === 'small'
-                            ? 'border-[#e5323f] bg-red-100/60 text-[#e5323f]'
-                            : 'border-slate-400 text-slate-400'
+                            ? 'border-[#e5323f] bg-red-100/60 dark:bg-red-900/40 text-[#e5323f]'
+                            : 'border-slate-400 dark:border-slate-500 text-slate-400'
                         }`}
                       >
                         <ImageIcon className="h-3 w-3" />
@@ -585,15 +585,15 @@ export const ImageToPdf: React.FC = () => {
                       }}
                       className={`flex flex-col items-center justify-center rounded-xl p-2.5 text-center transition-all ${
                         margin === 'big'
-                          ? 'border-2 border-[#e5323f] bg-red-50/40 text-slate-900 shadow-xs'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-2 border-[#e5323f] bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-white shadow-xs'
+                          : 'border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       <div
                         className={`mb-1.5 flex h-7 w-7 items-center justify-center rounded border-2 border-dotted ${
                           margin === 'big'
-                            ? 'border-[#e5323f] bg-red-100/60 text-[#e5323f]'
-                            : 'border-slate-400 text-slate-400'
+                            ? 'border-[#e5323f] bg-red-100/60 dark:bg-red-900/40 text-[#e5323f]'
+                            : 'border-slate-400 dark:border-slate-500 text-slate-400'
                         }`}
                       >
                         <ImageIcon className="h-2.5 w-2.5" />
@@ -610,9 +610,9 @@ export const ImageToPdf: React.FC = () => {
                       type="checkbox"
                       checked={mergeAll}
                       onChange={(e) => setMergeAll(e.target.checked)}
-                      className="h-4.5 w-4.5 rounded border-slate-300 text-[#e5323f] focus:ring-[#e5323f]"
+                      className="h-4.5 w-4.5 rounded border-slate-300 dark:border-dark-border text-[#e5323f] focus:ring-[#e5323f]"
                     />
-                    <span className="text-xs font-semibold text-slate-700">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Merge all images in one PDF file
                     </span>
                   </label>

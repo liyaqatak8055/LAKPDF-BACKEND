@@ -121,15 +121,15 @@ test.describe("Core PDF Tools Workflows", () => {
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(samplePdf1);
 
-    const textInput = page.locator('input[placeholder*="CONFIDENTIAL" i], input[type="text"]').first();
+    const textInput = page.locator('textarea[placeholder*="CONFIDENTIAL" i], input[placeholder*="CONFIDENTIAL" i], textarea, input[type="text"]').first();
     await expect(textInput).toBeVisible({ timeout: 15_000 });
     await textInput.fill("LAK CONFIDENTIAL");
 
-    const watermarkBtn = page.getByRole("button", { name: /add watermark/i });
+    const watermarkBtn = page.getByRole("button", { name: /(apply vector watermark|add watermark)/i });
     await expect(watermarkBtn).toBeEnabled({ timeout: 10_000 });
     await watermarkBtn.click();
 
-    await expect(page.getByRole("button", { name: /download pdf/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /download (watermarked )?pdf/i })).toBeVisible({ timeout: 15_000 });
     expect(pageErrors).toEqual([]);
   });
 
@@ -188,7 +188,7 @@ test.describe("Core PDF Tools Workflows", () => {
     await expect(protectBtn).toBeEnabled({ timeout: 10_000 });
     await protectBtn.click();
 
-    await expect(page.getByRole("button", { name: /download protected pdf/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /download (encrypted|protected) pdf/i })).toBeVisible({ timeout: 15_000 });
     expect(pageErrors).toEqual([]);
   });
 
@@ -444,7 +444,7 @@ test.describe("Image & Conversion Tools Workflows", () => {
       await typeTab.click();
       const input = page.locator('input[placeholder*="type your name" i]');
       await input.fill("John Doe");
-      await page.getByRole("button", { name: /generate typed signature/i }).click();
+      await page.getByRole("button", { name: /(generate signature|generate typed signature)/i }).click();
     } else {
       await page.getByRole("button", { name: /use this/i }).click();
     }

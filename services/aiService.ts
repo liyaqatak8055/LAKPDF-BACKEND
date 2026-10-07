@@ -514,6 +514,180 @@ export function parseStructuredSummaryText(
   };
 }
 
+/**
+ * Intelligently prepares a holistic excerpt of long documents (up to 100+ pages),
+ * ensuring the beginning, middle, and conclusion are all faithfully represented
+ * without blindly chopping off content after page 2-3.
+ */
+function prepareHolisticDocumentExcerpt(fullText: string, maxTargetChars: number = 18000): string {
+  if (!fullText) return '';
+  const clean = fullText.trim();
+  if (clean.length <= maxTargetChars) return clean;
+
+  // Allocate budget:
+  // 35% Beginning (Head: Title, intro, abstract, key parties, definitions)
+  // 40% Middle (Body: Core arguments, data, terms across the middle section)
+  // 25% End (Tail: Summary, conclusions, final clauses, signatures)
+  const headBudget = Math.floor(maxTargetChars * 0.35);
+  const tailBudget = Math.floor(maxTargetChars * 0.25);
+  const midBudget = maxTargetChars - headBudget - tailBudget;
+
+  const headText = clean.slice(0, headBudget).trim();
+  const tailText = clean.slice(clean.length - tailBudget).trim();
+
+  // Divide middle into 2 balanced snapshots at ~35% and ~65% mark of document
+  const midRemaining = clean.length - headBudget - tailBudget;
+  const chunk1Start = headBudget + Math.floor(midRemaining * 0.33);
+  const chunk1Size = Math.floor(midBudget / 2);
+  const chunk2Start = headBudget + Math.floor(midRemaining * 0.66);
+  const chunk2Size = midBudget - chunk1Size;
+
+  const midChunk1 = clean.slice(chunk1Start, chunk1Start + chunk1Size).trim();
+  const midChunk2 = clean.slice(chunk2Start, chunk2Start + chunk2Size).trim();
+
+  return [
+    headText,
+    '\n\n[... Continuing through middle document sections ...]\n\n',
+    midChunk1,
+    '\n\n[... Continuing through later document sections ...]\n\n',
+    midChunk2,
+    '\n\n[... Concluding sections, summary, and end notes ...]\n\n',
+    tailText,
+  ].join('');
+}
+
+/**
+ * High-precision client-side keyword and semantic relevance retrieval for Chat with Document.
+ * Ensures questions targeting any page (e.g. page 15, page 40) find the exact matching
+ * paragraphs instead of failing on documents longer than 3 pages.
+ */
+function retrieveRelevantContextForQuery(fullText: string, query: string, maxTargetChars: number = 16000): string {
+  if (!fullText) return '';
+  const clean = fullText.trim();
+  if (clean.length <= maxTargetChars) return clean;
+
+  // Split into natural paragraph/passage blocks (average 800 - 1500 chars)
+  const rawParagraphs = clean.split(/\n\s*\n+/);
+  const passages: { text: string; startIdx: number; score: number }[] = [];
+
+  let currentBlock = '';
+  let currentStart = 0;
+  for (const para of rawParagraphs) {
+    const pTrim = para.trim();
+    if (!pTrim) continue;
+    if (currentBlock.length + pTrim.length < 1200) {
+      currentBlock += (currentBlock ? '\n\n' : '') + pTrim;
+    } else {
+      if (currentBlock) {
+        passages.push({ text: currentBlock, startIdx: currentStart, score: 0 });
+        currentStart += currentBlock.length;
+      }
+      currentBlock = pTrim;
+    }
+  }
+  if (currentBlock) {
+    passages.push({ text: currentBlock, startIdx: currentStart, score: 0 });
+  }
+
+  // Tokenize user query for scoring
+  const stopwords = new Set([
+    'what', 'when', 'where', 'which', 'who', 'whom', 'whose', 'why', 'how',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'to', 'from', 'in', 'on',
+    'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through',
+    'during', 'before', 'after', 'above', 'below', 'can', 'could', 'should',
+    'would', 'kya', 'kaise', 'kab', 'kahan', 'hai', 'hain', 'tha', 'thi', 'the'
+  ]);
+
+  const queryTokens = query
+    .toLowerCase()
+    .replace(/[^\w\s\d]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length > 2 && !stopwords.has(t));
+
+  // Extract critical query entities (e.g., numbers, codes, dates, quotes)
+  const numbersOrDates = query.match(/\b(?:\d{1,4}[/-]\d{1,2}[/-]\d{2,4}|\d+(?:,\d+)*(?:\.\d+)?|\b(?:section|clause|article|rule|page)\s*\d+)\b/gi) || [];
+  const exactQuotes = (query.match(/"([^"]+)"/) || [])[1];
+
+  for (const passage of passages) {
+    const lower = passage.text.toLowerCase();
+    let score = 0;
+
+    // Exact phrase match bonus
+    if (exactQuotes && lower.includes(exactQuotes.toLowerCase())) {
+      score += 25;
+    }
+
+    // Number / date / code match bonus
+    for (const num of numbersOrDates) {
+      if (lower.includes(num.toLowerCase())) {
+        score += 15;
+      }
+    }
+
+    // Keyword matches
+    for (const token of queryTokens) {
+      if (lower.includes(token)) {
+        score += 4;
+        const count = lower.split(token).length - 1;
+        if (count > 1) score += Math.min(6, (count - 1) * 2);
+      }
+    }
+
+    passage.score = score;
+  }
+
+  // Keep first passage always for document context/title/meta
+  const firstPassage = passages[0];
+  const otherPassages = passages.slice(1).sort((a, b) => b.score - a.score);
+
+  // Take top relevant passages up to maxTargetChars budget
+  const selected: { text: string; startIdx: number }[] = [];
+  let currentLength = 0;
+
+  if (firstPassage) {
+    selected.push(firstPassage);
+    currentLength += firstPassage.text.length;
+  }
+
+  for (const p of otherPassages) {
+    if (currentLength + p.text.length + 50 > maxTargetChars) break;
+    if (p.score > 0 || currentLength < maxTargetChars * 0.4) {
+      selected.push(p);
+      currentLength += p.text.length;
+    }
+  }
+
+  // Sort selected passages back into original document sequence for natural reading
+  selected.sort((a, b) => a.startIdx - b.startIdx);
+
+  return selected.map(s => s.text).join('\n\n---\n\n');
+}
+
+/**
+ * Samples evenly across the entire document for comprehensive MCQ generation across all chapters.
+ */
+function sampleDistributedSegments(fullText: string, segmentCount: number = 4, maxCharsTotal: number = 18000): string {
+  if (!fullText) return '';
+  const clean = fullText.trim();
+  if (clean.length <= maxCharsTotal) return clean;
+
+  const actualSegments = Math.max(2, Math.min(8, segmentCount));
+  const segmentLength = Math.floor(clean.length / actualSegments);
+  const charsPerSegment = Math.floor(maxCharsTotal / actualSegments);
+
+  const parts: string[] = [];
+  for (let i = 0; i < actualSegments; i++) {
+    const start = i * segmentLength;
+    const chunk = clean.slice(start, start + charsPerSegment).trim();
+    if (chunk) {
+      parts.push(`[Section ${i + 1} of document]:\n${chunk}`);
+    }
+  }
+
+  return parts.join('\n\n====================\n\n');
+}
+
 class AIService {
   public getCustomApiKey(): string {
     try {
@@ -797,8 +971,7 @@ Length: ${lengthGuide}`;
         break;
     }
 
-    const maxTextChars = 14000;
-    const documentExcerpt = text.slice(0, maxTextChars);
+    const documentExcerpt = prepareHolisticDocumentExcerpt(text, 18000);
 
     const prompt = `${stylePrompt}
 
@@ -827,8 +1000,7 @@ Produce the summary with clean markdown formatting (headings, bold points, bulle
     if (!text || text.trim().length === 0) {
       throw new Error("No readable text found in this document to summarize.");
     }
-    const maxTextChars = 9000;
-    const documentExcerpt = text.slice(0, maxTextChars);
+    const documentExcerpt = prepareHolisticDocumentExcerpt(text, 18000);
 
     const prompt = `You are LakPDF AI Summary Engine, designed to generate ultra-scannable, highly professional executive summaries like Smallpdf.
 
@@ -986,8 +1158,7 @@ ${documentExcerpt}
         ? 'Respond in friendly Hinglish (Hindi in Roman alphabet).'
         : 'Respond in clear English.';
 
-    const maxContextChars = 12000;
-    const excerpt = contextText.slice(0, maxContextChars);
+    const excerpt = retrieveRelevantContextForQuery(contextText, userQuestion, 16000);
 
     const formattedHistory = history
       .slice(-4)
@@ -1117,7 +1288,7 @@ Return ONLY valid JSON matching:
 }
 
 --- DOCUMENT CONTENT ---
-${text.slice(0, 13000)}
+${sampleDistributedSegments(text, Math.min(count, 6), 18000)}
 --- END DOCUMENT ---`;
 
     const res = await this.callAPI(prompt, {

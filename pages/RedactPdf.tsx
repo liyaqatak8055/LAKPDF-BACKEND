@@ -23,23 +23,27 @@ import {
   X,
   AlertTriangle,
   Layers,
+  Unlock,
+  Fingerprint,
+  QrCode,
 } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
+import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 import {
   RedactionBox,
   searchPdfForRedaction,
   applyRedactionsToPdf,
+  detectSensitivePiiInPdf,
+  verifyRedactionSecurity,
+  SecurityVerificationResult,
+  mergeOverlappingBoxes,
+  detectQrCodesInPdf,
+  convertImageToPdfFile,
 } from '../services/redactService';
 import { formatBytes } from '../services/fileHelpers';
 import { ToolSEOContent } from '../components/ToolSEOContent';
 import { trackEvent } from '../utils/analytics';
-
-const pdfjs = pdfjsLib as any;
-
-if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions?.workerSrc) {
-  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-}
+import { pdfjs } from '../services/pdfService';
 
 // Redaction Box Interface with pageIndex & relative percent
 export interface ActiveDragState {
@@ -344,7 +348,9 @@ const RedactPageItem: React.FC<RedactPageItemProps> = ({
                   onRemoveBox(box.id);
                 }}
                 className={`redact-delete-btn absolute -top-3.5 -right-3.5 w-7 h-7 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white cursor-pointer z-50 transition-all ${
-                  isSelected ? 'opacity-100 scale-100' : 'opacity-85 group-hover:opacity-100'
+                  isSelected
+                    ? 'opacity-100 scale-100'
+                    : 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 pointer-events-none group-hover:pointer-events-auto'
                 }`}
                 title="Cut / Delete Box"
               >
@@ -451,7 +457,20 @@ export const RedactPdf: React.FC = () => {
   // Search auto-redact state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [searchMessage, setSearchMessage] = useState<string | null>(null);
+  const [isDetectingPii, setIsDetectingPii] = useState<boolean>(false);
+  const [isDetectingQr, setIsDetectingQr] = useState<boolean>(false);
+  const [searchMessage, setSearchMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [lastSearchedQuery, setLastSearchedQuery] = useState<string>('');
+  const [trackedSensitiveQueries, setTrackedSensitiveQueries] = useState<string[]>([]);
+  const [ocrLanguage, setOcrLanguage] = useState<string>('eng+hin');
+  const [deepOcr, setDeepOcr] = useState<boolean>(true);
+  const [securityVerification, setSecurityVerification] = useState<SecurityVerificationResult | null>(null);
+
+  // Image and Loading State
+  const [isLoadingDoc, setIsLoadingDoc] = useState<boolean>(false);
+  const [loadingDocMsg, setLoadingDocMsg] = useState<string>('');
+  const [isImageSource, setIsImageSource] = useState<boolean>(false);
+  const [sourceImageName, setSourceImageName] = useState<string>('');
 
   // Processing & Download state
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -460,6 +479,7 @@ export const RedactPdf: React.FC = () => {
   const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
 
   const [unscaledDims, setUnscaledDims] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [loadError, setLoadError] = useState<{ message: string; isPassword?: boolean } | null>(null);
 
   // Refs
   const viewportContainerRef = useRef<HTMLDivElement>(null);
@@ -505,12 +525,13 @@ export const RedactPdf: React.FC = () => {
     }
   };
 
-  // Load PDF file
+  // Load PDF or Image file
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
       loadPdfFile(files[0]);
     }
+    e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -521,15 +542,28 @@ export const RedactPdf: React.FC = () => {
   };
 
   const loadPdfFile = async (f: File) => {
-    setFile(f);
-    setRedactions([]);
-    setSelectedBoxId(null);
-    setDownloadBlob(null);
-
+    setLoadError(null);
+    setIsLoadingDoc(true);
     try {
-      const buffer = await f.arrayBuffer();
+      let targetFile = f;
+      const isImage = (f.type || '').startsWith('image/') || /\.(jpe?g|png|webp|avif|bmp|tiff?)$/i.test(f.name);
+      setIsImageSource(isImage);
+      if (isImage) {
+        setSourceImageName(f.name);
+        setLoadingDocMsg('Converting photo/image for redaction...');
+        targetFile = await convertImageToPdfFile(f);
+      } else {
+        setSourceImageName('');
+        setLoadingDocMsg('Opening PDF document...');
+      }
+
+      const buffer = await targetFile.arrayBuffer();
       const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
       const doc = await loadingTask.promise;
+      setFile(targetFile);
+      setRedactions([]);
+      setSelectedBoxId(null);
+      setDownloadBlob(null);
       setPdfJsDoc(doc);
       setNumPages(doc.numPages);
 
@@ -546,8 +580,53 @@ export const RedactPdf: React.FC = () => {
           setPageScale(0.85);
         }
       }, 60);
-    } catch (err) {
-      console.error('Failed to load PDF in Redact tool:', err);
+    } catch (err: any) {
+      console.error('Failed to load file in Redact tool:', err);
+      const errMsg = (err?.message || '').toLowerCase();
+      const isPassword = err?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+      setFile(null);
+      setPdfJsDoc(null);
+      setLoadError({
+        message: isPassword
+          ? 'This PDF is password-protected. Unlock it first before redacting sensitive information.'
+          : (err?.message || 'Could not load document or image.'),
+        isPassword
+      });
+    } finally {
+      setIsLoadingDoc(false);
+      setLoadingDocMsg('');
+    }
+  };
+
+  const handleDownloadAsImage = async (format: 'png' | 'jpeg' = 'png', targetBlobOverride?: Blob) => {
+    const blobToUse = targetBlobOverride || downloadBlob;
+    if (!blobToUse) return;
+    try {
+      const arrayBuffer = await blobToUse.arrayBuffer();
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      const page = await doc.getPage(1);
+      const vp = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+      canvas.toBlob((imgBlob) => {
+        if (!imgBlob) return;
+        const url = URL.createObjectURL(imgBlob);
+        const link = document.createElement('a');
+        const baseName = (sourceImageName || file?.name || 'document').replace(/\.[^/.]+$/, '');
+        link.href = url;
+        link.download = `${baseName}-redacted.${format === 'jpeg' ? 'jpg' : 'png'}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }, format === 'jpeg' ? 'image/jpeg' : 'image/png', 0.96);
+    } catch (e) {
+      console.error('Failed to export image:', e);
     }
   };
 
@@ -680,20 +759,36 @@ export const RedactPdf: React.FC = () => {
     setSelectedBoxId(null);
   };
 
-  // Auto-search and redact keywords
+  // Auto-search and redact keywords (supports both native text and scanned image OCR)
   const handleSearchAndRedact = async () => {
     if (!file || !searchQuery.trim()) return;
     setIsSearching(true);
     setSearchMessage(null);
+    setSecurityVerification(null);
+    const query = searchQuery.trim();
+    setLastSearchedQuery(query);
+    setTrackedSensitiveQueries((prev) => Array.from(new Set([...prev, query])));
 
     try {
-      const matches = await searchPdfForRedaction(file, searchQuery);
+      const matches = await searchPdfForRedaction(file, query, {
+        enableOcr: true,
+        deepOcr,
+        ocrLanguage,
+        onProgress: (msg) => {
+          setSearchMessage({ text: msg, type: 'info' });
+        },
+      });
+
       if (matches.length === 0) {
-        setSearchMessage(`No matches found for "${searchQuery}".`);
+        setSearchMessage({
+          text: `No matches found for "${query}" in text layer or scanned images (${ocrLanguage}). You can manually draw a blackout box over the area.`,
+          type: 'info',
+        });
         setIsSearching(false);
         return;
       }
 
+      const ocrMatches = matches.filter(m => m.isOcr);
       const newBoxes: RedactionBox[] = matches.map((m, idx) => ({
         id: `search-redact-${Date.now()}-${idx}`,
         pageIndex: m.pageIndex,
@@ -702,15 +797,127 @@ export const RedactPdf: React.FC = () => {
         widthPercent: m.widthPercent,
         heightPercent: m.heightPercent,
         type: redactionMode,
+        label: m.isOcr ? `Scanned Match (Page ${m.pageIndex + 1})` : `Text Match (Page ${m.pageIndex + 1})`,
+        confidence: m.confidence || 'high',
       }));
 
-      setRedactions((prev) => [...prev, ...newBoxes]);
-      setSearchMessage(`Redacted ${matches.length} occurrences of "${searchQuery}"!`);
-    } catch (err) {
+      setRedactions((prev) => mergeOverlappingBoxes([...prev, ...newBoxes]));
+      const ocrNote = ocrMatches.length > 0 ? ` (${ocrMatches.length} found via scanned image OCR)` : '';
+      setSearchMessage({
+        text: `Found and marked ${matches.length} match(es) for "${query}"${ocrNote}!`,
+        type: 'success',
+      });
+    } catch (err: any) {
       console.error('Search error:', err);
-      setSearchMessage('Could not search text on this PDF.');
+      setSearchMessage({
+        text: 'Error scanning document. Please try again or draw boxes manually.',
+        type: 'error',
+      });
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  // Auto-detect sensitive PII patterns (Aadhaar, PAN, Phone, Email)
+  const handleDetectPii = async () => {
+    if (!file) return;
+    setIsDetectingPii(true);
+    setSearchMessage(null);
+    setSecurityVerification(null);
+
+    try {
+      const piiMatches = await detectSensitivePiiInPdf(file, {
+        enableOcr: true,
+        deepOcr,
+        ocrLanguage,
+        categories: ['aadhaar', 'pan', 'phone', 'email', 'card', 'ssn'],
+        onProgress: (msg) => {
+          setSearchMessage({ text: msg, type: 'info' });
+        },
+      });
+
+      if (piiMatches.length === 0) {
+        setSearchMessage({
+          text: 'No standard sensitive personal patterns (Aadhaar, PAN, Phone, Email) detected automatically. You can search directly or draw boxes manually.',
+          type: 'info',
+        });
+        setIsDetectingPii(false);
+        return;
+      }
+
+      const detectedTexts = piiMatches.map((m) => m.text).filter(Boolean);
+      setTrackedSensitiveQueries((prev) => Array.from(new Set([...prev, ...detectedTexts])));
+
+      const newBoxes: RedactionBox[] = piiMatches.map((m, idx) => ({
+        id: `pii-redact-${Date.now()}-${idx}`,
+        pageIndex: m.pageIndex,
+        xPercent: m.xPercent,
+        yPercent: m.yPercent,
+        widthPercent: m.widthPercent,
+        heightPercent: m.heightPercent,
+        type: redactionMode,
+        label: `${m.category?.toUpperCase() || 'PII'} (Page ${m.pageIndex + 1})`,
+        confidence: m.confidence || 'high',
+      }));
+
+      setRedactions((prev) => mergeOverlappingBoxes([...prev, ...newBoxes]));
+      const cats = [...new Set(piiMatches.map(m => m.category?.toUpperCase()))].join(', ');
+      const ocrDetectedCount = piiMatches.filter(m => m.isOcr).length;
+      const ocrSuffix = ocrDetectedCount > 0 ? ` (${ocrDetectedCount} in scanned images)` : '';
+      setSearchMessage({
+        text: `Auto-detected ${piiMatches.length} sensitive item(s) (${cats})${ocrSuffix} across document! Review boxes before downloading.`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('PII detection error:', err);
+      setSearchMessage({
+        text: 'Failed to auto-detect PII. Please search directly or draw boxes manually.',
+        type: 'error',
+      });
+    } finally {
+      setIsDetectingPii(false);
+    }
+  };
+
+  // Auto-detect and redact QR codes / Barcodes on ID cards
+  const handleRedactQrCodes = async () => {
+    if (!file) return;
+    setIsDetectingQr(true);
+    setSearchMessage(null);
+    try {
+      const qrList = await detectQrCodesInPdf(file);
+      if (qrList.length === 0) {
+        setSearchMessage({
+          text: 'No visible QR codes or 2D barcodes detected on the document.',
+          type: 'info',
+        });
+      } else {
+        const qrBoxes: RedactionBox[] = qrList.map((qr, idx) => ({
+          id: `qr-redact-${Date.now()}-${idx}`,
+          pageIndex: qr.pageIndex,
+          xPercent: qr.xPercent,
+          yPercent: qr.yPercent,
+          widthPercent: qr.widthPercent,
+          heightPercent: qr.heightPercent,
+          type: redactionMode,
+          label: `QR Code (Page ${qr.pageIndex + 1})`,
+          confidence: 'high',
+        }));
+
+        setRedactions((prev) => mergeOverlappingBoxes([...prev, ...qrBoxes]));
+        setSearchMessage({
+          text: `Detected & blacked out ${qrList.length} QR Code(s) to protect identity data!`,
+          type: 'success',
+        });
+      }
+    } catch (err) {
+      console.error('QR detect error:', err);
+      setSearchMessage({
+        text: 'Could not detect QR code. You can draw a box over the QR code manually.',
+        type: 'error',
+      });
+    } finally {
+      setIsDetectingQr(false);
     }
   };
 
@@ -736,17 +943,37 @@ export const RedactPdf: React.FC = () => {
       });
 
       setDownloadBlob(sanitizedBlob);
+
+      // Automated post-redaction dual-layer security verification
+      const queriesToCheck = Array.from(
+        new Set([lastSearchedQuery, ...trackedSensitiveQueries].filter(Boolean))
+      );
+      setProgressMsg('Running dual security verification (vector stream & optical scan)...');
+      const verification = await verifyRedactionSecurity(sanitizedBlob, queriesToCheck, {
+        ocrLanguage,
+        verifyWithOcr: true,
+        onProgress: (pct, msg) => {
+          setProgressPct(Math.min(99, 90 + Math.round(pct * 0.09)));
+          setProgressMsg(msg);
+        },
+      });
+      setSecurityVerification(verification);
+
       setIsProcessing(false);
 
       // Trigger instant download
-      const url = URL.createObjectURL(sanitizedBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.name.replace(/\.pdf$/i, '') + '-redacted.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      if (isImageSource) {
+        await handleDownloadAsImage('png', sanitizedBlob);
+      } else {
+        const url = URL.createObjectURL(sanitizedBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.name.replace(/\.pdf$/i, '') + '-redacted.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }
 
       trackEvent({
         category: 'RedactPdf',
@@ -846,8 +1073,8 @@ export const RedactPdf: React.FC = () => {
             </h1>
 
             <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-600 dark:text-slate-400">
-              Permanently blackout confidential information from your PDF documents.
-              Erase Aadhaar numbers, bank account details, signatures, and personal data with
+              Permanently blackout confidential information from your PDF documents or ID photos (Aadhaar, PAN, Passport).
+              Erase sensitive numbers, bank account details, and personal data with
               true pixel destruction that cannot be recovered.
             </p>
           </div>
@@ -857,11 +1084,37 @@ export const RedactPdf: React.FC = () => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="application/pdf"
+            accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp,image/avif,image/bmp,image/*,.pdf,.png,.jpg,.jpeg,.webp,.avif,.bmp"
             className="hidden"
           />
 
-          {!file ? (
+          {loadError && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-start gap-3">
+              <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  {loadError.isPassword ? 'Password-Protected PDF Detected' : 'Error Opening Document'}
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">{loadError.message}</p>
+                {loadError.isPassword && (
+                  <Link
+                    to="/unlock-pdf"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                  >
+                    Go to Unlock PDF tool &rarr;
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isLoadingDoc ? (
+            <div className="relative rounded-3xl border-2 border-rose-300 dark:border-rose-900/60 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-xl p-12 text-center shadow-lg flex flex-col items-center justify-center min-h-[300px]">
+              <div className="w-12 h-12 rounded-full border-4 border-rose-600 border-t-transparent animate-spin mb-4" />
+              <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{loadingDocMsg || 'Preparing file...'}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Setting up high-resolution sanitization workspace (100% private in-browser)</p>
+            </div>
+          ) : !file ? (
             /* Upload Dropzone */
             <div
               onDrop={handleDrop}
@@ -874,11 +1127,11 @@ export const RedactPdf: React.FC = () => {
               </div>
 
               <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mb-2">
-                Upload PDF to Redact Sensitive Information
+                Upload PDF or Image to Redact Sensitive Information
               </h3>
               <p className="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto mb-6">
-                Drag and drop your PDF file here, or click to browse. Ideal for bank statements,
-                ID cards, legal contracts, and resumes.
+                Drag and drop your PDF or ID photo (JPG, PNG, WebP) here, or click to browse. Ideal for Aadhaar photos,
+                ID cards, bank statements, legal contracts, and receipts.
               </p>
 
               <Button
@@ -891,7 +1144,7 @@ export const RedactPdf: React.FC = () => {
                 }}
               >
                 <Upload className="w-5 h-5 mr-2" />
-                Select PDF File
+                Select PDF or Image
               </Button>
 
               <div className="mt-8 flex flex-wrap justify-center items-center gap-6 text-xs text-slate-500">
@@ -1019,7 +1272,7 @@ export const RedactPdf: React.FC = () => {
                     onClick={() => fileInputRef.current?.click()}
                     className="text-xs"
                   >
-                    Change PDF
+                    Change File
                   </Button>
                 </div>
               </div>
@@ -1059,7 +1312,7 @@ export const RedactPdf: React.FC = () => {
                           redactionMode={redactionMode}
                           onSelectBox={setSelectedBoxId}
                           onRemoveBox={removeRedaction}
-                          onAddBox={(newBox) => setRedactions((prev) => [...prev, newBox])}
+                          onAddBox={(newBox) => setRedactions((prev) => mergeOverlappingBoxes([...prev, newBox]))}
                           onStartDrag={setActiveDrag}
                         />
                       );
@@ -1071,22 +1324,49 @@ export const RedactPdf: React.FC = () => {
                 <div className="lg:col-span-4 flex flex-col space-y-6">
                   {/* 1. Keyword Search & Auto-Redact */}
                   <div className="bg-white dark:bg-dark-surface p-5 rounded-3xl border border-slate-200 dark:border-dark-border shadow-sm">
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mb-1 flex items-center gap-2">
                       <Search className="w-4 h-4 text-rose-500" />
                       Search & Redact All Matches
                     </h3>
                     <p className="text-xs text-slate-500 mb-3">
-                      Automatically find and blackout names, phone numbers, or account numbers across all pages.
+                      Searches native PDF text layers and embedded scanned images via high-accuracy OCR.
                     </p>
+
+                    {/* OCR Settings Controls */}
+                    <div className="mb-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-dark-bg/60 border border-slate-200 dark:border-dark-border text-xs flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                          OCR Language:
+                        </label>
+                        <select
+                          value={ocrLanguage}
+                          onChange={(e) => setOcrLanguage(e.target.value)}
+                          className="text-[11px] font-semibold bg-white dark:bg-dark-surface border border-slate-300 dark:border-dark-border rounded-lg px-2 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500 cursor-pointer"
+                        >
+                          <option value="eng+hin">English + Hindi (eng+hin)</option>
+                          <option value="eng">English only (eng)</option>
+                          <option value="hin">Hindi only (hin)</option>
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-600 dark:text-slate-400">
+                        <input
+                          type="checkbox"
+                          checked={deepOcr}
+                          onChange={(e) => setDeepOcr(e.target.checked)}
+                          className="rounded text-rose-600 focus:ring-rose-500 h-3.5 w-3.5"
+                        />
+                        <span>Deep scan embedded images & scanned pages</span>
+                      </label>
+                    </div>
 
                     <div className="flex items-center gap-2 mb-2">
                       <input
                         type="text"
-                        placeholder="e.g. Aadhaar, Phone, Name"
+                        placeholder="e.g. 8515 3843 3319 or Name"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearchAndRedact()}
-                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-white"
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                       />
                       <Button
                         variant="secondary"
@@ -1095,14 +1375,87 @@ export const RedactPdf: React.FC = () => {
                         disabled={isSearching || !searchQuery.trim()}
                         className="text-xs font-bold"
                       >
-                        {isSearching ? 'Searching...' : 'Redact All'}
+                        {isSearching ? 'Scanning...' : 'Redact All'}
                       </Button>
                     </div>
 
-                    {searchMessage && (
-                      <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-1">
-                        {searchMessage}
+                    {/* Auto-Detect Sensitive PII & QR Code button */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-dark-border">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          Auto-Detect Sensitive PII & IDs
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-dark-bg px-2 py-0.5 rounded-md">
+                          OCR Powered
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mb-2">
+                        Detect Aadhaar, PAN card, phone numbers, emails & QR codes on scanned documents.
                       </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleDetectPii}
+                        disabled={isDetectingPii || isSearching}
+                        className="w-full text-xs font-bold border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-800 dark:text-amber-300 flex items-center justify-center gap-2"
+                      >
+                        {isDetectingPii ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Scanning with OCR...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Fingerprint className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Scan Document for Aadhaar, PAN & IDs</span>
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleRedactQrCodes}
+                        disabled={isDetectingQr || isSearching || isDetectingPii}
+                        className="w-full mt-2 text-xs font-bold border-indigo-200 dark:border-indigo-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 text-indigo-800 dark:text-indigo-300 flex items-center justify-center gap-2"
+                      >
+                        {isDetectingQr ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Detecting QR Code...</span>
+                          </>
+                        ) : (
+                          <>
+                            <QrCode className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Redact Aadhaar QR Code / Barcode</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Search & Detection Status Message */}
+                    {searchMessage && (
+                      <div
+                        className={`mt-3 p-2.5 rounded-xl border flex items-start gap-2 text-xs ${
+                          searchMessage.type === 'success'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                            : searchMessage.type === 'error'
+                            ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+                            : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+                        }`}
+                      >
+                        {searchMessage.type === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        ) : searchMessage.type === 'error' ? (
+                          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        ) : isSearching || isDetectingPii ? (
+                          <RefreshCw className="w-4 h-4 text-blue-500 animate-spin shrink-0 mt-0.5" />
+                        ) : (
+                          <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        )}
+                        <span className="leading-relaxed">{searchMessage.text}</span>
+                      </div>
                     )}
                   </div>
 
@@ -1194,7 +1547,7 @@ export const RedactPdf: React.FC = () => {
                       ) : (
                         <>
                           <Download className="w-4 h-4 mr-2" />
-                          <span>Apply & Download Redacted PDF</span>
+                          <span>{isImageSource ? 'Apply & Download Redacted Image' : 'Apply & Download Redacted PDF'}</span>
                         </>
                       )}
                     </Button>
@@ -1212,6 +1565,72 @@ export const RedactPdf: React.FC = () => {
                             style={{ width: `${progressPct}%` }}
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {/* Security Verification Status Banner */}
+                    {securityVerification && !isProcessing && (
+                      <div
+                        className={`mt-4 p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 animate-in fade-in ${
+                          securityVerification.secure
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                            : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                        }`}
+                      >
+                        {securityVerification.secure ? (
+                          <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1">
+                          <div className="font-bold flex flex-wrap items-center gap-1.5">
+                            <span>{securityVerification.secure ? '100% Security Verified' : 'Security Warning'}</span>
+                            <div className="flex items-center gap-1.5 text-[10px] font-semibold mt-0.5">
+                              <span className={`px-1.5 py-0.5 rounded ${securityVerification.vectorTextClean ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 text-rose-700'}`}>
+                                {securityVerification.vectorTextClean ? '✓ Vector Stream Clean' : '⚠ Vector Text Leaked'}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded ${securityVerification.ocrClean ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 text-rose-700'}`}>
+                                {securityVerification.ocrClean ? '✓ Optical OCR Scan Clean' : '⚠ OCR Remnant Detected'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-[11px] mt-1 opacity-90 leading-relaxed">
+                            {securityVerification.message}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Re-download button if blob is ready */}
+                    {downloadBlob && !isProcessing && (
+                      <div className="mt-3 space-y-2">
+                        {isImageSource && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleDownloadAsImage('png')}
+                            className="w-full text-xs font-bold flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download Redacted Image (PNG)</span>
+                          </Button>
+                        )}
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            const url = URL.createObjectURL(downloadBlob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = (sourceImageName || file?.name || 'document').replace(/\.[^/.]+$/, '') + '-redacted.pdf';
+                            link.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="w-full text-xs font-bold flex items-center justify-center gap-1.5 border-slate-300 dark:border-dark-border"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>{isImageSource ? 'Download as Redacted PDF' : 'Download Redacted PDF Again'}</span>
+                        </Button>
                       </div>
                     )}
                   </div>

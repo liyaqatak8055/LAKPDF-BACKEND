@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
 import { PdfFile, ProcessingStatus } from '../types';
 import { convertPdfToImages, downloadPdf, formatBytes, pdfjs } from '../services/pdfService';
-import { FileImage, X, Image as ImageIcon, Download } from 'lucide-react';
+import { FileImage, X, Image as ImageIcon, Download, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { NextStepPanel, RelatedActions, ToolStartPanel } from '../components/ToolProductPanels';
 import { Helmet } from 'react-helmet-async';
@@ -48,8 +49,16 @@ const PdfToJpg: React.FC = () => {
       const ab = await f.arrayBuffer();
       const pdf = await pdfjs.getDocument({ data: ab }).promise;
       setPageCount(pdf.numPages);
-    } catch {
+    } catch (e: any) {
       setPageCount(0);
+      const errMsg = (e?.message || '').toLowerCase();
+      if (e?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt')) {
+        setStatus({
+          isProcessing: false,
+          message: 'This PDF is password-protected. Unlock it before converting pages to JPG.',
+          error: 'password_protected'
+        });
+      }
     }
   };
 
@@ -71,9 +80,17 @@ const PdfToJpg: React.FC = () => {
         setReadyZip({ blob, name });
         setStatus({ isProcessing: false, message: 'Done! ZIP ready to download.', success: true });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setStatus({ isProcessing: false, message: 'Error converting file.', error: 'Failed' });
+      const errMsg = (error?.message || '').toLowerCase();
+      const isPassword = errMsg.includes('password') || errMsg.includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: isPassword
+          ? 'This PDF is password-protected. Unlock it before converting pages to JPG.'
+          : (error?.message || 'Error converting file.'),
+        error: isPassword ? 'password_protected' : 'Failed'
+      });
     }
   };
 
@@ -136,14 +153,14 @@ const PdfToJpg: React.FC = () => {
         ) : (
           <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
             {/* ── Main panel ─────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 space-y-6">
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-6 md:p-8 space-y-6">
               {/* File header */}
-              <div className="flex items-start justify-between pb-5 border-b border-slate-100">
+              <div className="flex items-start justify-between pb-5 border-b border-slate-100 dark:border-dark-border">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0">PDF</div>
+                  <div className="w-12 h-12 bg-red-100 dark:bg-red-950/40 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0">PDF</div>
                   <div>
-                    <h3 className="font-semibold text-slate-900 truncate max-w-[200px] md:max-w-xs">{file.name}</h3>
-                    <p className="text-sm text-slate-500">{formatBytes(file.size)}{pageCount > 0 ? ` · ${pageCount} page${pageCount !== 1 ? 's' : ''}` : ''}</p>
+                    <h3 className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px] md:max-w-xs">{file.name}</h3>
+                    <p className="text-sm text-slate-500 dark:text-dark-text-secondary">{formatBytes(file.size)}{pageCount > 0 ? ` · ${pageCount} page${pageCount !== 1 ? 's' : ''}` : ''}</p>
                   </div>
                 </div>
                 <button onClick={reset} className="text-slate-400 hover:text-red-500 transition-colors"><X /></button>
@@ -153,7 +170,7 @@ const PdfToJpg: React.FC = () => {
               <div className="space-y-5">
                   {/* DPI selector */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
                       Output Quality (DPI)
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -164,12 +181,12 @@ const PdfToJpg: React.FC = () => {
                           onClick={() => setDpi(opt.value)}
                           className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
                             dpi === opt.value
-                              ? 'border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400'
-                              : 'border-slate-200 hover:border-slate-300'
+                              ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 ring-1 ring-yellow-400'
+                              : 'border-slate-200 dark:border-dark-border hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-dark-surface'
                           }`}
                         >
-                          <p className="font-bold text-sm text-slate-900">{opt.label}</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">{opt.desc}</p>
+                          <p className="font-bold text-sm text-slate-900 dark:text-white">{opt.label}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-dark-text-secondary mt-0.5">{opt.desc}</p>
                         </button>
                       ))}
                     </div>
@@ -177,36 +194,36 @@ const PdfToJpg: React.FC = () => {
 
                   {/* Page range */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
                       Page Range
-                      {pageCount > 0 && <span className="ml-2 font-normal normal-case text-slate-400">(PDF has {pageCount} pages)</span>}
+                      {pageCount > 0 && <span className="ml-2 font-normal normal-case text-slate-400 dark:text-slate-500">(PDF has {pageCount} pages)</span>}
                     </label>
                     <input
                       type="text"
                       value={pageRange}
                       onChange={e => { setPageRange(e.target.value); setReadyZip(null); setReadyJpg(null); }}
                       placeholder={`all  or  1-3,5  or  2`}
-                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                      className="w-full rounded-xl border border-slate-300 dark:border-dark-border bg-white dark:bg-dark-bg text-slate-900 dark:text-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent placeholder:text-slate-400 dark:placeholder:text-slate-600"
                     />
-                    <p className="text-[11px] text-slate-400 mt-1.5">
-                      Examples: <code className="bg-slate-100 px-1 rounded">all</code>&nbsp;
-                      <code className="bg-slate-100 px-1 rounded">1-5</code>&nbsp;
-                      <code className="bg-slate-100 px-1 rounded">1,3,5</code>&nbsp;
-                      <code className="bg-slate-100 px-1 rounded">3</code> (single page = direct JPG download)
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                      Examples: <code className="bg-slate-100 dark:bg-dark-bg px-1 rounded text-slate-700 dark:text-slate-300">all</code>&nbsp;
+                      <code className="bg-slate-100 dark:bg-dark-bg px-1 rounded text-slate-700 dark:text-slate-300">1-5</code>&nbsp;
+                      <code className="bg-slate-100 dark:bg-dark-bg px-1 rounded text-slate-700 dark:text-slate-300">1,3,5</code>&nbsp;
+                      <code className="bg-slate-100 dark:bg-dark-bg px-1 rounded text-slate-700 dark:text-slate-300">3</code> (single page = direct JPG download)
                     </p>
                   </div>
               </div>
 
               {/* ── Info badge ─────────────────────────────────────────── */}
-              <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-yellow-500 shrink-0 shadow-sm">
+              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-100 dark:border-yellow-900/30 rounded-xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 bg-white dark:bg-dark-surface rounded-full flex items-center justify-center text-yellow-500 shrink-0 shadow-sm">
                   <ImageIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-900 text-sm">
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm">
                     {isSinglePage ? 'Single JPG download' : 'ZIP of JPG images'}
                   </h4>
-                  <p className="text-xs text-slate-600 mt-0.5">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
                     {isSinglePage
                       ? 'Page range resolves to one page — download as a single .jpg file.'
                       : 'All selected pages will be exported and packaged into a ZIP archive.'}
@@ -250,6 +267,22 @@ const PdfToJpg: React.FC = () => {
                 <p className={`text-xs text-center ${status.error ? 'text-red-600' : status.success ? 'text-emerald-600' : 'text-slate-500'}`}>
                   {status.message}
                 </p>
+              )}
+
+              {status.error === 'password_protected' && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left flex items-start gap-2.5">
+                  <Unlock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-900">Protected PDF Detected</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">This document has password security enabled. Unlock it first to extract JPG pages.</p>
+                    <Link
+                      to="/unlock-pdf"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-1.5 underline"
+                    >
+                      Go to Unlock PDF tool &rarr;
+                    </Link>
+                  </div>
+                </div>
               )}
             </div>
 

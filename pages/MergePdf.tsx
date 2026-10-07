@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
 import { PdfFile, ProcessingStatus } from '../types';
 import { formatBytes } from '../utils/formatBytes';
-import { FileText, X, Download, Files, GripVertical } from 'lucide-react';
+import { FileText, X, Download, Files, GripVertical, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { NextStepPanel, RelatedActions, ToolStartPanel } from '../components/ToolProductPanels';
 import { Helmet } from 'react-helmet-async';
@@ -58,9 +59,15 @@ const MergePdf: React.FC = () => {
       setReadyPdf({ data: mergedBytes, name: outputName });
       downloadPdf(mergedBytes, outputName, { autoDownload: false });
       setStatus({ isProcessing: false, message: 'Done! File ready to download.', success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setStatus({ isProcessing: false, message: 'Error merging files.', error: 'Failed' });
+      const msg = error?.message || 'Error merging files.';
+      const isEncrypted = msg.toLowerCase().includes('password') || msg.toLowerCase().includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: msg,
+        error: isEncrypted ? 'password_protected' : 'Failed'
+      });
     }
   };
 
@@ -92,8 +99,8 @@ const MergePdf: React.FC = () => {
 
       <div className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center mb-10">
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Merge PDF Files</h1>
-          <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
+          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">Merge PDF Files</h1>
+          <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
             Combine PDFs in the order you want. Drag to reorder, then merge.
           </p>
         </div>
@@ -122,21 +129,21 @@ const MergePdf: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* ── File List ──────────────────────────────────────────── */}
             <div className="lg:col-span-2 space-y-4">
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-dark-border bg-slate-50 dark:bg-dark-bg flex justify-between items-center">
                   <div>
-                    <span className="font-semibold text-slate-700">File preview · {files.length} selected</span>
-                    <span className="ml-3 text-xs text-slate-400">Drag <GripVertical className="inline w-3 h-3" /> to reorder</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">File preview · {files.length} selected</span>
+                    <span className="ml-3 text-xs text-slate-400 dark:text-slate-500">Drag <GripVertical className="inline w-3 h-3" /> to reorder</span>
                   </div>
                   <button
                     onClick={() => { setFiles([]); setReadyPdf(null); setStatus({ isProcessing: false, message: '' }); }}
-                    className="text-red-500 text-sm font-medium hover:text-red-600 transition-colors"
+                    className="text-red-500 hover:text-red-600 dark:text-red-400 text-sm font-medium transition-colors"
                   >
                     Clear All
                   </button>
                 </div>
 
-                <ul className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto no-scrollbar">
+                <ul className="divide-y divide-slate-100 dark:divide-dark-border max-h-[500px] overflow-y-auto no-scrollbar">
                   {files.map((file, index) => (
                     <li
                       key={file.id}
@@ -147,35 +154,35 @@ const MergePdf: React.FC = () => {
                       onDragOver={e => e.preventDefault()}
                       className={`p-4 flex items-center gap-3 transition-all cursor-grab active:cursor-grabbing select-none group ${
                         dragOver === index
-                          ? 'bg-blue-50 border-l-4 border-blue-400 shadow-sm'
-                          : 'hover:bg-slate-50'
+                          ? 'bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-400 shadow-sm'
+                          : 'hover:bg-slate-50 dark:hover:bg-dark-bg/60'
                       }`}
                     >
                       {/* Drag handle */}
-                      <div className="text-slate-300 hover:text-slate-500 transition-colors shrink-0">
+                      <div className="text-slate-300 dark:text-slate-600 hover:text-slate-500 transition-colors shrink-0">
                         <GripVertical size={20} />
                       </div>
 
                       {/* Order badge */}
-                      <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
-                        <span className="text-[11px] font-bold text-slate-600">{index + 1}</span>
+                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{index + 1}</span>
                       </div>
 
                       {/* PDF icon */}
-                      <div className="w-10 h-12 bg-red-100 rounded flex items-center justify-center shrink-0 border border-red-200">
-                        <span className="font-bold text-red-500 text-xs">PDF</span>
+                      <div className="w-10 h-12 bg-red-100 dark:bg-red-950/40 rounded flex items-center justify-center shrink-0 border border-red-200 dark:border-red-900/50">
+                        <span className="font-bold text-red-500 dark:text-red-400 text-xs">PDF</span>
                       </div>
 
                       {/* File info */}
                       <div className="flex-grow min-w-0">
-                        <p className="font-medium text-slate-800 truncate">{file.name}</p>
-                        <p className="text-xs text-slate-400">{formatBytes(file.size)}</p>
+                        <p className="font-medium text-slate-800 dark:text-slate-100 truncate">{file.name}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-400">{formatBytes(file.size)}</p>
                       </div>
 
                       {/* Remove */}
                       <button
                         onClick={() => removeFile(file.id)}
-                        className="p-1.5 rounded-full hover:bg-red-100 text-slate-400 hover:text-red-500 ml-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 rounded-full hover:bg-red-100 dark:hover:bg-red-950/50 text-slate-400 hover:text-red-500 ml-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                       >
                         <X size={16} />
                       </button>
@@ -183,7 +190,7 @@ const MergePdf: React.FC = () => {
                   ))}
                 </ul>
 
-                <div className="p-4 border-t border-slate-100 bg-slate-50">
+                <div className="p-4 border-t border-slate-100 dark:border-dark-border bg-slate-50 dark:bg-dark-bg">
                   <div className="relative">
                     <input
                       type="file"
@@ -192,8 +199,8 @@ const MergePdf: React.FC = () => {
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={e => { if (e.target.files) handleFilesSelected(Array.from(e.target.files)); }}
                     />
-                    <Button variant="secondary" size="sm" className="w-full">
-                      + Add more files
+                    <Button variant="secondary" size="md" className="w-full">
+                      + Add More Files
                     </Button>
                   </div>
                 </div>
@@ -211,16 +218,16 @@ const MergePdf: React.FC = () => {
                     'Merge when the order is right.',
                   ]}
                 />
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                  <h3 className="font-bold text-slate-900 mb-4 text-lg">Summary</h3>
+                <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-6">
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-4 text-lg">Summary</h3>
                   <div className="space-y-3 mb-6">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">File count:</span>
-                      <span className="font-medium text-slate-800">{files.length}</span>
+                      <span className="text-slate-500 dark:text-slate-400">File count:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{files.length}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Total size:</span>
-                      <span className="font-medium text-slate-800">
+                      <span className="text-slate-500 dark:text-slate-400">Total size:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">
                         {formatBytes(files.reduce((acc, curr) => acc + curr.size, 0))}
                       </span>
                     </div>
@@ -259,6 +266,24 @@ const MergePdf: React.FC = () => {
                     <p className={`text-sm mt-3 text-center ${status.error ? 'text-red-600' : status.success ? 'text-emerald-700' : 'text-slate-500'}`}>
                       {status.message}
                     </p>
+                  )}
+
+                  {status.error === 'password_protected' && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left">
+                      <div className="flex items-start gap-2.5">
+                        <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold text-amber-900">Protected PDF Detected</p>
+                          <p className="text-xs text-amber-700 mt-1">One of your files has password encryption. Unlock it before merging.</p>
+                          <Link
+                            to="/unlock-pdf"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                          >
+                            Go to Unlock PDF tool &rarr;
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <RelatedActions

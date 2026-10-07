@@ -23,11 +23,14 @@ import { UsageCounter } from './UsageCounter';
 import { useOnlineStatus } from '../hooks/useHooks';
 import { isToolRoute, getToolTitle } from '../utils/toolUsage';
 import { ROUTE_SEO } from '../config/seoRoutes';
+import { PrivacyBadge } from './PrivacyBadgeModal';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
+  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = React.useState(false);
   const profileMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const toolsDropdownRef = React.useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
@@ -35,6 +38,61 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const canonicalUrl = `${siteUrl}${location.pathname}`;
   const seo = ROUTE_SEO[location.pathname];
   const showToolBack = isToolRoute(location.pathname);
+
+  // Close menus on route change
+  useEffect(() => {
+    setIsToolsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+    setIsProfileMenuOpen(false);
+  }, [location.pathname]);
+
+  const toolGroups = [
+    {
+      category: 'Organize PDF',
+      items: [
+        { name: 'Merge PDF', path: '/merge', desc: 'Combine multiple PDFs into one document' },
+        { name: 'Split PDF', path: '/split', desc: 'Extract pages or split into files' },
+        { name: 'Organize PDF', path: '/organize-pdf', desc: 'Sort, reorder and delete pages' },
+        { name: 'Rotate PDF', path: '/rotate', desc: 'Fix page orientation in seconds' },
+        { name: 'Crop PDF', path: '/crop-pdf', desc: 'Trim margins with vector fidelity' },
+        { name: 'Delete Pages', path: '/delete-page', desc: 'Remove unwanted pages permanently' },
+      ],
+    },
+    {
+      category: 'Convert & OCR',
+      items: [
+        { name: 'PDF to Word', path: '/pdf-to-word', desc: 'Convert to editable Word (.docx)' },
+        { name: 'Word to PDF', path: '/word-to-pdf', desc: 'Convert DOCX to standard PDF' },
+        { name: 'PDF to Image', path: '/pdf-to-img', desc: 'Extract high-resolution JPG / PNG' },
+        { name: 'Image to PDF', path: '/img-to-pdf', desc: 'Convert photos & scans to PDF' },
+        { name: 'Make PPT', path: '/make-ppt', desc: 'Convert PDF & images to PowerPoint' },
+        { name: 'OCR PDF', path: '/ocr-pdf', desc: 'Convert scans into searchable PDF' },
+      ],
+    },
+    {
+      category: 'Edit & Page',
+      items: [
+        { name: 'Watermark PDF', path: '/watermark', desc: 'Vector text or image stamp' },
+        { name: 'Page Numbers', path: '/page-number', desc: 'Add customizable page numbering' },
+        { name: 'Compress PDF', path: '/compress', desc: 'Multi-pass target size reduction' },
+        { name: 'PDF Editor', path: '/pdf-editor', desc: 'Draw, annotate and add text' },
+        { name: 'Compare PDF', path: '/compare-pdf', desc: 'Highlight document differences' },
+        { name: 'Scan Document', path: '/scan-pdf', desc: 'Physical camera scan to PDF' },
+      ],
+    },
+    {
+      category: 'Security & Forms',
+      items: [
+        { name: 'Protect PDF', path: '/protect-pdf', desc: 'ISO 32000-2 standard AES-256' },
+        { name: 'Unlock PDF', path: '/unlock-pdf', desc: 'Instant vector decryption' },
+        { name: 'Sign PDF', path: '/sign-pdf', desc: 'Flattened digital signatures' },
+        { name: 'Redact PDF', path: '/redact-pdf', desc: 'Permanent blackout with OCR fallback' },
+        { name: 'FormDocFixer', path: '/govt-exam-resizer', desc: 'Govt & exam 20-50KB resizer' },
+        { name: 'Passport Photo', path: '/passport-photo-maker', desc: 'ICAO 9303 biometric centering' },
+      ],
+    },
+  ];
+
   const toolFaqSchema = seo
     ? {
       '@context': 'https://schema.org',
@@ -103,13 +161,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
-      if (!profileMenuRef.current) return;
-      if (!profileMenuRef.current.contains(event.target as Node)) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
+      }
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target as Node)) {
+        setIsToolsDropdownOpen(false);
       }
     };
     const onEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsProfileMenuOpen(false);
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false);
+        setIsToolsDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', onClickOutside);
     document.addEventListener('keydown', onEsc);
@@ -194,24 +257,93 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
             {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-0.5 sm:gap-1">
-              {navLinks.map((link) => (
+              {/* All Tools Mega Dropdown */}
+              <div className="relative" ref={toolsDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsToolsDropdownOpen((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    isToolsDropdownOpen || location.pathname === '/tools'
+                      ? 'text-primary-700 bg-primary-50 dark:text-primary-400 dark:bg-dark-hover'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
+                  }`}
+                  aria-expanded={isToolsDropdownOpen}
+                >
+                  <span>All Tools</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                      isToolsDropdownOpen ? 'rotate-180 text-primary-600' : 'text-slate-400'
+                    }`}
+                  />
+                </button>
+
+                {isToolsDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-[720px] lg:w-[840px] -translate-x-12 lg:-translate-x-16 bg-white dark:bg-dark-surface rounded-2xl shadow-2xl border border-slate-200 dark:border-dark-border p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="grid grid-cols-4 gap-4">
+                      {toolGroups.map((group) => (
+                        <div key={group.category} className="space-y-2">
+                          <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 pb-1 border-b border-slate-100 dark:border-dark-border">
+                            {group.category}
+                          </h4>
+                          <div className="space-y-1">
+                            {group.items.map((item) => (
+                              <Link
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => setIsToolsDropdownOpen(false)}
+                                className="group block p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-dark-hover transition-colors"
+                              >
+                                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                                  {item.name}
+                                </div>
+                                <div className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-1">
+                                  {item.desc}
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-dark-border flex items-center justify-between">
+                      <span
+                        className="text-xs text-slate-500 dark:text-slate-400 font-medium cursor-help"
+                        title="Core tools run locally; AI features use external APIs"
+                      >
+                        🛡️ Core tools run locally • AI features use external APIs
+                      </span>
+                      <Link
+                        to="/tools"
+                        onClick={() => setIsToolsDropdownOpen(false)}
+                        className="text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 flex items-center gap-1"
+                      >
+                        Browse all 30+ tools <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {navLinks.slice(1).map((link) => (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === link.path
-                    ? 'text-slate-900 bg-slate-100 dark:text-dark-text-primary dark:bg-dark-hover'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
-                    }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    location.pathname === link.path
+                      ? 'text-slate-900 bg-slate-100 dark:text-dark-text-primary dark:bg-dark-hover'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
+                  }`}
                 >
                   {link.label}
                 </Link>
               ))}
               <Link
                 to="/dashboard"
-                className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/dashboard'
-                  ? 'text-slate-900 bg-slate-100 dark:text-dark-text-primary dark:bg-dark-hover'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
-                  }`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  location.pathname === '/dashboard'
+                    ? 'text-slate-900 bg-slate-100 dark:text-dark-text-primary dark:bg-dark-hover'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-dark-text-secondary dark:hover:text-dark-text-primary dark:hover:bg-dark-hover'
+                }`}
               >
                 Dashboard
               </Link>
@@ -444,60 +576,55 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <p className="text-slate-400 text-sm leading-relaxed">
                 Free, privacy-first online PDF tools. Merge, compress, convert, sign, and manage documents securely in your browser.
               </p>
-              <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-dot" />
-                <span>100% Client-Side Privacy</span>
+              <div className="mt-5">
+                <PrivacyBadge showAiDisclaimer={true} />
               </div>
             </div>
 
             <div>
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Popular Tools</h4>
-              <ul className="space-y-2.5 text-sm text-slate-400">
-                <li><Link to="/redact-pdf" className="text-rose-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Redact PDF</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-rose-500/20 text-rose-300 font-bold">NEW</span></Link></li>
-                <li><Link to="/passport-photo-maker" className="text-blue-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Passport Photo Maker</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-blue-500/20 text-blue-300 font-bold">NEW</span></Link></li>
-                <li><Link to="/make-ppt" className="text-orange-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Make PPT (PDF & Images)</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-500/20 text-orange-300 font-bold">NEW</span></Link></li>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Organize & Convert</h4>
+              <ul className="space-y-2 text-sm text-slate-400">
                 <li><Link to="/merge" className="hover:text-white transition-colors">Merge PDF</Link></li>
                 <li><Link to="/split" className="hover:text-white transition-colors">Split PDF</Link></li>
-                <li><Link to="/compress" className="hover:text-white transition-colors">Compress PDF</Link></li>
-                <li><Link to="/advance-compress-img" className="hover:text-white transition-colors">Compress Image to 50KB</Link></li>
+                <li><Link to="/organize-pdf" className="hover:text-white transition-colors">Organize PDF</Link></li>
+                <li><Link to="/rotate" className="text-purple-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Rotate PDF</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-500/20 text-purple-300 font-bold">HOT</span></Link></li>
+                <li><Link to="/crop-pdf" className="hover:text-white transition-colors">Crop PDF</Link></li>
                 <li><Link to="/pdf-to-word" className="hover:text-white transition-colors">PDF to Word</Link></li>
+                <li><Link to="/word-to-pdf" className="hover:text-white transition-colors">Word to PDF</Link></li>
+                <li><Link to="/pdf-to-img" className="hover:text-white transition-colors">PDF to Image (JPG)</Link></li>
+                <li><Link to="/img-to-pdf" className="hover:text-white transition-colors">Image to PDF</Link></li>
+                <li><Link to="/make-ppt" className="hover:text-white transition-colors">Make PPT</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Edit & Security</h4>
+              <ul className="space-y-2 text-sm text-slate-400">
+                <li><Link to="/watermark" className="text-teal-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Watermark PDF</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-teal-500/20 text-teal-300 font-bold">NEW</span></Link></li>
+                <li><Link to="/page-number" className="hover:text-white transition-colors">Add Page Numbers</Link></li>
+                <li><Link to="/protect-pdf" className="text-emerald-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Protect PDF (AES-256)</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-bold">NEW</span></Link></li>
+                <li><Link to="/unlock-pdf" className="hover:text-white transition-colors">Unlock PDF</Link></li>
+                <li><Link to="/redact-pdf" className="text-rose-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>Redact PDF</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-rose-500/20 text-rose-300 font-bold">NEW</span></Link></li>
                 <li><Link to="/sign-pdf" className="hover:text-white transition-colors">Sign PDF Online</Link></li>
+                <li><Link to="/ocr-pdf" className="hover:text-white transition-colors">OCR Searchable PDF</Link></li>
+                <li><Link to="/compare-pdf" className="hover:text-white transition-colors">Compare PDF</Link></li>
                 <li><Link to="/pdf-editor" className="hover:text-white transition-colors">PDF Editor</Link></li>
                 <li><Link to="/tools" className="hover:text-primary-400 font-semibold transition-colors">View All 30+ Tools →</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Company & Legal</h4>
-              <ul className="space-y-2.5 text-sm text-slate-400">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Govt Forms & Legal</h4>
+              <ul className="space-y-2 text-sm text-slate-400">
+                <li><Link to="/govt-exam-resizer" className="text-amber-400 font-semibold hover:text-white transition-colors">FormDocFixer (UPSC/SSC)</Link></li>
+                <li><Link to="/passport-photo-maker" className="text-blue-400 font-semibold hover:text-white transition-colors">Passport Photo Maker</Link></li>
+                <li><Link to="/advance-compress-img" className="hover:text-white transition-colors">Compress Image to 50KB</Link></li>
                 <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
                 <li><Link to="/contact" className="hover:text-white transition-colors">Contact Support</Link></li>
-                <li><Link to="/learn-pdf" className="hover:text-white transition-colors">Learn PDF</Link></li>
-                <li><Link to="/blog" className="hover:text-white transition-colors">Blog & Guides</Link></li>
+                <li><Link to="/learn-pdf" className="hover:text-white transition-colors">Learn PDF Guides</Link></li>
                 <li><Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
                 <li><Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link></li>
                 <li><Link to="/disclaimer" className="hover:text-white transition-colors">Disclaimer</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200 mb-4">Key Features</h4>
-              <ul className="space-y-2.5 text-sm text-slate-400">
-                <li className="flex items-center gap-2 text-slate-300">
-                  <span className="text-primary-400 font-bold">✓</span> 100% Free • No Signup Required
-                </li>
-                <li className="flex items-center gap-2 text-slate-300">
-                  <span className="text-primary-400 font-bold">✓</span> Zero Server File Storage
-                </li>
-                <li className="flex items-center gap-2 text-slate-300">
-                  <span className="text-primary-400 font-bold">✓</span> Ultra-Fast WebAssembly Engine
-                </li>
-                <li className="flex items-center gap-2 text-slate-300">
-                  <span className="text-primary-400 font-bold">✓</span> Mobile & Tablet Responsive
-                </li>
-                <li className="flex items-center gap-2 text-slate-300">
-                  <span className="text-primary-400 font-bold">✓</span> Bank-Grade Browser Encryption
-                </li>
               </ul>
             </div>
           </div>

@@ -714,12 +714,28 @@ export function removeShadowsAndNormalize(canvas: HTMLCanvasElement): HTMLCanvas
       }
 
       const bx = Math.min(bw - 1, Math.floor(x * scaleX));
-      const bgVal = Math.max(90, smoothedBg[by * bw + bx]);
-      const normFactor = 248 / bgVal;
+      const rawBg = smoothedBg[by * bw + bx];
+      // Adaptive baseline: in dark indoor lighting (bg < 90), allow dynamic scaling down to 40 with gamma boost
+      const bgVal = Math.max(40, rawBg);
+      const normFactor = 250 / bgVal;
 
-      outD[idx] = Math.min(255, Math.max(0, Math.round(r * normFactor)));
-      outD[idx + 1] = Math.min(255, Math.max(0, Math.round(g * normFactor)));
-      outD[idx + 2] = Math.min(255, Math.max(0, Math.round(b * normFactor)));
+      let nr = r * normFactor;
+      let ng = g * normFactor;
+      let nb = b * normFactor;
+
+      // Low-light dark ink preservation
+      if (bgVal < 115) {
+        const localLum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (localLum < bgVal * 0.68) {
+          nr *= 0.82;
+          ng *= 0.82;
+          nb *= 0.82;
+        }
+      }
+
+      outD[idx] = Math.min(255, Math.max(0, Math.round(nr)));
+      outD[idx + 1] = Math.min(255, Math.max(0, Math.round(ng)));
+      outD[idx + 2] = Math.min(255, Math.max(0, Math.round(nb)));
       outD[idx + 3] = 255;
     }
   }

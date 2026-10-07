@@ -63,7 +63,7 @@ const AllTools: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   const allTools: Tool[] = [
-    // PDF Core
+    // ── Organize & Structure ──
     {
       id: "merge",
       title: "Merge PDF",
@@ -71,7 +71,7 @@ const AllTools: React.FC = () => {
       iconName: "FileText",
       to: "/merge",
       color: "bg-blue-50",
-      category: "pdf-core",
+      category: "organize",
       popular: true
     },
     {
@@ -81,17 +81,7 @@ const AllTools: React.FC = () => {
       iconName: "Scissors",
       to: "/split",
       color: "bg-green-50",
-      category: "pdf-core",
-      popular: true
-    },
-    {
-      id: "compress",
-      title: "Compress PDF",
-      description: "Reduce PDF file size without losing quality",
-      iconName: "Minimize2",
-      to: "/compress",
-      color: "bg-purple-50",
-      category: "pdf-core",
+      category: "organize",
       popular: true
     },
     {
@@ -101,7 +91,25 @@ const AllTools: React.FC = () => {
       iconName: "LayoutGrid",
       to: "/organize-pdf",
       color: "bg-orange-50",
-      category: "pdf-core"
+      category: "organize"
+    },
+    {
+      id: "rotate",
+      title: "Rotate PDF",
+      description: "Rotate PDF pages to correct orientation",
+      iconName: "RotateCw",
+      to: "/rotate",
+      color: "bg-orange-50",
+      category: "organize"
+    },
+    {
+      id: "crop-pdf",
+      title: "Crop PDF",
+      description: "Crop PDF pages to remove unwanted margins",
+      iconName: "Crop",
+      to: "/crop-pdf",
+      color: "bg-cyan-50",
+      category: "organize"
     },
     {
       id: "delete-page",
@@ -110,7 +118,7 @@ const AllTools: React.FC = () => {
       iconName: "Trash2",
       to: "/delete-page",
       color: "bg-red-50",
-      category: "pdf-core"
+      category: "organize"
     },
     {
       id: "detect-duplicates",
@@ -119,37 +127,38 @@ const AllTools: React.FC = () => {
       iconName: "Target",
       to: "/detect-duplicates",
       color: "bg-indigo-50",
-      category: "pdf-core"
-    },
-    {
-      id: "protect-pdf",
-      title: "Protect PDF",
-      description: "Encrypt PDF files with a password to prevent unauthorized access",
-      iconName: "Shield",
-      to: "/protect-pdf",
-      color: "bg-emerald-50",
-      category: "pdf-core"
-    },
-    {
-      id: "unlock-pdf",
-      title: "Unlock PDF",
-      description: "Remove passwords and security restrictions from PDF files",
-      iconName: "Unlock",
-      to: "/unlock-pdf",
-      color: "bg-teal-50",
-      category: "pdf-core",
-      popular: true
+      category: "organize"
     },
 
-    // Image Tools
+    // ── Conversion Suite ──
     {
-      id: "img-to-pdf",
-      title: "Image to PDF",
-      description: "Convert images (JPG, PNG) to PDF format",
-      iconName: "Image",
-      to: "/img-to-pdf",
-      color: "bg-pink-50",
-      category: "image",
+      id: "convert",
+      title: "Convert PDF",
+      description: "Convert PDF to Word, images, and other formats",
+      iconName: "ArrowRight",
+      to: "/convert",
+      color: "bg-yellow-50",
+      category: "convert",
+      popular: true
+    },
+    {
+      id: "pdf-to-word",
+      title: "PDF to Word",
+      description: "Convert PDF documents to editable Word (.docx) files",
+      iconName: "FileType",
+      to: "/pdf-to-word",
+      color: "bg-blue-50",
+      category: "convert",
+      popular: true
+    },
+    {
+      id: "word-to-pdf",
+      title: "Word to PDF",
+      description: "Convert Word documents to PDF format",
+      iconName: "Type",
+      to: "/word-to-pdf",
+      color: "bg-green-50",
+      category: "convert",
       popular: true
     },
     {
@@ -159,7 +168,94 @@ const AllTools: React.FC = () => {
       iconName: "FileImage",
       to: "/pdf-to-img",
       color: "bg-indigo-50",
-      category: "image"
+      category: "convert",
+      popular: true
+    },
+    {
+      id: "img-to-pdf",
+      title: "Image to PDF",
+      description: "Convert images (JPG, PNG) to PDF format",
+      iconName: "Image",
+      to: "/img-to-pdf",
+      color: "bg-pink-50",
+      category: "convert",
+      popular: true
+    },
+    {
+      id: "pdf-to-powerpoint",
+      title: "PDF to PowerPoint",
+      description: "Convert PDF to PowerPoint presentation",
+      iconName: "Presentation",
+      to: "/pdf-to-powerpoint",
+      color: "bg-red-50",
+      category: "convert"
+    },
+    {
+      id: "powerpoint-to-pdf",
+      title: "PowerPoint to PDF",
+      description: "Convert PowerPoint presentations to PDF",
+      iconName: "Presentation",
+      to: "/powerpoint-to-pdf",
+      color: "bg-purple-50",
+      category: "convert"
+    },
+    {
+      id: "make-ppt",
+      title: "Make PPT (PDF & Photos)",
+      description: "Convert PDF documents or photos into PowerPoint slides",
+      iconName: "Presentation",
+      to: "/make-ppt",
+      color: "bg-orange-50",
+      category: "convert"
+    },
+    {
+      id: "pdf-to-text",
+      title: "PDF to Text",
+      description: "Extract clean text and OCR from scanned PDF documents",
+      iconName: "FileText",
+      to: "/pdf-to-text",
+      color: "bg-blue-50",
+      category: "convert"
+    },
+    {
+      id: "ocr-pdf",
+      title: "OCR PDF",
+      description: "Extract searchable text from scanned PDF using OCR",
+      iconName: "Eye",
+      to: "/ocr-pdf",
+      color: "bg-green-50",
+      category: "convert"
+    },
+
+    // ── Edit & Optimize ──
+    {
+      id: "compress",
+      title: "Compress PDF",
+      description: "Reduce PDF file size without losing quality",
+      iconName: "Minimize2",
+      to: "/compress",
+      color: "bg-purple-50",
+      category: "edit",
+      popular: true
+    },
+    {
+      id: "pdf-editor",
+      title: "PDF Editor",
+      description: "Add text, annotations, highlights and shapes to PDF",
+      iconName: "FileText",
+      to: "/pdf-editor",
+      color: "bg-fuchsia-50",
+      category: "edit",
+      popular: true
+    },
+    {
+      id: "ai-edit-pdf",
+      title: "OCR Text Editor",
+      description: "Edit text, annotate, erase and highlight scanned PDFs with OCR",
+      iconName: "FileEdit",
+      to: "/ai-edit-pdf",
+      color: "bg-purple-50",
+      category: "edit"
     },
     {
       id: "compress-img",
@@ -168,7 +264,7 @@ const AllTools: React.FC = () => {
       iconName: "Minimize2",
       to: "/compress-img",
       color: "bg-teal-50",
-      category: "image",
+      category: "edit",
       popular: true
     },
     {
@@ -178,158 +274,34 @@ const AllTools: React.FC = () => {
       iconName: "Sliders",
       to: "/advance-compress-img",
       color: "bg-cyan-50",
-      category: "image"
-    },
-    {
-      id: "make-ppt",
-      title: "Make PPT (PDF & Images)",
-      description: "Convert PDF documents or photos into PowerPoint (.pptx) with smart aspect ratio auto-fit",
-      iconName: "Presentation",
-      to: "/make-ppt",
-      color: "bg-orange-50",
-      category: "image",
-      popular: true
-    },
-    {
-      id: "passport-photo-maker",
-      title: "Passport Size Photo Maker",
-      description: "Create official 3.5x4.5 cm passport photos, 4x6 print sheets, and 20-50KB exam form files",
-      iconName: "Camera",
-      to: "/passport-photo-maker",
-      color: "bg-blue-50",
-      category: "image",
-      popular: true
-    },
-
-    // Conversion
-    {
-      id: "convert",
-      title: "Convert PDF",
-      description: "Convert PDF to various formats",
-      iconName: "ArrowRight",
-      to: "/convert",
-      color: "bg-yellow-50",
-      category: "conversion"
-    },
-    {
-      id: "pdf-to-text",
-      title: "PDF to Text",
-      description: "Extract clean text and OCR from scanned PDF documents",
-      iconName: "FileText",
-      to: "/pdf-to-text",
-      color: "bg-blue-50",
-      category: "conversion"
-    },
-    {
-      id: "pdf-to-word",
-      title: "PDF to Word",
-      description: "Convert PDF documents to editable Word files",
-      iconName: "FileType",
-      to: "/pdf-to-word",
-      color: "bg-blue-50",
-      category: "conversion"
-    },
-    {
-      id: "pdf-to-powerpoint",
-      title: "PDF to PowerPoint",
-      description: "Convert PDF to PowerPoint presentation",
-      iconName: "Presentation",
-      to: "/pdf-to-powerpoint",
-      color: "bg-red-50",
-      category: "conversion"
-    },
-    {
-      id: "word-to-pdf",
-      title: "Word to PDF",
-      description: "Convert Word documents to PDF format",
-      iconName: "Type",
-      to: "/word-to-pdf",
-      color: "bg-green-50",
-      category: "conversion"
-    },
-    {
-      id: "powerpoint-to-pdf",
-      title: "PowerPoint to PDF",
-      description: "Convert PowerPoint presentations to PDF",
-      iconName: "Presentation",
-      to: "/powerpoint-to-pdf",
-      color: "bg-purple-50",
-      category: "conversion"
-    },
-
-    // PDF Tools
-    {
-      id: "rotate",
-      title: "Rotate PDF",
-      description: "Rotate PDF pages to correct orientation",
-      iconName: "RotateCw",
-      to: "/rotate",
-      color: "bg-orange-50",
-      category: "pdf-tools"
+      category: "edit"
     },
     {
       id: "page-number",
       title: "Add Page Numbers",
-      description: "Add page numbers to PDF documents",
+      description: "Add customizable page numbers to PDF documents",
       iconName: "Hash",
       to: "/page-number",
       color: "bg-pink-50",
-      category: "pdf-tools"
+      category: "edit"
     },
     {
       id: "watermark",
       title: "Watermark PDF",
-      description: "Add text or image watermarks to PDF",
+      description: "Add text or image watermarks to PDF pages",
       iconName: "Type",
       to: "/watermark",
       color: "bg-teal-50",
-      category: "pdf-tools"
-    },
-    {
-      id: "crop-pdf",
-      title: "Crop PDF",
-      description: "Crop PDF pages to remove unwanted margins",
-      iconName: "Crop",
-      to: "/crop-pdf",
-      color: "bg-cyan-50",
-      category: "pdf-tools"
+      category: "edit"
     },
     {
       id: "scan-pdf",
       title: "Scan Document",
-      description: "Convert scanned documents to PDF",
+      description: "Convert physical documents from camera to PDF",
       iconName: "Scan",
       to: "/scan-pdf",
       color: "bg-yellow-50",
-      category: "pdf-tools"
-    },
-    {
-      id: "sign-pdf",
-      title: "Sign PDF",
-      description: "Add digital signatures to PDF documents",
-      iconName: "Signature",
-      to: "/sign-pdf",
-      color: "bg-blue-50",
-      category: "pdf-tools"
-    },
-    {
-      id: "redact-pdf",
-      title: "Redact PDF",
-      description: "Permanently blackout and erase sensitive text and confidential data",
-      iconName: "EyeOff",
-      to: "/redact-pdf",
-      color: "bg-rose-50",
-      category: "pdf-tools",
-      popular: true
-    },
-    {
-      id: "ocr-pdf",
-      title: "OCR PDF",
-      description: "Extract text from scanned PDF using OCR",
-      iconName: "Eye",
-      to: "/ocr-pdf",
-      color: "bg-green-50",
-      category: "pdf-tools"
+      category: "edit"
     },
     {
       id: "compare-pdf",
@@ -338,36 +310,71 @@ const AllTools: React.FC = () => {
       iconName: "BarChart3",
       to: "/compare-pdf",
       color: "bg-purple-50",
-      category: "pdf-tools"
+      category: "edit"
     },
+
+    // ── Security & Sign ──
+    {
+      id: "redact-pdf",
+      title: "Redact PDF",
+      description: "Permanently blackout sensitive text and confidential data",
+      iconName: "EyeOff",
+      to: "/redact-pdf",
+      color: "bg-rose-50",
+      category: "security",
+      popular: true
+    },
+    {
+      id: "protect-pdf",
+      title: "Protect PDF",
+      description: "Encrypt PDF files with a password to prevent unauthorized access",
+      iconName: "Shield",
+      to: "/protect-pdf",
+      color: "bg-emerald-50",
+      category: "security",
+      popular: true
+    },
+    {
+      id: "unlock-pdf",
+      title: "Unlock PDF",
+      description: "Remove passwords and security restrictions from PDF files",
+      iconName: "Unlock",
+      to: "/unlock-pdf",
+      color: "bg-teal-50",
+      category: "security",
+      popular: true
+    },
+    {
+      id: "sign-pdf",
+      title: "Sign PDF",
+      description: "Add digital signatures to PDF documents securely",
+      iconName: "Signature",
+      to: "/sign-pdf",
+      color: "bg-blue-50",
+      category: "security",
+      popular: true
+    },
+
+    // ── AI Document Intelligence & Exam Tools ──
     {
       id: "summarizer-qa",
       title: "AI Summary",
-      description: "Generate executive summary and main topics from any document or PDF",
+      description: "Generate structured executive summaries and ask questions with AI",
       iconName: "Brain",
       to: "/summarizer-qa",
       color: "bg-blue-50",
-      category: "ai-tools",
+      category: "ai-exams",
       popular: true
     },
     {
       id: "ai-pdf-to-mcq",
       title: "AI PDF to MCQ",
-      description: "Generate MCQs from PDF with test mode, answer key and performance analysis",
+      description: "Generate exam MCQs with test mode, answer key and performance analysis",
       iconName: "GraduationCap",
       to: "/ai-pdf-to-mcq",
       color: "bg-amber-50",
-      category: "ai-tools",
+      category: "ai-exams",
       popular: true
-    },
-    {
-      id: "pdf-editor",
-      title: "PDF Editor",
-      description: "Normal PDF editor for manual text, highlight and shape annotations",
-      iconName: "FileText",
-      to: "/pdf-editor",
-      color: "bg-fuchsia-50",
-      category: "pdf-tools"
     },
     {
       id: "ai-interview-generator",
@@ -376,28 +383,38 @@ const AllTools: React.FC = () => {
       iconName: "Briefcase",
       to: "/ai-interview-generator",
       color: "bg-emerald-50",
-      category: "ai-tools",
+      category: "ai-exams",
       popular: true
     },
     {
-      id: "ai-edit-pdf",
-      title: "AI Edit PDF",
-      description: "Edit text, annotate, erase and highlight PDFs with AI OCR",
-      iconName: "FileEdit",
-      to: "/ai-edit-pdf",
-      color: "bg-purple-50",
-      category: "ai-tools",
+      id: "govt-exam-resizer",
+      title: "FormDocFixer",
+      description: "Fix & prepare photos (20-50KB), signatures, and certificate PDFs for all Govt exams",
+      iconName: "GraduationCap",
+      to: "/govt-exam-resizer",
+      color: "bg-amber-50",
+      category: "ai-exams",
+      popular: true
+    },
+    {
+      id: "passport-photo-maker",
+      title: "Passport Size Photo Maker",
+      description: "Create official 3.5x4.5 cm passport photos, 4x6 print sheets, and 20-50KB files",
+      iconName: "Camera",
+      to: "/passport-photo-maker",
+      color: "bg-blue-50",
+      category: "ai-exams",
       popular: true
     },
   ];
 
   const categories = [
     { id: 'all', name: 'All Tools', icon: Grid3X3 },
-    { id: 'ai-tools', name: 'AI Tools', icon: Brain },
-    { id: 'pdf-core', name: 'PDF Core', icon: FileText },
-    { id: 'image', name: 'Image Tools', icon: Image },
-    { id: 'conversion', name: 'Conversion', icon: ArrowRight },
-    { id: 'pdf-tools', name: 'PDF Tools', icon: FileText }
+    { id: 'organize', name: 'Organize PDF', icon: LayoutGrid },
+    { id: 'convert', name: 'Convert PDF', icon: ArrowRight },
+    { id: 'edit', name: 'Edit & Optimize', icon: FileEdit },
+    { id: 'security', name: 'Security & Sign', icon: Shield },
+    { id: 'ai-exams', name: 'AI & Exam Tools', icon: Brain },
   ];
 
   const iconMap: Record<string, React.ComponentType<any>> = {

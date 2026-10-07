@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /api/
 
 Sitemap: https://lakpdf.com/sitemap.xml

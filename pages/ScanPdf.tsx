@@ -1124,17 +1124,17 @@ export const ScanPdf: React.FC = () => {
                 </div>
               </div>
 
-              <div className="relative aspect-[4/3] bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-slate-700 shadow-inner">
+              <div className="relative max-h-[65vh] min-h-[320px] bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-slate-700 shadow-inner">
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className="max-h-[65vh] w-full h-auto object-contain mx-auto"
                 />
-                <div className="absolute inset-6 border-2 border-dashed border-white/50 rounded-xl pointer-events-none flex items-center justify-center">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-white/70 bg-black/50 px-2.5 py-1 rounded">
-                    Position Document Here
+                <div className="absolute inset-5 sm:inset-8 border-2 border-dashed border-white/60 rounded-xl pointer-events-none flex items-center justify-center shadow-sm">
+                  <span className="text-[10px] sm:text-xs uppercase font-bold tracking-widest text-white/90 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/20">
+                    Position Document Inside Frame
                   </span>
                 </div>
 

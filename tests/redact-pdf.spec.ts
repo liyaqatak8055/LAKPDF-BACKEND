@@ -21,6 +21,7 @@ test('Redact PDF tool - Multi-page, drag-to-move, cut/delete, and export', async
 
   // 4. Draw a redaction box on Page 1
   const page1Overlay = page.locator('#pdf-page-1 .pdf-page-overlay');
+  await page1Overlay.scrollIntoViewIfNeeded();
   const box1 = await page1Overlay.boundingBox();
   expect(box1).not.toBeNull();
   if (box1) {

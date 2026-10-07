@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
 import { PdfFile, ProcessingStatus } from '../types';
 import { addPageNumbers, downloadPdf, formatBytes, PageNumberPosition, getPdfPageCount, pdfjs } from '../services/pdfService';
-import { Hash, X, Download, CheckCircle2, AlertCircle, Eye } from 'lucide-react';
+import { Hash, X, Download, CheckCircle2, AlertCircle, Eye, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { NextStepPanel, RelatedActions, ToolStartPanel } from '../components/ToolProductPanels';
 import { Helmet } from 'react-helmet-async';
@@ -38,6 +39,7 @@ export const PageNumbers: React.FC = () => {
   const [margin, setMargin] = useState<number>(20);
   const [color, setColor] = useState<string>('#111111');
   const [showBackground, setShowBackground] = useState<boolean>(true);
+  const [skipFirstPage, setSkipFirstPage] = useState<boolean>(false);
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, message: '' });
   const [readyPdf, setReadyPdf] = useState<{ data: Uint8Array; name: string } | null>(null);
@@ -87,9 +89,20 @@ export const PageNumbers: React.FC = () => {
         if (ctx) {
           await page.render({ canvasContext: ctx, viewport }).promise;
           setPreviewImg(canvas.toDataURL('image/jpeg', 0.85));
+          canvas.width = 0;
+          canvas.height = 0;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
+        const errMsg = (e?.message || '').toLowerCase();
+        const isPassword = e?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+        if (isPassword) {
+          setStatus({
+            isProcessing: false,
+            message: 'This PDF is password-protected. Unlock it before adding page numbers.',
+            error: 'password_protected'
+          });
+        }
       } finally {
         setPreviewLoading(false);
       }
@@ -102,14 +115,29 @@ export const PageNumbers: React.FC = () => {
     setStatus({ isProcessing: true, message: 'Adding page numbers...' });
     try {
       const safeStart = Math.max(1, Number.isFinite(startNumber) ? Math.floor(startNumber) : 1);
-      const newPdfBytes = await addPageNumbers(file.file, { position, format, startNumber: safeStart, fontSize, margin, color, showBackground });
+      const newPdfBytes = await addPageNumbers(file.file, {
+        position,
+        format,
+        startNumber: safeStart,
+        fontSize,
+        margin,
+        color,
+        showBackground,
+        skipFirstPage
+      });
       const outputName = `numbered-${file.name}`;
       setReadyPdf({ data: newPdfBytes, name: outputName });
       downloadPdf(newPdfBytes, outputName, { autoDownload: false });
       setStatus({ isProcessing: false, message: 'Page numbers added successfully!', success: true });
-    } catch (error) {
+    } catch (error: any) {
+      console.error(error);
       const details = error instanceof Error ? error.message : 'Unknown error';
-      setStatus({ isProcessing: false, message: `Error: ${details}`, error: 'Failed' });
+      const isPassword = details.toLowerCase().includes('password') || details.toLowerCase().includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: isPassword ? 'This PDF is password-protected. Unlock it before adding page numbers.' : `Error: ${details}`,
+        error: isPassword ? 'password_protected' : 'Failed'
+      });
     }
   };
 
@@ -147,8 +175,8 @@ export const PageNumbers: React.FC = () => {
       </Helmet>
     <div className="max-w-5xl mx-auto px-4 py-12">
       <div className="text-center mb-10">
-        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Page Numbers</h1>
-        <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">Page Numbers</h1>
+        <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
           Add page numbers to your PDF — choose position, style, font size, and color. Live preview included.
         </p>
       </div>
@@ -177,37 +205,37 @@ export const PageNumbers: React.FC = () => {
       ) : (
         <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* Main settings panel */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 space-y-7">
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-6 md:p-8 space-y-7">
             {/* File header */}
-            <div className="flex items-start justify-between pb-5 border-b border-slate-100">
+            <div className="flex items-start justify-between pb-5 border-b border-slate-100 dark:border-dark-border">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-red-100 rounded-lg flex items-center justify-center text-red-500 font-bold text-xs shrink-0">PDF</div>
+                <div className="w-11 h-11 bg-red-100 dark:bg-red-950/60 rounded-lg flex items-center justify-center text-red-500 font-bold text-xs shrink-0">PDF</div>
                 <div>
-                  <p className="font-semibold text-slate-900 truncate max-w-[220px]">{file.name}</p>
-                  <p className="text-sm text-slate-500">{formatBytes(file.size)}{pageCount ? ` • ${pageCount} pages` : ''}</p>
+                  <p className="font-semibold text-slate-900 dark:text-white truncate max-w-[220px]">{file.name}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{formatBytes(file.size)}{pageCount ? ` • ${pageCount} pages` : ''}</p>
                 </div>
               </div>
-              <button onClick={() => { setFile(null); setPageCount(null); setReadyPdf(null); setStatus({ isProcessing: false, message: '' }); }} className="text-slate-400 hover:text-red-500">
+              <button onClick={() => { setFile(null); setPageCount(null); setReadyPdf(null); setStatus({ isProcessing: false, message: '' }); }} className="text-slate-400 hover:text-red-500 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Position picker */}
             <div>
-              <h4 className="font-semibold text-slate-800 mb-3">Position</h4>
+              <h4 className="font-semibold text-slate-800 dark:text-white mb-3">Position</h4>
               <div className="grid grid-cols-3 gap-2">
                 {positionCards.map((opt) => (
                   <button
                     key={opt.key}
                     onClick={() => setPosition(opt.key)}
-                    className={`p-3 rounded-xl border transition-all text-center ${position === opt.key ? 'border-teal-500 bg-teal-50 text-teal-700 ring-1 ring-teal-300' : 'border-slate-200 hover:border-teal-300 text-slate-600'}`}
+                    className={`p-3 rounded-xl border transition-all text-center cursor-pointer ${position === opt.key ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 ring-1 ring-teal-300' : 'border-slate-200 dark:border-dark-border hover:border-teal-300 text-slate-600 dark:text-slate-300 bg-white dark:bg-dark-surface'}`}
                   >
                     {/* Mini page with number dot */}
-                    <div className="w-14 h-20 bg-white border border-slate-200 shadow-sm relative mx-auto mb-2 rounded-sm overflow-hidden">
+                    <div className="w-14 h-20 bg-white dark:bg-dark-bg border border-slate-200 dark:border-dark-border shadow-sm relative mx-auto mb-2 rounded-sm overflow-hidden">
                       {/* Simulated content lines */}
                       <div className="absolute inset-x-2 space-y-1" style={{ top: '20%' }}>
                         {[70, 90, 60, 80].map((w, i) => (
-                          <div key={i} className="h-0.5 bg-slate-200 rounded" style={{ width: `${w}%` }} />
+                          <div key={i} className="h-0.5 bg-slate-200 dark:bg-dark-border rounded" style={{ width: `${w}%` }} />
                         ))}
                       </div>
                       {/* Number label */}
@@ -227,11 +255,11 @@ export const PageNumbers: React.FC = () => {
             {/* Format & Start Number */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Number Format</label>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Number Format</label>
                 <select
                   value={format}
                   onChange={e => setFormat(e.target.value as NumberingFormat)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+                  className="w-full rounded-xl border border-slate-200 dark:border-dark-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white dark:bg-dark-surface text-slate-900 dark:text-white"
                 >
                   <option value="page-of-total">1 / 10 (Page of Total)</option>
                   <option value="page-only">1 (Number Only)</option>
@@ -239,7 +267,7 @@ export const PageNumbers: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Start Number</label>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Start Number</label>
                 <input
                   type="number"
                   min={1}
@@ -249,7 +277,7 @@ export const PageNumbers: React.FC = () => {
                     const v = Number(e.target.value);
                     setStartNumber(Number.isFinite(v) ? Math.max(1, Math.floor(v)) : 1);
                   }}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-dark-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white dark:bg-dark-surface text-slate-900 dark:text-white"
                 />
               </div>
             </div>
@@ -257,13 +285,13 @@ export const PageNumbers: React.FC = () => {
             {/* Sliders */}
             <div className="grid grid-cols-2 gap-5">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Font Size: <span className="text-teal-600">{fontSize}px</span></label>
-                <input type="range" min={8} max={32} step={1} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="w-full accent-teal-500" />
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Font Size: <span className="text-teal-600 dark:text-teal-400">{fontSize}px</span></label>
+                <input type="range" min={8} max={32} step={1} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="w-full accent-teal-500 cursor-pointer" />
                 <div className="flex justify-between text-[10px] text-slate-400 mt-0.5"><span>8</span><span>32</span></div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Margin: <span className="text-teal-600">{margin}px</span></label>
-                <input type="range" min={8} max={72} step={1} value={margin} onChange={e => setMargin(Number(e.target.value))} className="w-full accent-teal-500" />
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Margin: <span className="text-teal-600 dark:text-teal-400">{margin}px</span></label>
+                <input type="range" min={8} max={72} step={1} value={margin} onChange={e => setMargin(Number(e.target.value))} className="w-full accent-teal-500 cursor-pointer" />
                 <div className="flex justify-between text-[10px] text-slate-400 mt-0.5"><span>8</span><span>72</span></div>
               </div>
             </div>
@@ -271,18 +299,18 @@ export const PageNumbers: React.FC = () => {
             {/* Color + background */}
             <div className="flex items-center gap-5 flex-wrap">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Text Color</label>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Text Color</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     value={color}
                     onChange={e => setColor(e.target.value)}
-                    className="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1 cursor-pointer"
+                    className="h-10 w-14 rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-1 cursor-pointer"
                   />
-                  <span className="text-sm font-mono text-slate-500">{color.toUpperCase()}</span>
+                  <span className="text-sm font-mono text-slate-500 dark:text-slate-400">{color.toUpperCase()}</span>
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={showBackground}
@@ -291,6 +319,15 @@ export const PageNumbers: React.FC = () => {
                 />
                 <span>Show background behind number</span>
               </label>
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={skipFirstPage}
+                  onChange={e => setSkipFirstPage(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 accent-teal-500"
+                />
+                <span>Skip first page (Cover page)</span>
+              </label>
             </div>
 
             {/* Status */}
@@ -298,6 +335,22 @@ export const PageNumbers: React.FC = () => {
               <div className={`rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${status.error ? 'bg-red-50 border border-red-200 text-red-700' : status.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-blue-50 border border-blue-200 text-blue-700'}`}>
                 {status.error ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
                 {status.message}
+              </div>
+            )}
+
+            {status.error === 'password_protected' && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Protected PDF Detected</p>
+                  <p className="text-xs text-amber-700 mt-1">This document has password security enabled. Unlock it first to add page numbers.</p>
+                  <Link
+                    to="/unlock-pdf"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                  >
+                    Go to Unlock PDF tool &rarr;
+                  </Link>
+                </div>
               </div>
             )}
 
@@ -329,12 +382,12 @@ export const PageNumbers: React.FC = () => {
           {/* Sidebar — Live preview + next steps */}
           <div className="space-y-4">
             {/* Live preview */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Eye className="w-4 h-4 text-teal-500" />
-                <h4 className="text-sm font-semibold text-slate-700">Live Preview</h4>
+                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Live Preview</h4>
               </div>
-              <div className="bg-slate-100 rounded-xl overflow-hidden relative" style={{ minHeight: 200 }}>
+              <div className="bg-slate-100 dark:bg-dark-bg rounded-xl overflow-hidden relative" style={{ minHeight: 200 }}>
                 {previewLoading ? (
                   <div className="flex items-center justify-center h-40">
                     <div className="w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />

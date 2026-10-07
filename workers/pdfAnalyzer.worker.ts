@@ -4,7 +4,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js to work in web worker context
-pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`;
 
 // Page limit hard-cap
 const MAX_ANALYZE_PAGES = 25;

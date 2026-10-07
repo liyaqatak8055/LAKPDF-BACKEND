@@ -1,11 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
-import { Scan, FileText, Download, Copy, RefreshCw, Loader2, AlertCircle, CheckCircle, FileType, Settings, Check, Layout } from 'lucide-react';
+import {
+  Scan,
+  FileText,
+  Download,
+  Copy,
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+  FileType,
+  Settings,
+  Check,
+  Layout,
+  Sparkles,
+  SlidersHorizontal,
+  Compass,
+} from 'lucide-react';
 import { pdfjs, formatBytes } from '../services/pdfService';
-import { v4 as uuidv4 } from 'uuid';
 import { setLatestDownload } from '../utils/downloadCenter';
 import { postProcessOcrText, preprocessCanvasForOcr } from '../utils/ocrPostProcess';
+import { processFileWithOCR } from '../utils/ocrService';
 import { Helmet } from 'react-helmet-async';
 import { ToolSEOContent } from '../components/ToolSEOContent';
 
@@ -23,6 +39,12 @@ const loadDocx = async () => {
   return import('docx');
 };
 
+export interface OcrWordTokenItem {
+  text: string;
+  confidence: number;
+  page?: number;
+}
+
 export const OcrPdf: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState('');
@@ -34,11 +56,19 @@ export const OcrPdf: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Settings state
-  const [language, setLanguage] = useState('eng');
+  const [language, setLanguage] = useState('eng+hin');
   const [psmMode, setPsmMode] = useState('3'); // '3' is AUTO
   const [enhancement, setEnhancement] = useState<'grayscale' | 'binarize' | 'none'>('grayscale');
   const [resolutionScale, setResolutionScale] = useState<number>(2.5);
   const [preserveLayout, setPreserveLayout] = useState<boolean>(true);
+  const [autoDeskew, setAutoDeskew] = useState<boolean>(true);
+  const [denoiseFilter, setDenoiseFilter] = useState<boolean>(true);
+
+  // Confidence & Review Mode State
+  const [docConfidence, setDocConfidence] = useState<number | null>(null);
+  const [wordTokens, setWordTokens] = useState<OcrWordTokenItem[]>([]);
+  const [activeTab, setActiveTab] = useState<'editor' | 'review'>('editor');
+  const [isGeneratingSearchablePdf, setIsGeneratingSearchablePdf] = useState<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -78,6 +108,8 @@ export const OcrPdf: React.FC = () => {
     if (!file) return;
     setStatus('initializing');
     setText('');
+    setDocConfidence(null);
+    setWordTokens([]);
     setProgress(0);
     setStatusMessage('Initializing OCR engine... (This may take a moment)');
 
@@ -109,6 +141,7 @@ export const OcrPdf: React.FC = () => {
 
       setStatus('processing');
       let extractedText = '';
+      const allTokens: OcrWordTokenItem[] = [];
 
       if (file.type === 'application/pdf') {
         const arrayBuffer = await file.arrayBuffer();
@@ -133,25 +166,25 @@ export const OcrPdf: React.FC = () => {
              await page.render({ canvasContext: ctx, viewport }).promise;
              
              // Preprocess canvas based on user settings
-             let processedCanvas = canvas;
-             if (enhancement === 'binarize') {
-               processedCanvas = preprocessCanvasForOcr(canvas, {
-                 contrastBoost: 1.45,
-                 thresholdOffset: -3,
-                 binarize: true,
-               });
-             } else if (enhancement === 'grayscale') {
-               processedCanvas = preprocessCanvasForOcr(canvas, {
-                 contrastBoost: 1.3,
-                 binarize: false,
-               });
-             }
+             const processedCanvas = preprocessCanvasForOcr(canvas, {
+               deskew: autoDeskew,
+               denoise: denoiseFilter,
+               contrastBoost: enhancement === 'binarize' ? 1.45 : enhancement === 'grayscale' ? 1.3 : 1.0,
+               thresholdOffset: enhancement === 'binarize' ? -3 : 0,
+               binarize: enhancement === 'binarize',
+             });
 
              const blob = await new Promise<Blob | null>(resolve => processedCanvas.toBlob(resolve, 'image/png'));
              if (blob) {
                  setProgress(0);
-                 const { data: { text } } = await worker.recognize(blob);
-                 extractedText += cleanOcrText(text, preserveLayout) + "\n\n";
+                 const { data } = await worker.recognize(blob);
+                 const pageWords: OcrWordTokenItem[] = (data.words || []).map((w: any) => ({
+                   text: w.text || '',
+                   confidence: Math.round(w.confidence || 0),
+                   page: i,
+                 }));
+                 allTokens.push(...pageWords);
+                 extractedText += cleanOcrText(data.text || '', preserveLayout) + "\n\n";
              }
            }
         }
@@ -172,28 +205,34 @@ export const OcrPdf: React.FC = () => {
         if (ctx) {
           ctx.drawImage(img, 0, 0);
           
-          let processedCanvas = canvas;
-          if (enhancement === 'binarize') {
-            processedCanvas = preprocessCanvasForOcr(canvas, {
-              contrastBoost: 1.45,
-              thresholdOffset: -3,
-              binarize: true,
-            });
-          } else if (enhancement === 'grayscale') {
-            processedCanvas = preprocessCanvasForOcr(canvas, {
-              contrastBoost: 1.3,
-              binarize: false,
-            });
-          }
+          const processedCanvas = preprocessCanvasForOcr(canvas, {
+            deskew: autoDeskew,
+            denoise: denoiseFilter,
+            contrastBoost: enhancement === 'binarize' ? 1.45 : enhancement === 'grayscale' ? 1.3 : 1.0,
+            thresholdOffset: enhancement === 'binarize' ? -3 : 0,
+            binarize: enhancement === 'binarize',
+          });
 
           const blob = await new Promise<Blob | null>(resolve => processedCanvas.toBlob(resolve, 'image/png'));
           if (blob) {
             setStatusMessage('Recognizing text...');
-            const { data: { text } } = await worker.recognize(blob);
-            extractedText = cleanOcrText(text, preserveLayout);
+            const { data } = await worker.recognize(blob);
+            const words: OcrWordTokenItem[] = (data.words || []).map((w: any) => ({
+              text: w.text || '',
+              confidence: Math.round(w.confidence || 0),
+              page: 1,
+            }));
+            allTokens.push(...words);
+            extractedText = cleanOcrText(data.text || '', preserveLayout);
           }
         }
         URL.revokeObjectURL(img.src);
+      }
+
+      setWordTokens(allTokens);
+      if (allTokens.length > 0) {
+        const avgConf = Math.round(allTokens.reduce((acc, w) => acc + w.confidence, 0) / allTokens.length);
+        setDocConfidence(avgConf);
       }
 
       setText(extractedText.trim());
@@ -218,6 +257,41 @@ export const OcrPdf: React.FC = () => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadSearchablePdf = async () => {
+    if (!file) return;
+    setIsGeneratingSearchablePdf(true);
+    setStatusMessage('Generating Searchable PDF...');
+    try {
+      const searchableFile = await processFileWithOCR(
+        file,
+        (p) => {
+          setStatusMessage(`Building Searchable PDF... ${p.progress}%`);
+        },
+        {
+          language,
+          deskew: autoDeskew,
+          denoise: denoiseFilter,
+        }
+      );
+      const outputFilename = `${file.name.replace(/\.[^/.]+$/, '')}-searchable.pdf`;
+      setLatestDownload({
+        filename: outputFilename,
+        blob: searchableFile,
+      });
+      const url = URL.createObjectURL(searchableFile);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = outputFilename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Failed to generate searchable PDF:', err);
+      alert('Failed to generate searchable PDF: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsGeneratingSearchablePdf(false);
+    }
   };
 
   const downloadAsTxt = () => {
@@ -294,6 +368,11 @@ export const OcrPdf: React.FC = () => {
     setFile(null);
     setText('');
     setStatus('idle');
+    setDocConfidence(null);
+    setWordTokens([]);
+    setActiveTab('editor');
+    setProgress(0);
+    setStatusMessage('');
   };
 
   return (
@@ -436,6 +515,31 @@ export const OcrPdf: React.FC = () => {
                    />
                    <span>Preserve original line-breaks</span>
                  </label>
+
+                 {/* Scan Pre-processing Controls */}
+                 <div className="space-y-2 pt-2 border-t border-slate-100">
+                   <span className="block text-xs font-semibold text-slate-600">Scan Pre-processing</span>
+                   <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                     <input
+                       type="checkbox"
+                       checked={autoDeskew}
+                       onChange={(e) => setAutoDeskew(e.target.checked)}
+                       disabled={status !== 'idle'}
+                       className="w-4 h-4 rounded border-slate-300 accent-cyan-500"
+                     />
+                     <span>Auto-Deskew Tilted Pages</span>
+                   </label>
+                   <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                     <input
+                       type="checkbox"
+                       checked={denoiseFilter}
+                       onChange={(e) => setDenoiseFilter(e.target.checked)}
+                       disabled={status !== 'idle'}
+                       className="w-4 h-4 rounded border-slate-300 accent-cyan-500"
+                     />
+                     <span>Despeckle / Noise Filter</span>
+                   </label>
+                 </div>
                </div>
 
                {status === 'idle' && (
@@ -473,15 +577,48 @@ export const OcrPdf: React.FC = () => {
                )}
 
                {status === 'done' && (
-                 <div className="bg-green-50 p-6 rounded-xl border border-green-100 text-center space-y-3">
+                 <div className="bg-green-50 p-6 rounded-xl border border-green-100 text-center space-y-4">
                    <div className="flex flex-col items-center">
                      <CheckCircle className="w-10 h-10 text-green-500 mb-2" />
-                     <h3 className="font-bold text-green-700">Success!</h3>
-                     <p className="text-xs text-green-600">Document converted successfully.</p>
+                     <h3 className="font-bold text-green-700">Scan Complete!</h3>
+                     <p className="text-xs text-green-600">Document recognized and enhanced.</p>
                    </div>
+
+                   {docConfidence !== null && (
+                     <div className="p-3 bg-white/95 border border-green-200 rounded-xl text-left shadow-sm">
+                       <div className="flex items-center justify-between mb-1">
+                         <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Recognition Accuracy</span>
+                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                           docConfidence >= 85 ? 'bg-emerald-100 text-emerald-800' :
+                           docConfidence >= 70 ? 'bg-amber-100 text-amber-800' :
+                           'bg-rose-100 text-rose-800'
+                         }`}>
+                           {docConfidence >= 85 ? 'High Quality' : docConfidence >= 70 ? 'Moderate' : 'Low Quality'}
+                         </span>
+                       </div>
+                       <div className="flex items-baseline gap-2">
+                         <span className="text-2xl font-black text-slate-800">{docConfidence}%</span>
+                         <span className="text-xs text-slate-500">average word confidence</span>
+                       </div>
+                     </div>
+                   )}
+
                    <div className="flex flex-col gap-2">
+                     <Button
+                       onClick={downloadSearchablePdf}
+                       disabled={isGeneratingSearchablePdf}
+                       variant="primary"
+                       className="bg-indigo-600 hover:bg-indigo-700 w-full"
+                     >
+                       {isGeneratingSearchablePdf ? (
+                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                       ) : (
+                         <Sparkles className="w-4 h-4 mr-2" />
+                       )}
+                       {isGeneratingSearchablePdf ? 'Building PDF...' : 'Download Searchable PDF'}
+                     </Button>
                      <Button onClick={downloadAsPdf} variant="primary" className="bg-red-600 hover:bg-red-700 w-full">
-                       <Download className="w-4 h-4 mr-2" /> Download as PDF
+                       <Download className="w-4 h-4 mr-2" /> Download Clean PDF
                      </Button>
                      <Button onClick={downloadAsWord} variant="primary" className="bg-blue-600 hover:bg-blue-700 w-full">
                        <FileType className="w-4 h-4 mr-2" /> Download as Word
@@ -498,10 +635,39 @@ export const OcrPdf: React.FC = () => {
            {/* Right Column: MS Word-style Editor */}
            <div className="w-full lg:w-2/3 bg-slate-100 rounded-2xl border border-slate-200 p-3 sm:p-5 md:p-8 flex flex-col items-center min-h-[420px] sm:min-h-[600px] shadow-inner">
                <div className="w-full flex items-center justify-between mb-4 px-2">
-                 <span className="text-sm font-semibold text-slate-600 flex items-center gap-1">
-                   <Layout className="w-4 h-4 text-cyan-600" />
-                   Document Editor
-                 </span>
+                 <div className="flex items-center gap-2">
+                   <button
+                     type="button"
+                     onClick={() => setActiveTab('editor')}
+                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                       activeTab === 'editor'
+                         ? 'bg-white shadow-sm border border-slate-200 text-cyan-700'
+                         : 'text-slate-500 hover:text-slate-800'
+                     }`}
+                   >
+                     <Layout className="w-3.5 h-3.5" />
+                     Edit Text
+                   </button>
+                   {wordTokens.length > 0 && (
+                     <button
+                       type="button"
+                       onClick={() => setActiveTab('review')}
+                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                         activeTab === 'review'
+                           ? 'bg-white shadow-sm border border-slate-200 text-cyan-700'
+                           : 'text-slate-500 hover:text-slate-800'
+                       }`}
+                     >
+                       <SlidersHorizontal className="w-3.5 h-3.5" />
+                       Confidence Review
+                       {wordTokens.filter(w => w.confidence < 70).length > 0 && (
+                         <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
+                           {wordTokens.filter(w => w.confidence < 70).length} uncertain
+                         </span>
+                       )}
+                     </button>
+                   )}
+                 </div>
                  {text && (
                    <button
                      onClick={copyText}
@@ -523,6 +689,31 @@ export const OcrPdf: React.FC = () => {
                       <p className="text-lg font-medium opacity-50">Document Preview</p>
                       <p className="text-xs opacity-40 mt-1 max-w-[220px] text-center">Your OCR scanned text will appear here ready to edit.</p>
                     </div>
+                 ) : activeTab === 'review' ? (
+                   <div className="space-y-4">
+                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center justify-between">
+                       <span>Words highlighted in yellow scored &lt; 70% confidence. Hover or click to inspect.</span>
+                       <span className="font-semibold">{wordTokens.filter(w => w.confidence < 70).length} uncertain words</span>
+                     </div>
+                     <div className="font-sans text-sm sm:text-base leading-relaxed text-slate-800 flex flex-wrap gap-x-1.5 gap-y-1 select-text">
+                       {wordTokens.map((token, idx) => {
+                         const isLow = token.confidence < 70;
+                         return (
+                           <span
+                             key={idx}
+                             title={`Confidence: ${token.confidence}%`}
+                             className={`rounded px-1 transition-all ${
+                               isLow
+                                 ? 'bg-amber-100 text-amber-900 border border-amber-300 font-medium cursor-help'
+                                 : 'hover:bg-slate-100'
+                             }`}
+                           >
+                             {token.text}
+                           </span>
+                         );
+                       })}
+                     </div>
+                   </div>
                  ) : (
                    <textarea 
                      ref={textareaRef}

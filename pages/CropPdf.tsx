@@ -3,10 +3,11 @@ import { Helmet } from 'react-helmet-async';
 import { ToolSEOContent } from '../components/ToolSEOContent';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
-import { pdfjs, cropPdf, downloadPdf, formatBytes, getPdfPageCount } from '../services/pdfService';
+import { pdfjs, cropPdf, downloadPdf, formatBytes, getPdfPageCount, detectPdfMargins } from '../services/pdfService';
 import {
   Crop, Download, RefreshCw, ChevronLeft, ChevronRight,
-  Info, CheckCircle2, AlertCircle, Maximize2, Lock, Move
+  Info, CheckCircle2, AlertCircle, Maximize2, Lock, Move,
+  Sparkles, Layers, ShieldCheck
 } from 'lucide-react';
 
 type AspectMode = 'free' | '1:1' | '4:3' | '16:9' | 'a4';
@@ -29,6 +30,11 @@ export const CropPdf: React.FC = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageLoading, setPageLoading] = useState(false);
+
+  // Page range options
+  const [pageRange, setPageRange] = useState<'all' | 'current' | 'custom'>('all');
+  const [customPages, setCustomPages] = useState('');
+  const [autoTrimNote, setAutoTrimNote] = useState<string | null>(null);
 
   // Crop selection (normalized 0-1)
   const [selection, setSelection] = useState({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 });
@@ -94,7 +100,11 @@ export const CropPdf: React.FC = () => {
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const ctx = canvas.getContext('2d');
-      if (ctx) await page.render({ canvasContext: ctx, viewport }).promise;
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      }
     } catch (e) {
       console.error(e);
       setError('Failed to render page.');
@@ -230,6 +240,18 @@ export const CropPdf: React.FC = () => {
     }
   };
 
+  const handleAutoDetectMargins = () => {
+    if (!canvasRef.current) return;
+    try {
+      const margins = detectPdfMargins(canvasRef.current, 0.03);
+      setSelection(margins);
+      setAutoTrimNote('Content margins auto-detected! Blank white borders trimmed.');
+      setTimeout(() => setAutoTrimNote(null), 4000);
+    } catch (e) {
+      console.warn('Auto-detect margins error:', e);
+    }
+  };
+
   const handleCrop = async () => {
     if (!file) return;
     setIsProcessing(true);
@@ -237,13 +259,23 @@ export const CropPdf: React.FC = () => {
     setSuccess('');
     setReadyPdf(null);
     try {
-      const croppedBytes = await cropPdf(file, selection);
+      const croppedBytes = await cropPdf(file, selection, {
+        pageRange,
+        currentPage,
+        customPages,
+      });
       const outputName = `cropped-${file.name}`;
       setReadyPdf({ data: croppedBytes, name: outputName });
-      setSuccess(`PDF cropped successfully! All ${totalPages} page(s) processed.`);
+      const pagesMsg =
+        pageRange === 'current'
+          ? `Page ${currentPage}`
+          : pageRange === 'custom'
+          ? `Pages (${customPages})`
+          : `All ${totalPages} page(s)`;
+      setSuccess(`PDF cropped successfully! ${pagesMsg} trimmed with pure vector fidelity.`);
     } catch (e) {
       console.error(e);
-      setError('Error cropping PDF. Please try again.');
+      setError('Error cropping PDF. Please check page numbers and try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -436,14 +468,91 @@ export const CropPdf: React.FC = () => {
               </div>
             </div>
 
-            {/* Coordinates Info */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-slate-700">Crop Box Dimensions</h4>
-                <button onClick={resetSelection} className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-semibold">
-                  <Maximize2 className="w-3.5 h-3.5" /> Reset Selection
-                </button>
+            {/* Page Range Selection */}
+            {totalPages > 1 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Layers className="w-4 h-4 text-emerald-500" />
+                  <h4 className="text-sm font-semibold text-slate-700">Apply Crop To</h4>
+                </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPageRange('all')}
+                      className={`py-1.5 text-xs rounded-lg border font-semibold transition-all ${
+                        pageRange === 'all'
+                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700 font-bold shadow-sm'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      All ({totalPages} Pages)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPageRange('current')}
+                      className={`py-1.5 text-xs rounded-lg border font-semibold transition-all ${
+                        pageRange === 'current'
+                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700 font-bold shadow-sm'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Current (Page {currentPage})
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPageRange('custom')}
+                    className={`w-full py-1.5 text-xs rounded-lg border font-semibold transition-all ${
+                      pageRange === 'custom'
+                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700 font-bold shadow-sm'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Custom Page Range
+                  </button>
+                  {pageRange === 'custom' && (
+                    <div className="pt-1.5 animate-in fade-in">
+                      <input
+                        type="text"
+                        value={customPages}
+                        onChange={(e) => setCustomPages(e.target.value)}
+                        placeholder={`e.g. 1, 3-${totalPages}`}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Specify comma-separated pages or ranges.</p>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* Coordinates & Auto-Trim Info */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-slate-700">Crop Box Dimensions</h4>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleAutoDetectMargins}
+                    className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1 font-bold transition-all shadow-sm"
+                    title="Automatically trim blank white margins around content"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" /> Auto-Trim
+                  </button>
+                  <button onClick={resetSelection} className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-0.5 font-medium ml-1">
+                    <Maximize2 className="w-3 h-3" /> Reset
+                  </button>
+                </div>
+              </div>
+
+              {autoTrimNote && (
+                <div className="mb-2 text-[11px] text-emerald-700 bg-emerald-50/80 border border-emerald-200 rounded-lg px-2 py-1 flex items-center gap-1.5 animate-in fade-in">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span>{autoTrimNote}</span>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: 'Left (X)', value: `${Math.round(selection.x * 100)}%` },
@@ -457,6 +566,14 @@ export const CropPdf: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Vector Fidelity Assurance */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-slate-600 leading-tight">
+                <strong>100% Vector Fidelity:</strong> LakPDF crops document MediaBox metadata directly. Vectors, fonts, and searchable text remain pristine without rasterization.
+              </p>
             </div>
 
             {/* Status Messages */}

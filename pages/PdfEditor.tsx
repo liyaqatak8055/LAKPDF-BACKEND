@@ -37,7 +37,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { pdfjs } from "../services/pdfService";
+import { pdfjs, safeLoadPdf } from "../services/pdfService";
 import { useEditorState } from "../components/pdf-editor/hooks/useEditorState";
 import { PdfViewer, type ActiveEditorTool } from "../components/pdf-editor/PdfViewer";
 import { PageThumbnails } from "../components/pdf-editor/PageThumbnails";
@@ -344,7 +344,7 @@ const PdfEditor: React.FC = () => {
         return;
       }
       const sourceBytes = await document.file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(sourceBytes);
+      const pdfDoc = await safeLoadPdf(sourceBytes);
       const pages = pdfDoc.getPages();
       const embeddedFonts = new Map<string, any>();
 
@@ -404,6 +404,18 @@ const PdfEditor: React.FC = () => {
               font,
               color: hexToRgb(style.textColor || "#111827"),
             });
+          });
+          continue;
+        }
+
+        if (annotation.type === PdfAnnotationType.ERASER || (annotation.type as any) === 'eraser') {
+          page.drawRectangle({
+            x,
+            y,
+            width,
+            height,
+            color: rgb(1, 1, 1),
+            opacity: 1,
           });
           continue;
         }

@@ -55,7 +55,7 @@ const routes = [
   "/disclaimer",
   "/learn-pdf",
   "/blog",
-  "/blog/how-to-compress-pdf-without-losing-quality"
+  "/blog/lossless-vs-lossy-pdf-compression"
 ];
 
 async function runDeepAudit() {

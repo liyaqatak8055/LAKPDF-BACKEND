@@ -221,21 +221,43 @@ export const ComparePdf: React.FC = () => {
           continue;
         }
 
-        if (Math.abs(r1 - r2) > threshold || Math.abs(g1 - g2) > threshold || Math.abs(b1 - b2) > threshold || Math.abs(a1 - a2) > threshold) {
-           // Highlight Diff in Red
-           diff.data[i] = 255;     // R
-           diff.data[i+1] = 0;     // G
-           diff.data[i+2] = 0;     // B
-           diff.data[i+3] = 255;   // A
-           diffPixels++;
+        const lum1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1;
+        const lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2;
+
+        const isDiff =
+          Math.abs(r1 - r2) > threshold ||
+          Math.abs(g1 - g2) > threshold ||
+          Math.abs(b1 - b2) > threshold ||
+          Math.abs(a1 - a2) > threshold;
+
+        if (isDiff) {
+          diffPixels++;
+          if (lum1 > 215 && lum2 < 195) {
+            // Text added in Document B -> Emerald Green (#10B981)
+            diff.data[i] = 16;
+            diff.data[i + 1] = 185;
+            diff.data[i + 2] = 129;
+            diff.data[i + 3] = 255;
+          } else if (lum1 < 195 && lum2 > 215) {
+            // Text removed from Document A -> Crimson Red (#EF4444)
+            diff.data[i] = 239;
+            diff.data[i + 1] = 68;
+            diff.data[i + 2] = 68;
+            diff.data[i + 3] = 255;
+          } else {
+            // Content modified, shifted, or restyled -> Amber (#F59E0B)
+            diff.data[i] = 245;
+            diff.data[i + 1] = 158;
+            diff.data[i + 2] = 11;
+            diff.data[i + 3] = 255;
+          }
         } else {
-           // Fade out identical pixels (Grayish) to make red pop
-           const gray = (r1 + g1 + b1) / 3;
-           const alpha = 40; // Low opacity for context
-           diff.data[i] = gray;
-           diff.data[i+1] = gray;
-           diff.data[i+2] = gray;
-           diff.data[i+3] = alpha; 
+          // Fade out identical pixels with subtle context
+          const gray = Math.round((r1 + g1 + b1) / 3);
+          diff.data[i] = gray;
+          diff.data[i + 1] = gray;
+          diff.data[i + 2] = gray;
+          diff.data[i + 3] = 35;
         }
       }
 
@@ -510,11 +532,22 @@ export const ComparePdf: React.FC = () => {
 
             {/* Stats Badge */}
             {viewMode === 'diff' && diffStats && !isProcessing && (
-              <div className={`mb-6 px-4 py-2 rounded-full border flex items-center gap-2 text-sm font-bold shadow-sm ${diffStats.percent > 0 ? 'bg-red-50 border-red-200 text-red-600' : 'bg-green-50 border-green-200 text-green-600'}`}>
-                 <AlertCircle className="w-4 h-4" />
-                 {diffStats.percent === 0 
-                    ? "Perfect Match! No differences found." 
-                    : `${diffStats.percent.toFixed(2)}% Difference Detected (${diffStats.pixels} pixels changed)`}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div className={`px-4 py-2 rounded-full border flex items-center gap-2 text-sm font-bold shadow-sm ${diffStats.percent > 0 ? 'bg-red-50 border-red-200 text-red-600' : 'bg-green-50 border-green-200 text-green-600'}`}>
+                  <AlertCircle className="w-4 h-4" />
+                  {diffStats.percent === 0 
+                     ? "Perfect Match! No differences found." 
+                     : `${diffStats.percent.toFixed(2)}% Difference Detected (${diffStats.pixels.toLocaleString()} pixels changed)`}
+                </div>
+
+                {diffStats.percent > 0 && (
+                  <div className="flex flex-wrap items-center gap-3 text-xs font-semibold bg-slate-100/90 border border-slate-200 px-3.5 py-1.5 rounded-full text-slate-700">
+                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Legend:</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm"></span> Added in B</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shadow-sm"></span> Removed from A</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-sm"></span> Modified</span>
+                  </div>
+                )}
               </div>
             )}
 

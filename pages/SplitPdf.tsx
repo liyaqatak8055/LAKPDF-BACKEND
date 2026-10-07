@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
 import { PdfFile, ProcessingStatus } from '../types';
-import { pdfjs, downloadPdf, formatBytes } from '../services/pdfService';
+import { pdfjs, downloadPdf, formatBytes, safeLoadPdf } from '../services/pdfService';
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
-import { Scissors, FileText, Download, X, CheckSquare, Square, ChevronRight, Layers, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Scissors, FileText, Download, X, CheckSquare, Square, ChevronRight, Layers, AlertCircle, CheckCircle2, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { NextStepPanel, RelatedActions, ToolStartPanel } from '../components/ToolProductPanels';
 import { Helmet } from 'react-helmet-async';
@@ -64,14 +65,28 @@ const SplitPdf: React.FC = () => {
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
           if (ctx) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             await page.render({ canvasContext: ctx, viewport }).promise;
             newThumbs.push({ id: uuidv4(), index: i - 1, img: canvas.toDataURL('image/jpeg', 0.7) });
+            canvas.width = 0;
+            canvas.height = 0;
           }
         }
         setThumbs(newThumbs);
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        setStatus({ isProcessing: false, message: 'Failed to load PDF preview.', error: 'Error' });
+        const errMsg = (e?.message || '').toLowerCase();
+        const isPassword = e?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+        if (isPassword) {
+          setStatus({
+            isProcessing: false,
+            message: 'This PDF is password-protected. Unlock it before splitting.',
+            error: 'password_protected'
+          });
+        } else {
+          setStatus({ isProcessing: false, message: 'Failed to load PDF preview.', error: 'Error' });
+        }
       } finally {
         setThumbsLoading(false);
       }
@@ -156,7 +171,7 @@ const SplitPdf: React.FC = () => {
 
     try {
       const arrayBuffer = await file.file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pdfDoc = await safeLoadPdf(arrayBuffer);
       const zip = new JSZip();
 
       for (let i = 0; i < pages.length; i++) {
@@ -171,10 +186,15 @@ const SplitPdf: React.FC = () => {
       const outputName = `split-${file.name.replace('.pdf', '')}.zip`;
       const blob = await zip.generateAsync({ type: 'blob' });
       setReadyZip({ blob, name: outputName });
-      setStatus({ isProcessing: false, message: `Done! ${pages.length} pages extracted as ZIP.`, success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setStatus({ isProcessing: false, message: 'Error splitting file.', error: 'Failed' });
+      const errMsg = (error?.message || '').toLowerCase();
+      const isEncrypted = errMsg.includes('password') || errMsg.includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: isEncrypted ? 'This PDF is password-protected. Unlock it before splitting.' : 'Error splitting file.',
+        error: isEncrypted ? 'password_protected' : 'Failed'
+      });
     }
   };
 
@@ -189,7 +209,7 @@ const SplitPdf: React.FC = () => {
 
     try {
       const arrayBuffer = await file.file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pdfDoc = await safeLoadPdf(arrayBuffer);
       const newPdf = await PDFDocument.create();
       const copiedPages = await newPdf.copyPages(pdfDoc, pages);
       copiedPages.forEach(p => newPdf.addPage(p));
@@ -197,9 +217,15 @@ const SplitPdf: React.FC = () => {
       const outputName = `extracted-${file.name}`;
       setReadySingle({ data: pdfBytes, name: outputName });
       setStatus({ isProcessing: false, message: `Done! ${pages.length} page(s) combined into one PDF.`, success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setStatus({ isProcessing: false, message: 'Error extracting pages.', error: 'Failed' });
+      const errMsg = (error?.message || '').toLowerCase();
+      const isEncrypted = errMsg.includes('password') || errMsg.includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: isEncrypted ? 'This PDF is password-protected. Unlock it before splitting.' : 'Error extracting pages.',
+        error: isEncrypted ? 'password_protected' : 'Failed'
+      });
     }
   };
 
@@ -243,8 +269,8 @@ const SplitPdf: React.FC = () => {
       </Helmet>
     <div className="max-w-5xl mx-auto px-4 py-12">
       <div className="text-center mb-10">
-        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Split PDF</h1>
-        <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">Split PDF</h1>
+        <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
           Extract all pages, a custom range, or handpick specific pages from your PDF.
         </p>
       </div>
@@ -273,22 +299,22 @@ const SplitPdf: React.FC = () => {
       ) : (
         <div className="space-y-5">
           {/* File Header */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex items-center justify-between gap-4">
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0 text-xs">PDF</div>
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-950/60 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0 text-xs">PDF</div>
               <div className="min-w-0">
-                <p className="font-semibold text-slate-900 truncate">{file.name}</p>
-                <p className="text-sm text-slate-500">{formatBytes(file.size)} • {totalPages || '...'} pages</p>
+                <p className="font-semibold text-slate-900 dark:text-white truncate">{file.name}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{formatBytes(file.size)} • {totalPages || '...'} pages</p>
               </div>
             </div>
-            <button onClick={reset} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
+            <button onClick={reset} className="text-slate-400 hover:text-red-500 transition-colors shrink-0 cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Mode Selector */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-800 mb-4">Choose Split Mode</h3>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-5">
+            <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Choose Split Mode</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {([
                 { key: 'all', icon: <Layers className="w-5 h-5" />, label: 'All Pages', desc: 'Extract every page as a separate PDF' },
@@ -298,7 +324,7 @@ const SplitPdf: React.FC = () => {
                 <button
                   key={m.key}
                   onClick={() => { setSplitMode(m.key); setRangeError(''); }}
-                  className={`p-4 rounded-xl border text-left transition-all ${splitMode === m.key ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-slate-200 hover:border-orange-300 text-slate-600'}`}
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${splitMode === m.key ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300' : 'border-slate-200 dark:border-dark-border hover:border-orange-300 dark:hover:border-orange-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-dark-surface'}`}
                 >
                   <div className="flex items-center gap-2 mb-1 font-semibold">{m.icon}{m.label}</div>
                   <p className="text-xs opacity-70">{m.desc}</p>
@@ -309,7 +335,7 @@ const SplitPdf: React.FC = () => {
             {/* Range Input */}
             {splitMode === 'range' && (
               <div className="mt-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Page Range <span className="text-slate-400 font-normal">(e.g. 1-3, 5, 7-9)</span>
                 </label>
                 <input
@@ -317,14 +343,14 @@ const SplitPdf: React.FC = () => {
                   value={rangeInput}
                   onChange={e => { setRangeInput(e.target.value); setRangeError(''); }}
                   placeholder={`e.g. 1-5, 8, 10-${totalPages}`}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${rangeError ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm bg-white dark:bg-dark-surface text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 ${rangeError ? 'border-red-400 bg-red-50 dark:bg-red-950/30' : 'border-slate-200 dark:border-dark-border'}`}
                 />
                 {rangeError && (
                   <p className="text-red-600 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{rangeError}</p>
                 )}
                 {rangeInput && !rangeError && (() => {
                   const pages = parseRange(rangeInput, totalPages);
-                  return pages ? <p className="text-green-600 text-xs mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{pages.length} page(s) selected</p> : null;
+                  return pages ? <p className="text-green-600 dark:text-green-400 text-xs mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{pages.length} page(s) selected</p> : null;
                 })()}
               </div>
             )}
@@ -332,17 +358,17 @@ const SplitPdf: React.FC = () => {
 
           {/* Thumbnail Grid for custom mode or info */}
           {(splitMode === 'custom' || splitMode === 'all') && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-slate-800">
+                <h3 className="font-semibold text-slate-800 dark:text-white">
                   {splitMode === 'custom' ? 'Pick Pages to Extract' : 'Page Preview'}
                 </h3>
                 {splitMode === 'custom' && totalPages > 0 && (
-                  <button onClick={handleSelectAll} className="text-xs text-orange-600 hover:underline">
+                  <button onClick={handleSelectAll} className="text-xs text-orange-600 dark:text-orange-400 hover:underline cursor-pointer">
                     {selectedPages.size === totalPages ? 'Deselect All' : 'Select All'}
                   </button>
                 )}
-                {splitMode === 'custom' && <span className="text-xs text-slate-500">{selectedPages.size} selected</span>}
+                {splitMode === 'custom' && <span className="text-xs text-slate-500 dark:text-slate-400">{selectedPages.size} selected</span>}
               </div>
               {thumbsLoading ? (
                 <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
@@ -396,10 +422,26 @@ const SplitPdf: React.FC = () => {
             </div>
           )}
 
+          {status.error === 'password_protected' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+              <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Protected PDF Detected</p>
+                <p className="text-xs text-amber-700 mt-1">This document has password security enabled. Unlock it first to extract or split pages.</p>
+                <Link
+                  to="/unlock-pdf"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                >
+                  Go to Unlock PDF tool &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Action buttons */}
           {readyZip ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-              <p className="text-sm text-slate-600 font-medium">✅ Ready to download</p>
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-5 space-y-3">
+              <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">✅ Ready to download</p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button variant="primary" size="lg" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleDownloadZip}>
                   <Download className="w-5 h-5 mr-2" /> Download ZIP ({readyZip.name})
@@ -410,8 +452,8 @@ const SplitPdf: React.FC = () => {
               </div>
             </div>
           ) : readySingle ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-              <p className="text-sm text-slate-600 font-medium">✅ Ready to download</p>
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-5 space-y-3">
+              <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">✅ Ready to download</p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button variant="primary" size="lg" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleDownloadSingle}>
                   <Download className="w-5 h-5 mr-2" /> Download PDF
@@ -422,7 +464,7 @@ const SplitPdf: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-5">
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button
                   variant="primary"

@@ -25,8 +25,10 @@ import {
   GraduationCap,
   Camera,
   Building2,
-  Lightbulb
+  Lightbulb,
+  Unlock
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 import {
   convertImagesToPowerPoint,
@@ -69,6 +71,7 @@ export const MakePpt: React.FC = () => {
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultFileName, setResultFileName] = useState<string>('presentation.pptx');
+  const [errorStatus, setErrorStatus] = useState<{ message: string; isPassword?: boolean } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -173,8 +176,9 @@ export const MakePpt: React.FC = () => {
             });
 
             const page = await pdfDoc.getPage(p);
-            // 2.0x scale gives ultra-crisp ~200 DPI resolution, perfect for small handwriting & text
-            const viewport = page.getViewport({ scale: 2.0 });
+            const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /iphone|ipad|ipod|android/i.test(navigator.userAgent));
+            const scale = isMobile ? 1.4 : 2.0;
+            const viewport = page.getViewport({ scale });
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.floor(viewport.width));
             canvas.height = Math.max(1, Math.floor(viewport.height));
@@ -183,7 +187,7 @@ export const MakePpt: React.FC = () => {
               ctx.fillStyle = '#FFFFFF';
               ctx.fillRect(0, 0, canvas.width, canvas.height);
               await page.render({ canvasContext: ctx, viewport }).promise;
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
               const approxSize = Math.round(dataUrl.length * 0.75);
 
               const newItem: ImageCardItem = {
@@ -200,6 +204,8 @@ export const MakePpt: React.FC = () => {
                 sourceType: 'pdf',
                 pageNumber: p
               };
+              canvas.width = 0;
+              canvas.height = 0;
               fileExtractedItems.push(newItem);
 
               // Batch render updates every 5 pages or on final page for snappy performance
@@ -214,10 +220,11 @@ export const MakePpt: React.FC = () => {
         }
       } catch (err: any) {
         console.error('PDF extraction error:', err);
-        const errMsg = err?.name === 'PasswordException'
-          ? 'This PDF is password-protected. Please remove the password first.'
+        const isPassword = err?.name === 'PasswordException' || (err?.message || '').toLowerCase().includes('password') || (err?.message || '').toLowerCase().includes('encrypt');
+        const errMsg = isPassword
+          ? 'This PDF is password-protected. Unlock it first to convert pages to PowerPoint slides.'
           : (err?.message || 'Could not load PDF document.');
-        alert(errMsg);
+        setErrorStatus({ message: errMsg, isPassword });
       } finally {
         setIsExtractingPdf(false);
       }
@@ -449,6 +456,26 @@ export const MakePpt: React.FC = () => {
               Har page aur photo bina khinche (smart aspect ratio maintain karke) slide me perfectly fit aur center hogi.
             </p>
           </div>
+
+          {errorStatus && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-start gap-3">
+              <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  {errorStatus.isPassword ? 'Password-Protected PDF Detected' : 'Document Processing Error'}
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">{errorStatus.message}</p>
+                {errorStatus.isPassword && (
+                  <Link
+                    to="/unlock-pdf"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                  >
+                    Go to Unlock PDF tool &rarr;
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* PDF Extraction Progress Overlay */}
           {isExtractingPdf && (

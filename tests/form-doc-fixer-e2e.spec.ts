@@ -93,7 +93,7 @@ test.describe("FormDocFixer End-to-End Functional Test Suite", () => {
 
     // Verify photo is processed and KB size is strictly 20-50 KB
     await expect(page.getByText(/100% Portal Compliant/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/KB allowed/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/KB target/i).first()).toBeVisible({ timeout: 15_000 });
 
     // Test Fine-Tuning Drawer (Zoom, Background, Shadow removal)
     const tuneBtn = page.getByRole("button", { name: /Adjust/i }).first();

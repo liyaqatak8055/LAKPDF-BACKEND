@@ -38,6 +38,9 @@ import {
   exportPassportPdf,
   optimizeForGovtPortal,
   mmToPixels300Dpi,
+  detectAndCenterFace,
+  getBiometricGuidelines,
+  canvasTo300DpiJpegBlob,
 } from '../services/passportPhotoService';
 import { formatBytes } from '../services/fileHelpers';
 import { ToolSEOContent } from '../components/ToolSEOContent';
@@ -64,6 +67,12 @@ export const PassportPhotoMaker: React.FC = () => {
   >('white');
   const [border, setBorder] = useState<'none' | 'thin-white' | 'thin-black'>('thin-black');
   const [showBiometricGuide, setShowBiometricGuide] = useState<boolean>(true);
+  const [biometricStatus, setBiometricStatus] = useState<{
+    detected: boolean;
+    message: string;
+    method?: string;
+  } | null>(null);
+  const [isCenteringFace, setIsCenteringFace] = useState<boolean>(false);
 
   // Sheet Preview & Export states
   const [previewTab, setPreviewTab] = useState<'single' | '4x6' | 'a4'>('single');
@@ -87,6 +96,51 @@ export const PassportPhotoMaker: React.FC = () => {
     ? activePreset.heightPx300Dpi
     : mmToPixels300Dpi(customHeightMm);
 
+  const activeGuidelines = getBiometricGuidelines(selectedPresetId);
+
+  // Automated Biometric Face Centering
+  const handleAutoCenterFace = useCallback(
+    async (imgToUse?: HTMLImageElement) => {
+      const img = imgToUse || sourceImage;
+      if (!img) return;
+
+      setIsCenteringFace(true);
+      try {
+        const displayW = 320;
+        const displayH = Math.round((displayW * heightMm) / widthMm);
+        const desiredRatio = activeGuidelines.headMinPercent > 60 ? 0.72 : 0.60;
+        const result = await detectAndCenterFace(img, targetWidthPx, targetHeightPx, desiredRatio);
+
+        if (result.detected) {
+          setZoom(result.zoom);
+          const displayPanX = (result.panX * displayW) / targetWidthPx;
+          const displayPanY = (result.panY * displayH) / targetHeightPx;
+          setPan({ x: displayPanX, y: displayPanY });
+          setRotation(0);
+          setTiltAngle(0);
+
+          const methodText =
+            result.method === 'native-ai'
+              ? 'Native AI Detector'
+              : result.method === 'skin-centroid'
+              ? 'Biometric Centroid AI'
+              : 'Portrait Heuristic';
+
+          setBiometricStatus({
+            detected: true,
+            method: methodText,
+            message: `Face centered (${methodText}) • Head ~${Math.round(desiredRatio * 100)}% framed for ${activeGuidelines.standardName}`,
+          });
+        }
+      } catch (e) {
+        console.warn('Face auto-centering notice:', e);
+      } finally {
+        setIsCenteringFace(false);
+      }
+    },
+    [sourceImage, heightMm, widthMm, targetWidthPx, targetHeightPx, activeGuidelines]
+  );
+
   // Load source image
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -101,10 +155,7 @@ export const PassportPhotoMaker: React.FC = () => {
     img.src = url;
     img.onload = () => {
       setSourceImage(img);
-      setZoom(1.0);
-      setPan({ x: 0, y: 0 });
-      setRotation(0);
-      setTiltAngle(0);
+      handleAutoCenterFace(img);
     };
   };
 
@@ -277,30 +328,28 @@ export const PassportPhotoMaker: React.FC = () => {
     setTimeout(() => setDownloadSuccessMsg(null), 4000);
   };
 
-  // 1. Download Single Photo (300 DPI)
-  const handleDownloadSingle = () => {
+  // 1. Download Single Photo (300 DPI Guaranteed)
+  const handleDownloadSingle = async () => {
     const singleCanvas = getSingleHighResCanvas();
     if (!singleCanvas) return;
     setIsProcessing(true);
 
-    singleCanvas.toBlob(
-      (blob) => {
-        setIsProcessing(false);
-        if (blob) {
-          triggerDownload(blob, `passport-photo-${widthMm}x${heightMm}mm.jpg`);
-          trackEvent({
-            category: 'PassportPhoto',
-            action: 'download_single',
-            label: `${widthMm}x${heightMm}`,
-          });
-        }
-      },
-      'image/jpeg',
-      0.95
-    );
+    try {
+      const blob = await canvasTo300DpiJpegBlob(singleCanvas, 0.95);
+      setIsProcessing(false);
+      triggerDownload(blob, `passport-photo-${widthMm}x${heightMm}mm-300dpi.jpg`);
+      trackEvent({
+        category: 'PassportPhoto',
+        action: 'download_single',
+        label: `${widthMm}x${heightMm}`,
+      });
+    } catch (err) {
+      console.error('Failed to export 300 DPI single photo:', err);
+      setIsProcessing(false);
+    }
   };
 
-  // 2. Download Govt Form Photo (Strictly 20-50 KB)
+  // 2. Download Govt Form Photo (Strictly 20-50 KB with 300 DPI Metadata)
   const handleDownloadGovtSize = async () => {
     const singleCanvas = getSingleHighResCanvas();
     if (!singleCanvas) return;
@@ -320,8 +369,8 @@ export const PassportPhotoMaker: React.FC = () => {
     }
   };
 
-  // 3. Download Print Sheet Image (4x6 or A4)
-  const handleDownloadSheetImage = (paperSize: '4x6' | 'a4') => {
+  // 3. Download Print Sheet Image (4x6 or A4 at 300 DPI)
+  const handleDownloadSheetImage = async (paperSize: '4x6' | 'a4') => {
     const singleCanvas = getSingleHighResCanvas();
     if (!singleCanvas) return;
     setIsProcessing(true);
@@ -332,21 +381,14 @@ export const PassportPhotoMaker: React.FC = () => {
         showCuttingGuides: true,
       });
 
-      sheetCanvas.toBlob(
-        (blob) => {
-          setIsProcessing(false);
-          if (blob) {
-            triggerDownload(blob, `passport-photos-sheet-${paperSize}.jpg`);
-            trackEvent({
-              category: 'PassportPhoto',
-              action: `download_sheet_${paperSize}`,
-              label: `${widthMm}x${heightMm}`,
-            });
-          }
-        },
-        'image/jpeg',
-        0.95
-      );
+      const blob = await canvasTo300DpiJpegBlob(sheetCanvas, 0.95);
+      setIsProcessing(false);
+      triggerDownload(blob, `passport-photos-sheet-${paperSize}-300dpi.jpg`);
+      trackEvent({
+        category: 'PassportPhoto',
+        action: `download_sheet_${paperSize}`,
+        label: `${widthMm}x${heightMm}`,
+      });
     } catch {
       setIsProcessing(false);
     }
@@ -588,6 +630,23 @@ export const PassportPhotoMaker: React.FC = () => {
                   />
                 </div>
 
+                {/* Biometric Status Feedback */}
+                {biometricStatus && (
+                  <div className="w-full mt-3 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in">
+                    <div className="flex items-center gap-2 truncate">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="truncate">{biometricStatus.message}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBiometricStatus(null)}
+                      className="text-emerald-600 hover:text-emerald-800 text-[10px] uppercase font-bold shrink-0 ml-1"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
                 {/* Guidance Helper Note */}
                 <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 text-center mt-3 max-w-sm">
                   💡 Align eyes along the <strong>blue dashed line</strong> and head inside the{' '}
@@ -596,6 +655,46 @@ export const PassportPhotoMaker: React.FC = () => {
 
                 {/* Live Sliders: Zoom, Fine Tilt, Rotation */}
                 <div className="w-full mt-6 space-y-4 pt-4 border-t border-slate-100 dark:border-dark-border">
+                  {/* Action Controls: Auto-Center Biometric AI, Rotate 90°, Reset */}
+                  <div className="flex flex-col sm:flex-row items-center gap-2 pb-1">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isCenteringFace}
+                      onClick={() => handleAutoCenterFace()}
+                      className="w-full sm:flex-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${isCenteringFace ? 'animate-spin' : 'text-amber-300'}`} />
+                      {isCenteringFace ? 'Centering Face...' : 'Auto-Center Face (Biometric AI)'}
+                    </Button>
+                    <div className="flex w-full sm:w-auto items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setRotation((r) => (r + 90) % 360)}
+                        className="flex-1 sm:flex-none text-xs"
+                      >
+                        <RotateCw className="w-3.5 h-3.5 mr-1.5" />
+                        Rotate 90°
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setZoom(1.0);
+                          setPan({ x: 0, y: 0 });
+                          setRotation(0);
+                          setTiltAngle(0);
+                          setBiometricStatus(null);
+                        }}
+                        className="text-xs text-slate-500 hover:text-slate-800"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* Zoom Slider */}
                   <div>
                     <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -632,33 +731,6 @@ export const PassportPhotoMaker: React.FC = () => {
                       onChange={(e) => setTiltAngle(parseInt(e.target.value))}
                       className="w-full h-1.5 bg-slate-200 dark:bg-dark-border rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
-                  </div>
-
-                  {/* Rotate 90° & Reset Controls */}
-                  <div className="flex items-center gap-2 pt-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setRotation((r) => (r + 90) % 360)}
-                      className="flex-1 text-xs"
-                    >
-                      <RotateCw className="w-3.5 h-3.5 mr-1.5" />
-                      Rotate 90°
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setZoom(1.0);
-                        setPan({ x: 0, y: 0 });
-                        setRotation(0);
-                        setTiltAngle(0);
-                      }}
-                      className="text-xs text-slate-500 hover:text-slate-800"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                      Reset Center
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -748,6 +820,31 @@ export const PassportPhotoMaker: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Biometric Compliance Standards Card */}
+                  <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/60 dark:from-blue-950/40 dark:to-indigo-950/30 border border-blue-200/80 dark:border-blue-900/60">
+                    <div className="flex items-start gap-2.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
+                            {activeGuidelines.standardName}
+                          </span>
+                          <span className="text-[10px] font-extrabold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                            300 DPI High-Res ({targetWidthPx} × {targetHeightPx} px)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                          {activeGuidelines.description}
+                        </p>
+                        <div className="mt-2 flex items-center gap-3 sm:gap-4 flex-wrap text-[10px] text-slate-500 font-medium">
+                          <span>Head Coverage: <strong className="text-slate-700 dark:text-slate-300">{activeGuidelines.headMinPercent}–{activeGuidelines.headMaxPercent}%</strong></span>
+                          <span>Eye Level: <strong className="text-slate-700 dark:text-slate-300">~{activeGuidelines.eyeLinePercent}% from top</strong></span>
+                          <span>Print Size: <strong className="text-slate-700 dark:text-slate-300">{widthMm} × {heightMm} mm</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 2. Styling: Background Color & Border */}

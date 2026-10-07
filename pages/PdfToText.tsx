@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
 import { PdfFile, ProcessingStatus } from '../types';
 import { extractTextFromPdf, formatBytes, downloadFile, pdfjs } from '../services/pdfService';
-import { FileText, X, Copy, Download, Scan, RefreshCw, Loader2 } from 'lucide-react';
+import { FileText, X, Copy, Download, Scan, RefreshCw, Loader2, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { postProcessOcrText, preprocessCanvasForOcr } from '../utils/ocrPostProcess';
 import { Helmet } from 'react-helmet-async';
@@ -30,10 +31,12 @@ export const PdfToText: React.FC = () => {
       
       // Limit pages for browser performance
       const maxPages = Math.min(pdf.numPages, 10); 
+      const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /iphone|ipad|ipod|android/i.test(navigator.userAgent));
+      const scale = isMobile ? 1.5 : 2.2;
       
       for (let i = 1; i <= maxPages; i++) {
          const page = await pdf.getPage(i);
-         const viewport = page.getViewport({ scale: 2.6 });
+         const viewport = page.getViewport({ scale });
          const canvas = document.createElement('canvas');
          canvas.width = viewport.width;
          canvas.height = viewport.height;
@@ -48,6 +51,12 @@ export const PdfToText: React.FC = () => {
              binarize: true,
            });
            images.push(processedCanvas.toDataURL('image/png'));
+           canvas.width = 0;
+           canvas.height = 0;
+           if (processedCanvas !== canvas) {
+             processedCanvas.width = 0;
+             processedCanvas.height = 0;
+           }
          }
       }
 
@@ -70,10 +79,21 @@ export const PdfToText: React.FC = () => {
 
       setText(fullText);
       setStatus({ isProcessing: false, message: '', success: true });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setStatus({ isProcessing: false, message: 'OCR Failed.', error: 'Failed' });
-      setText("Could not extract text from this document.");
+      const errMsg = (e?.message || '').toLowerCase();
+      const isPassword = e?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+      if (isPassword) {
+        setStatus({
+          isProcessing: false,
+          message: 'This PDF is password-protected. Unlock it before extracting text.',
+          error: 'password_protected'
+        });
+        setText('This document is locked with a password. Please unlock it using the Unlock PDF tool.');
+      } else {
+        setStatus({ isProcessing: false, message: 'OCR Failed.', error: 'Failed' });
+        setText("Could not extract text from this document.");
+      }
     }
   };
 
@@ -104,7 +124,18 @@ export const PdfToText: React.FC = () => {
         }
       } catch (e: any) {
         console.error(e);
-        // If native extraction fails (e.g. strange format), try OCR
+        const errMsg = (e?.message || '').toLowerCase();
+        const isPassword = e?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+        if (isPassword) {
+          setStatus({
+            isProcessing: false,
+            message: 'This PDF is password-protected. Unlock it before extracting text.',
+            error: 'password_protected'
+          });
+          setText('This document is locked with a password. Please unlock it using the Unlock PDF tool.');
+          return;
+        }
+        // If native extraction fails (e.g. scanned image), try OCR
         await performOcr(f);
       }
     }
@@ -186,6 +217,22 @@ export const PdfToText: React.FC = () => {
                    </Button>
                 </div>
              </div>
+
+             {status.error === 'password_protected' && (
+               <div className="p-4 bg-amber-50 border-b border-amber-200 flex items-start gap-3">
+                 <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                 <div>
+                   <p className="text-sm font-semibold text-amber-900">Protected PDF Detected</p>
+                   <p className="text-xs text-amber-700 mt-1">This document has password security enabled. Unlock it first before extracting text.</p>
+                   <Link
+                     to="/unlock-pdf"
+                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                   >
+                     Go to Unlock PDF tool &rarr;
+                   </Link>
+                 </div>
+               </div>
+             )}
 
              {/* Content Area */}
              <div className="relative min-h-[320px] sm:min-h-[500px] bg-slate-50">

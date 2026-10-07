@@ -100,11 +100,20 @@ const slugify = (value) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-const blogGuidePaths = toolNamesForBlogGuides.map(
-  (name) => `/blog/${slugify(name)}-step-by-step-guide`
-);
+const highValueBlogSlugs = [
+  "upsc-ssc-photo-signature-resizer-guide",
+  "client-side-wasm-vs-cloud-pdf-security",
+  "iso-32000-aes-256-pdf-encryption-guide",
+  "permanent-pdf-redaction-remove-pii",
+  "lossless-vs-lossy-pdf-compression",
+  "icao-9303-biometric-passport-photo-standard",
+  "optical-character-recognition-ocr-scanned-pdf-guide",
+  "how-to-organize-merge-split-academic-legal-pdfs"
+];
 
-const paths = [...new Set([...staticPaths, ...toolPaths, ...blogGuidePaths])];
+const blogArticlePaths = highValueBlogSlugs.map((slug) => `/blog/${slug}`);
+
+const paths = [...new Set([...staticPaths, ...toolPaths, ...blogArticlePaths])];
 
 const today = new Date().toISOString().slice(0, 10);
 

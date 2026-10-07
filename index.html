@@ -400,9 +400,12 @@
       height: 32px;
       max-width: 32px;
       max-height: 32px;
+      aspect-ratio: 1 / 1;
+      contain: layout paint;
       display: inline-block;
       vertical-align: middle;
       flex-shrink: 0;
+      transform-origin: center center;
     }
 
     @media (min-width: 640px) {
@@ -532,42 +535,10 @@
   <!-- Critical above-fold CSS is already inlined in the <style> block above -->
 
 
-  <!-- ====== Google AdSense Verification & Auto-Ads (Performance Optimized) ====== -->
+  <!-- ====== Google AdSense Verification & Auto-Ads ====== -->
   <meta name="google-adsense-account" content="ca-pub-9704679803624436" />
-  <script>
-    (function () {
-      var isAudit = /Lighthouse|Chrome-Lighthouse|PageSpeed|PTST/i.test(navigator.userAgent || '');
-      var isLocal = /localhost|127\.0\.0\.1|\.local$/i.test(window.location.hostname || '');
-      if (isAudit || isLocal) return;
-
-      var adsLoaded = false;
-      function injectAdSense() {
-        if (adsLoaded) return;
-        adsLoaded = true;
-        var s = document.createElement('script');
-        s.async = true;
-        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436';
-        s.crossOrigin = 'anonymous';
-        document.head.appendChild(s);
-      }
-      var triggers = ['scroll', 'touchstart', 'mousemove', 'keydown', 'click'];
-      function onFirstUserGesture() {
-        injectAdSense();
-        triggers.forEach(function (evt) {
-          window.removeEventListener(evt, onFirstUserGesture, { passive: true });
-        });
-      }
-      triggers.forEach(function (evt) {
-        window.addEventListener(evt, onFirstUserGesture, { passive: true, once: true });
-      });
-      // Fallback: If no user gesture happens, load after idle (7s timeout) to avoid LCP contention
-      if ('requestIdleCallback' in window) {
-        requestIdleCallback(injectAdSense, { timeout: 7000 });
-      } else {
-        setTimeout(injectAdSense, 6000);
-      }
-    })();
-  </script>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436"
+    crossorigin="anonymous"></script>
 </head>
 
 <body>

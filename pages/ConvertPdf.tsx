@@ -41,6 +41,27 @@ export const ConvertPdf: React.FC = () => {
     }
   };
 
+  const handleConvertToWord = async () => {
+    if (!file) return;
+    setStatus({ isProcessing: true, message: 'Converting PDF to Word (.docx)...' });
+    setReadyZip(null);
+
+    try {
+      const { convertPdfToWord } = await import('../services/officeService');
+      const docxBlob = await convertPdfToWord(file.file, {
+        method: 'auto',
+        preserveLayout: true,
+      });
+      const filename = `${file.name.replace(/\.pdf$/i, '')}.docx`;
+      setReadyZip({ blob: docxBlob, name: filename });
+      downloadFile(docxBlob, filename, { autoDownload: true });
+      setStatus({ isProcessing: false, message: 'Converted to Word document successfully.', success: true });
+    } catch (error: any) {
+      console.error(error);
+      setStatus({ isProcessing: false, message: error?.message || 'Error converting to Word.', error: 'Failed' });
+    }
+  };
+
   const handleDownloadReady = () => {
     if (!readyZip) return;
     downloadFile(readyZip.blob, readyZip.name, { autoDownload: true });
@@ -69,7 +90,7 @@ export const ConvertPdf: React.FC = () => {
       <div className="text-center mb-10">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Convert PDF</h1>
         <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
-          Convert your PDF files to other formats.
+          Convert your PDF files to editable Word documents, high-quality images, and other formats instantly.
         </p>
       </div>
 
@@ -100,9 +121,26 @@ export const ConvertPdf: React.FC = () => {
 
            <div className="space-y-4">
               <h3 className="font-bold text-slate-900">Select Output Format</h3>
+
+              <button 
+                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all group cursor-pointer"
+                onClick={handleConvertToWord}
+                disabled={status.isProcessing}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <span className="block font-semibold text-slate-900">PDF to Word (.docx)</span>
+                    <span className="text-xs text-slate-500">Convert document to editable Word file</span>
+                  </div>
+                </div>
+                <ArrowRight className="text-slate-300 group-hover:text-blue-600 transition-colors" />
+              </button>
               
               <button 
-                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all group"
+                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all group cursor-pointer"
                 onClick={handleConvertToImages}
                 disabled={status.isProcessing}
               >
@@ -112,29 +150,14 @@ export const ConvertPdf: React.FC = () => {
                   </div>
                   <div className="text-left">
                     <span className="block font-semibold text-slate-900">PDF to JPG</span>
-                    <span className="text-xs text-slate-500">Convert pages to images</span>
+                    <span className="text-xs text-slate-500">Convert pages to high-quality images</span>
                   </div>
                 </div>
                 <ArrowRight className="text-slate-300 group-hover:text-slate-600 transition-colors" />
               </button>
 
-              <button 
-                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 opacity-60 cursor-not-allowed"
-                disabled
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <span className="block font-semibold text-slate-900">PDF to Word</span>
-                    <span className="text-xs text-slate-500">Coming soon</span>
-                  </div>
-                </div>
-              </button>
-
               {status.isProcessing && (
-                <div className="text-center py-4 text-pink-500 font-medium animate-pulse">
+                <div className="text-center py-4 text-primary-600 font-medium animate-pulse">
                   Converting... Please wait
                 </div>
               )}
@@ -167,14 +190,14 @@ export const ConvertPdf: React.FC = () => {
                   <div className="mt-4 flex flex-col sm:flex-row gap-3">
                     <Button className="w-full sm:flex-1" onClick={handleDownloadReady}>
                       <Download className="w-4 h-4 mr-2" />
-                      Download ZIP
+                      {readyZip.name.endsWith('.docx') ? 'Download Word File' : 'Download ZIP'}
                     </Button>
                     <Button
                       variant="secondary"
                       className="w-full sm:w-auto"
                       onClick={() => setReadyZip(null)}
                     >
-                      Continue Editing
+                      Convert Another
                     </Button>
                   </div>
                 </div>

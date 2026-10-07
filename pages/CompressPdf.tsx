@@ -114,21 +114,14 @@ const CompressPdf: React.FC = () => {
     }
   }, [searchParams]); // re-runs whenever ?target= appears or changes
 
-  /* ── Fake progress animation (level mode) ─────────────────────────── */
+  // Smooth fallback initial progress for immediate feedback while file buffers load
   useEffect(() => {
-    if (!isProgressOpen || !status.isProcessing || progressComplete || mode === 'target') return;
-    const interval = window.setInterval(() => {
-      setProgressPercent((cur) => {
-        if (cur >= 94) return cur;
-        if (cur < 20) return Math.min(20, cur + 4);
-        if (cur < 35) return Math.min(35, cur + 3);
-        if (cur < 70) return Math.min(70, cur + 2);
-        if (cur < 90) return Math.min(90, cur + 1.5);
-        return Math.min(94, cur + 0.6);
-      });
-    }, 260);
-    return () => window.clearInterval(interval);
-  }, [isProgressOpen, progressComplete, status.isProcessing, mode]);
+    if (!isProgressOpen || !status.isProcessing || progressComplete) return;
+    const timeout = window.setTimeout(() => {
+      setProgressPercent((cur) => (cur < 15 ? 15 : cur));
+    }, 200);
+    return () => window.clearTimeout(timeout);
+  }, [isProgressOpen, status.isProcessing, progressComplete]);
 
   /* ── Handlers ─────────────────────────────────────────────────────── */
   const handleFileSelected = (selectedFiles: File[]) => {
@@ -160,7 +153,7 @@ const CompressPdf: React.FC = () => {
     setCustomError('');
     setCompressedSize(null);
     setReadyPdf(null);
-    setProgressPercent(0);
+    setProgressPercent(5);
     setProgressComplete(false);
     setIsProgressOpen(true);
     setTargetMissed(false);
@@ -182,7 +175,11 @@ const CompressPdf: React.FC = () => {
             setTargetMissed(true);
           }
         } else {
-          compressedBytes = await compressPdf(file.file, compressionLevel);
+          compressedBytes = await compressPdf(
+            file.file,
+            compressionLevel,
+            (pct) => setProgressPercent(pct)
+          );
         }
 
         const newSize = compressedBytes.byteLength;
@@ -276,8 +273,8 @@ const CompressPdf: React.FC = () => {
       <div className="max-w-5xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Compress PDF</h1>
-          <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
+          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">Compress PDF</h1>
+          <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
             Reduce file size while optimizing for maximal PDF quality. Choose a compression level or
             set a <strong>custom target file size</strong>.
           </p>
@@ -308,22 +305,22 @@ const CompressPdf: React.FC = () => {
         ) : (
           /* ── Settings state ────────────────────────────────────────── */
           <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+            <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-sm border border-slate-200 dark:border-dark-border p-6 md:p-8">
 
               {/* File info row */}
-              <div className="flex items-start justify-between mb-6 pb-5 border-b border-slate-100">
+              <div className="flex items-start justify-between mb-6 pb-5 border-b border-slate-100 dark:border-dark-border">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0">
+                  <div className="w-12 h-12 bg-red-100 dark:bg-red-950/60 rounded-lg flex items-center justify-center text-red-500 font-bold shrink-0">
                     PDF
                   </div>
                   <div>
-                    <h3 className="font-semibold text-slate-900 truncate max-w-[200px] md:max-w-xs">{file.name}</h3>
-                    <p className="text-sm text-slate-500">{formatBytes(file.size)}</p>
+                    <h3 className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px] md:max-w-xs">{file.name}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{formatBytes(file.size)}</p>
                   </div>
                 </div>
                 <button
                   onClick={resetAll}
-                  className="text-slate-400 hover:text-red-500 transition-colors"
+                  className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                   aria-label="Remove file"
                 >
                   <X />
@@ -331,13 +328,13 @@ const CompressPdf: React.FC = () => {
               </div>
 
               {/* ── Mode Tabs ─────────────────────────────────────────── */}
-              <div className="flex rounded-xl border border-slate-200 p-1 mb-6 bg-slate-50">
+              <div className="flex rounded-xl border border-slate-200 dark:border-dark-border p-1 mb-6 bg-slate-50 dark:bg-dark-bg">
                 <button
                   onClick={() => setMode('level')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
                     mode === 'level'
-                      ? 'bg-white shadow-sm text-slate-900'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white dark:bg-dark-surface shadow-sm text-slate-900 dark:text-white'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'
                   }`}
                 >
                   <SlidersHorizontal className="w-4 h-4" />
@@ -345,10 +342,10 @@ const CompressPdf: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setMode('target')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
                     mode === 'target'
-                      ? 'bg-white shadow-sm text-slate-900'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white dark:bg-dark-surface shadow-sm text-slate-900 dark:text-white'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'
                   }`}
                 >
                   <Target className="w-4 h-4" />
@@ -359,25 +356,25 @@ const CompressPdf: React.FC = () => {
               {/* ── Level Mode ─────────────────────────────────────────── */}
               {mode === 'level' && (
                 <div className="space-y-3 mb-6">
-                  <h4 className="font-bold text-slate-900">Compression Level</h4>
+                  <h4 className="font-bold text-slate-900 dark:text-white">Compression Level</h4>
                   <div className="grid grid-cols-1 gap-3">
                     {levelOptions.map((opt) => (
                       <button
                         key={opt.level}
                         onClick={() => setCompressionLevel(opt.level)}
                         disabled={status.isProcessing}
-                        className={`relative text-left p-4 rounded-xl border-2 transition-all flex items-start gap-4 ${
+                        className={`relative text-left p-4 rounded-xl border-2 transition-all flex items-start gap-4 cursor-pointer ${
                           compressionLevel === opt.level
-                            ? opt.color + ' border-current ring-1 ring-offset-0 ring-current'
-                            : 'border-slate-100 bg-white hover:bg-slate-50'
+                            ? opt.color + ' border-current ring-1 ring-offset-0 ring-current dark:bg-slate-800/80'
+                            : 'border-slate-100 dark:border-dark-border bg-white dark:bg-dark-surface hover:bg-slate-50 dark:hover:bg-dark-hover'
                         }`}
                       >
-                        <div className={`p-2 rounded-lg bg-white shadow-sm ${compressionLevel === opt.level ? 'opacity-100' : 'opacity-70'}`}>
+                        <div className={`p-2 rounded-lg bg-white dark:bg-dark-bg shadow-sm ${compressionLevel === opt.level ? 'opacity-100' : 'opacity-70'}`}>
                           {opt.icon}
                         </div>
                         <div className="flex-grow">
-                          <h5 className={`font-bold ${compressionLevel === opt.level ? 'text-slate-900' : 'text-slate-700'}`}>{opt.title}</h5>
-                          <p className="text-sm text-slate-500 mt-0.5">{opt.desc}</p>
+                          <h5 className={`font-bold ${compressionLevel === opt.level ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>{opt.title}</h5>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opt.desc}</p>
                         </div>
                         {compressionLevel === opt.level && (
                           <div className="absolute top-4 right-4 text-green-500">
@@ -394,8 +391,8 @@ const CompressPdf: React.FC = () => {
               {mode === 'target' && (
                 <div className="space-y-5 mb-6">
                   <div>
-                    <h4 className="font-bold text-slate-900 mb-1">Target File Size</h4>
-                    <p className="text-sm text-slate-500">
+                    <h4 className="font-bold text-slate-900 dark:text-white mb-1">Target File Size</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                       We'll automatically find the best quality that fits your target. If the target
                       is too small, we'll get as close as possible.
                     </p>
@@ -414,10 +411,10 @@ const CompressPdf: React.FC = () => {
                             setCustomError('');
                           }}
                           disabled={status.isProcessing}
-                          className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all ${
+                          className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all cursor-pointer ${
                             targetPreset === preset.bytes && !customTargetKB
                               ? 'bg-violet-600 text-white border-violet-600 shadow'
-                              : 'border-slate-200 text-slate-600 hover:border-violet-400 hover:text-violet-700 bg-white'
+                              : 'border-slate-200 dark:border-dark-border text-slate-600 dark:text-slate-300 hover:border-violet-400 hover:text-violet-700 bg-white dark:bg-dark-surface'
                           }`}
                         >
                           {preset.label}
@@ -439,10 +436,10 @@ const CompressPdf: React.FC = () => {
                           value={customTargetKB}
                           onChange={(e) => handleCustomTarget(e.target.value)}
                           disabled={status.isProcessing}
-                          className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 font-medium outline-none transition-all ${
+                          className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 dark:text-white bg-white dark:bg-dark-surface font-medium outline-none transition-all ${
                             customTargetKB
-                              ? 'border-violet-400 ring-2 ring-violet-100'
-                              : 'border-slate-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100'
+                              ? 'border-violet-400 ring-2 ring-violet-100 dark:ring-violet-900/30'
+                              : 'border-slate-200 dark:border-dark-border focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/30'
                           } ${customError ? 'border-red-400' : ''}`}
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold pointer-events-none">
@@ -450,7 +447,7 @@ const CompressPdf: React.FC = () => {
                         </span>
                       </div>
                       {customTargetKB && (
-                        <span className="text-sm text-slate-500 shrink-0">
+                        <span className="text-sm text-slate-500 dark:text-slate-400 shrink-0">
                           ≈ {formatBytes(parseFloat(customTargetKB) * 1024)}
                         </span>
                       )}
@@ -533,12 +530,12 @@ const CompressPdf: React.FC = () => {
           bodyClassName="overflow-hidden"
           backdropClassName="bg-slate-950/55 backdrop-blur-sm"
         >
-          <div className="relative flex max-h-[88vh] min-h-[520px] flex-col bg-[#f7f7fb]">
+          <div className="relative flex max-h-[88vh] min-h-[520px] flex-col bg-[#f7f7fb] dark:bg-dark-surface">
             {progressComplete && (
               <button
                 type="button"
                 onClick={handleProgressClose}
-                className="absolute right-5 top-5 rounded-full p-2 text-slate-400 hover:bg-white hover:text-slate-700"
+                className="absolute right-5 top-5 rounded-full p-2 text-slate-400 hover:bg-white dark:hover:bg-dark-hover hover:text-slate-700 dark:hover:text-white cursor-pointer"
                 aria-label="Close progress"
               >
                 <X className="h-6 w-6" />
@@ -548,13 +545,13 @@ const CompressPdf: React.FC = () => {
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center">
               {/* Logo */}
               <div className="mb-9 flex items-center justify-center gap-2">
-                <span className="text-4xl font-black tracking-tight text-slate-950">LAK</span>
+                <span className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">LAK</span>
                 <span className="rounded-xl bg-[#e5323f] px-3 py-1.5 text-2xl font-black text-white shadow-sm">PDF</span>
               </div>
 
               {!progressComplete ? (
                 <>
-                  <h3 className="text-2xl font-bold text-slate-800">
+                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white">
                     {mode === 'target'
                       ? progressPercent <= 5
                         ? 'Selecting Optimal DPI…'
@@ -564,12 +561,12 @@ const CompressPdf: React.FC = () => {
                       : progressSteps[activeStepIndex]?.label.replace('...', '')}
                   </h3>
                   {file && (
-                    <p className="mt-4 text-lg font-semibold text-slate-600">
-                      {file.name} <span className="font-normal text-slate-500">({formatBytes(file.size)})</span>
+                    <p className="mt-4 text-lg font-semibold text-slate-600 dark:text-slate-300">
+                      {file.name} <span className="font-normal text-slate-500 dark:text-slate-400">({formatBytes(file.size)})</span>
                     </p>
                   )}
                   {mode === 'target' && targetBytes !== null && (
-                    <p className="mt-3 text-sm text-violet-600 font-semibold">
+                    <p className="mt-3 text-sm text-violet-600 dark:text-violet-400 font-semibold">
                       🎯 Target: {formatBytes(targetBytes)}
                     </p>
                   )}
@@ -578,7 +575,7 @@ const CompressPdf: React.FC = () => {
                       Finding highest JPEG quality that fits your target
                     </p>
                   )}
-                  <p className="mt-10 text-base text-slate-600">
+                  <p className="mt-10 text-base text-slate-600 dark:text-slate-300">
                     <span className="font-bold">Time left</span>{' '}
                     {Math.max(2, Math.ceil((100 - progressPercent) * (mode === 'target' ? 0.8 : 0.35)))} SECONDS
                     <span className="mx-2 font-bold">-</span>
@@ -587,12 +584,12 @@ const CompressPdf: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full animate-in zoom-in-95 ${targetMissed ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>
+                  <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full animate-in zoom-in-95 ${targetMissed ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400' : 'bg-green-100 dark:bg-green-950/60 text-green-600 dark:text-green-400'}`}>
                     {targetMissed
                       ? <AlertTriangle className="h-9 w-9" />
                       : <CheckCircle className="h-9 w-9" />}
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900">
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
                     {targetMissed
                       ? 'Best Achievable Result'
                       : compressionSavings > 0
@@ -602,27 +599,27 @@ const CompressPdf: React.FC = () => {
 
                   {file && compressedSize !== null && (
                     <div className="mt-2 space-y-1">
-                      <p className="text-base text-slate-600">
+                      <p className="text-base text-slate-600 dark:text-slate-300">
                         {compressionSavings > 0 ? (
                           <>
                             Your PDF is now{' '}
-                            <span className="font-bold text-slate-900">{formatBytes(compressedSize)}</span>
-                            <span className="ml-1 font-semibold text-green-600">({compressionSavings}% smaller)</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{formatBytes(compressedSize)}</span>
+                            <span className="ml-1 font-semibold text-green-600 dark:text-green-400">({compressionSavings}% smaller)</span>
                           </>
                         ) : (
                           <>
                             Your file is already at minimal size:{' '}
-                            <span className="font-bold text-slate-900">{formatBytes(compressedSize)}</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{formatBytes(compressedSize)}</span>
                           </>
                         )}
                       </p>
                       {targetMissed && targetBytes !== null && (
-                        <p className="text-sm text-amber-600">
+                        <p className="text-sm text-amber-600 dark:text-amber-400">
                           Could not reach {formatBytes(targetBytes)} — this is the smallest achievable size.
                         </p>
                       )}
                       {!targetMissed && mode === 'target' && targetBytes !== null && (
-                        <p className="text-sm text-green-600 font-semibold">
+                        <p className="text-sm text-green-600 dark:text-green-400 font-semibold">
                           ✓ Target of {formatBytes(targetBytes)} achieved!
                         </p>
                       )}
@@ -630,26 +627,26 @@ const CompressPdf: React.FC = () => {
                   )}
 
                   {/* High Clarity Guarantee Badge */}
-                  <div className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold">
+                  <div className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-semibold">
                     <ShieldCheck className="w-4 h-4 text-teal-600" />
                     High Clarity Engine — Zero Text Blur & 100% Legibility
                   </div>
 
                   {/* Stats grid */}
                   <div className="mt-5 grid w-full max-w-xl grid-cols-3 gap-3">
-                    <div className="rounded-xl bg-white p-3 shadow-sm">
+                    <div className="rounded-xl bg-white dark:bg-dark-bg border border-slate-100 dark:border-dark-border p-3 shadow-sm">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Original</p>
-                      <p className="mt-1 font-bold text-slate-900">{file ? formatBytes(file.size) : '-'}</p>
+                      <p className="mt-1 font-bold text-slate-900 dark:text-white">{file ? formatBytes(file.size) : '-'}</p>
                     </div>
-                    <div className="rounded-xl bg-white p-3 shadow-sm">
+                    <div className="rounded-xl bg-white dark:bg-dark-bg border border-slate-100 dark:border-dark-border p-3 shadow-sm">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Result</p>
-                      <p className="mt-1 font-bold text-slate-900">
+                      <p className="mt-1 font-bold text-slate-900 dark:text-white">
                         {compressedSize !== null ? formatBytes(compressedSize) : '-'}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-white p-3 shadow-sm">
+                    <div className="rounded-xl bg-white dark:bg-dark-bg border border-slate-100 dark:border-dark-border p-3 shadow-sm">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saved</p>
-                      <p className={`mt-1 font-bold ${compressionSavings > 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                      <p className={`mt-1 font-bold ${compressionSavings > 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
                         {compressionSavings > 0 ? `${compressionSavings}%` : 'Optimal'}
                       </p>
                     </div>

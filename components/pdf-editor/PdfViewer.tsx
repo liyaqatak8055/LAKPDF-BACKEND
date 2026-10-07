@@ -569,7 +569,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       return;
     }
 
-    if (activeTool === 'shape' || activeTool === 'highlight') {
+    if (activeTool === 'shape' || activeTool === 'highlight' || activeTool === 'erase') {
       setDrawStart(point);
       setDrawCurrent(point);
       return;
@@ -657,7 +657,28 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     if (!drawStart || !point) return;
 
-    if (activeTool === 'shape' || activeTool === 'highlight') {
+    if (activeTool === 'erase') {
+      const rect = normalizeRect(drawStart, point);
+      if (rect.width > 3 && rect.height > 3) {
+        onAnnotationAdd({
+          id: `eraser-${Date.now()}`,
+          type: PdfAnnotationType.ERASER,
+          pageNumber: currentPageNum,
+          bounds: new DOMRect(rect.x, rect.y, rect.width, rect.height),
+          data: {},
+          style: {
+            strokeColor: '#cbd5e1',
+            strokeWidth: 1,
+            fillColor: '#FFFFFF',
+            opacity: 1,
+          },
+          createdAt: new Date(),
+          modifiedAt: new Date(),
+          isVisible: true,
+          zIndex: 25,
+        });
+      }
+    } else if (activeTool === 'shape' || activeTool === 'highlight') {
       const rect = normalizeRect(drawStart, point);
       if (rect.width > 6 && rect.height > 6) {
         const isHighlight = activeTool === 'highlight';
@@ -815,13 +836,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       borderWidth: showOutline ? (annotation.type === PdfAnnotationType.HIGHLIGHT ? 1 : annotation.style.strokeWidth || 1) : 0,
       borderStyle: showOutline ? 'solid' : 'none',
       backgroundColor:
-        annotation.type === PdfAnnotationType.HIGHLIGHT
-          ? annotation.style.fillColor || '#fde047'
-          : annotation.type === PdfAnnotationType.TEXT
-            ? (annotation.style.fillColor === 'transparent' ? 'transparent' : (annotation.style.fillColor || '#FFFFFF'))
-            : annotation.style.fillColor && annotation.style.fillColor !== 'transparent'
-              ? annotation.style.fillColor
-              : 'transparent',
+        annotation.type === PdfAnnotationType.ERASER
+          ? '#FFFFFF'
+          : annotation.type === PdfAnnotationType.HIGHLIGHT
+            ? annotation.style.fillColor || '#fde047'
+            : annotation.type === PdfAnnotationType.TEXT
+              ? (annotation.style.fillColor === 'transparent' ? 'transparent' : (annotation.style.fillColor || '#FFFFFF'))
+              : annotation.style.fillColor && annotation.style.fillColor !== 'transparent'
+                ? annotation.style.fillColor
+                : 'transparent',
       borderRadius: annotation.type === PdfAnnotationType.CIRCLE ? '9999px' : 0,
     };
 

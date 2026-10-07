@@ -266,6 +266,26 @@ export default defineConfig(({ mode }) => {
           // Cache-first for pre-cached assets; network-first for everything else
           runtimeCaching: [
             {
+              // PDF.js worker script — CacheFirst so PDF tools work 100% offline
+              urlPattern: /.*pdf\.worker\.min\.(mjs|js)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'pdfjs-worker-cache',
+                expiration: { maxAgeSeconds: 60 * 24 * 60 * 60, maxEntries: 5 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // Tool vendor chunks — CacheFirst once loaded so visited tools run seamlessly offline
+              urlPattern: /\/assets\/js\/vendor-.*\.js$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'lakpdf-vendor-chunks',
+                expiration: { maxAgeSeconds: 30 * 24 * 60 * 60, maxEntries: 30 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
               // Google Fonts CSS — stale-while-revalidate
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/css/,
               handler: 'StaleWhileRevalidate',

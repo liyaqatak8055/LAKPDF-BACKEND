@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, ShieldCheck, Sparkles, Activity, Layers3 } from 'lucide-react';
+import { FileText, ShieldCheck, Sparkles, Activity, Layers3, Lock, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/apiBase';
+import { PrivacyGuaranteeModal } from './PrivacyBadgeModal';
 
 interface TrustLayerProps {
   toolCount: number;
@@ -51,6 +52,7 @@ const fetchServiceStatus = async (): Promise<ServiceStatus> => {
 export const TrustLayer: React.FC<TrustLayerProps> = ({ toolCount }) => {
   const [filesProcessedToday, setFilesProcessedToday] = useState<number | null>(null);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>('checking');
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,17 +115,25 @@ export const TrustLayer: React.FC<TrustLayerProps> = ({ toolCount }) => {
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6 dark:border-dark-border dark:bg-dark-surface">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)] lg:items-start">
           <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-dark-hover dark:text-dark-text-secondary">
-              <ShieldCheck className="h-4 w-4 text-primary-500" />
-              Privacy summary
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200/80 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Two-Tier Trust Guarantee
             </div>
             <h2 className="text-xl font-bold text-slate-900 md:text-2xl dark:text-dark-text-primary">
-              Clear handling for core tools and AI features
+              Core tools run locally; AI features use external APIs
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base dark:text-dark-text-secondary">
-              Most everyday PDF tools run in your browser. AI tools are different: they may send extracted text to configured AI providers so they can generate answers. Files and text are used only for the workflow you request, as described in the privacy policy.
+              Core PDF and image utilities (Merge, Compress, Split, Redact, Sign, Crop, Rotate, Encrypt, Watermark, OCR, Passport Photos) run 100% locally in your browser RAM with zero cloud uploads or server storage. Optional generative AI features (AI Summarizer, Q&A) communicate directly with external AI API providers only upon your explicit request.
             </p>
-            <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-medium">
+              <button
+                type="button"
+                onClick={() => setIsPrivacyModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>View Architecture Guarantee</span>
+              </button>
               <Link to="/privacy-policy" className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
                 Read Privacy Policy
               </Link>
@@ -178,6 +188,11 @@ export const TrustLayer: React.FC<TrustLayerProps> = ({ toolCount }) => {
           </div>
         </div>
       </div>
+
+      <PrivacyGuaranteeModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+      />
     </section>
   );
 };

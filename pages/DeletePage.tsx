@@ -1,12 +1,14 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { FileUploader } from "../components/FileUploader";
 import { Button } from "../components/Button";
 import { deletePdfPages, formatBytes, downloadPdf, parsePageRange } from "../services/pdfService";
-import { Trash2, FileText, Eye, AlertTriangle, CheckCircle, RotateCcw, Download } from "lucide-react";
+import { Trash2, FileText, Eye, AlertTriangle, CheckCircle, RotateCcw, Download, Unlock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { AdUnit } from "../components/AdUnit";
 import { pdfjs } from "../services/pdfService";
 import { Helmet } from 'react-helmet-async';
 import { ToolSEOContent } from '../components/ToolSEOContent';
+import { ProcessingStatus } from '../types';
 
 interface PagePreview {
   pageNumber: number;
@@ -19,6 +21,7 @@ const DeletePage: React.FC = () => {
   const [pagesInput, setPagesInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, message: '' });
   const [totalPages, setTotalPages] = useState(0);
   const [pagePreviews, setPagePreviews] = useState<PagePreview[]>([]);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
@@ -71,8 +74,12 @@ const DeletePage: React.FC = () => {
           canvas.height = viewport.height;
 
           if (context) {
+            context.fillStyle = '#FFFFFF';
+            context.fillRect(0, 0, canvas.width, canvas.height);
             await page.render({ canvasContext: context, viewport }).promise;
-            const thumbnail = canvas.toDataURL('image/png');
+            const thumbnail = canvas.toDataURL('image/jpeg', 0.75);
+            canvas.width = 0;
+            canvas.height = 0;
 
             previews.push({
               pageNumber: pageNum,
@@ -101,6 +108,7 @@ const DeletePage: React.FC = () => {
   // Analyze PDF when file is selected
   const analyzePdf = useCallback(async (pdfFile: File) => {
     setAnalyzing(true);
+    setStatus({ isProcessing: false, message: '' });
     try {
       // Check if PDF is signed
       const arrayBuffer = await pdfFile.arrayBuffer();
@@ -129,9 +137,23 @@ const DeletePage: React.FC = () => {
       setPagePreviews(previews);
       setShowPreview(true);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to analyze PDF:', error);
-      alert('Failed to analyze PDF. Please ensure it\'s a valid PDF file.');
+      const errMsg = (error?.message || '').toLowerCase();
+      const isEncrypted = error?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+      if (isEncrypted) {
+        setStatus({
+          isProcessing: false,
+          message: 'This PDF is password-protected. Unlock it before deleting pages.',
+          error: 'password_protected'
+        });
+      } else {
+        setStatus({
+          isProcessing: false,
+          message: 'Failed to analyze PDF. Please ensure it is a valid PDF file.',
+          error: 'Failed'
+        });
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -287,11 +309,23 @@ const DeletePage: React.FC = () => {
       stats.lastActive = Date.now();
       localStorage.setItem('lakpdf_stats', JSON.stringify(stats));
 
-      alert(`Successfully deleted ${validation.pages.length} page(s)!`);
+      setStatus({
+        isProcessing: false,
+        message: `Successfully deleted ${validation.pages.length} page(s)! Your updated document is ready.`,
+        success: true
+      });
 
     } catch (error: any) {
       console.error('Failed to delete pages:', error);
-      alert(`Failed to delete pages: ${error.message || 'Unknown error'}`);
+      const errMsg = (error?.message || '').toLowerCase();
+      const isEncrypted = errMsg.includes('password') || errMsg.includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: isEncrypted
+          ? 'This PDF is password-protected. Unlock it before deleting pages.'
+          : `Failed to delete pages: ${error?.message || 'Unknown error'}`,
+        error: isEncrypted ? 'password_protected' : 'Failed'
+      });
     } finally {
       setLoading(false);
     }
@@ -308,6 +342,7 @@ const DeletePage: React.FC = () => {
     setTotalPages(0);
     setIsSignedPdf(false);
     setReadyPdf(null);
+    setStatus({ isProcessing: false, message: '' });
   }, []);
 
   const handleDownloadReady = () => {
@@ -346,8 +381,8 @@ const DeletePage: React.FC = () => {
       </Helmet>
     <div className="max-w-6xl mx-auto px-4 py-12">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Delete PDF Pages</h1>
-        <p className="text-slate-500">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Delete PDF Pages</h1>
+        <p className="text-slate-500 dark:text-slate-400">
           Remove unwanted pages from your PDF document safely
         </p>
       </div>
@@ -362,18 +397,18 @@ const DeletePage: React.FC = () => {
       ) : (
         <div className="space-y-6">
           {/* File Info */}
-          <div className="bg-white p-6 rounded-xl shadow border">
+          <div className="bg-white dark:bg-dark-surface p-6 rounded-xl shadow border border-slate-200 dark:border-dark-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-red-100 rounded-lg">
+                <div className="p-3 bg-red-100 dark:bg-red-950/60 rounded-lg">
                   <FileText className="w-6 h-6 text-red-500" />
                 </div>
                 <div>
-                  <p className="font-medium text-slate-900 truncate max-w-[200px] sm:max-w-md">{file.name}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="font-medium text-slate-900 dark:text-white truncate max-w-[200px] sm:max-w-md">{file.name}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     {formatBytes(file.size)} • {totalPages} pages
                     {isSignedPdf && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
+                      <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                         <AlertTriangle className="w-4 h-4" />
                         Signed PDF
                       </span>
@@ -394,7 +429,7 @@ const DeletePage: React.FC = () => {
                 )}
                 <button
                   onClick={handleReset}
-                  className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors"
+                  className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-hover transition-colors cursor-pointer"
                 >
                   Change File
                 </button>
@@ -404,29 +439,58 @@ const DeletePage: React.FC = () => {
 
           {/* Warnings */}
           {isSignedPdf && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-lg p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-amber-800 font-medium">Digital Signature Warning</p>
-                <p className="text-amber-600 text-sm">
+                <p className="text-amber-800 dark:text-amber-300 font-medium">Digital Signature Warning</p>
+                <p className="text-amber-600 dark:text-amber-400 text-sm">
                   This PDF contains digital signatures. Deleting pages may invalidate the signatures and make the document legally unusable.
                 </p>
               </div>
             </div>
           )}
 
+          {status.message && (
+            <div className={`p-4 rounded-xl flex items-center gap-2 text-sm ${
+              status.error
+                ? 'bg-red-50 border border-red-200 text-red-700'
+                : status.success
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                  : 'bg-blue-50 border border-blue-200 text-blue-700'
+            }`}>
+              {status.error ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+              <span>{status.message}</span>
+            </div>
+          )}
+
+          {status.error === 'password_protected' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Protected PDF Detected</p>
+                <p className="text-xs text-amber-700 mt-1">This document has password security enabled. Unlock it first before deleting pages.</p>
+                <Link
+                  to="/unlock-pdf"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                >
+                  Go to Unlock PDF tool &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Page Selection */}
-          <div className="bg-white p-6 rounded-xl shadow border space-y-4">
+          <div className="bg-white dark:bg-dark-surface p-6 rounded-xl shadow border border-slate-200 dark:border-dark-border space-y-4">
             <div className="flex items-center gap-2 mb-4">
               <Eye className="w-5 h-5 text-blue-500" />
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Select Pages to Delete
               </h3>
             </div>
 
             {/* Manual Input */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Pages to delete (e.g. "1,3,5-7")
               </label>
               <input
@@ -434,15 +498,15 @@ const DeletePage: React.FC = () => {
                 placeholder="Enter page numbers or ranges"
                 value={pagesInput}
                 onChange={(e) => setPagesInput(e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  validation.error ? 'border-red-300' : 'border-slate-300'
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white dark:bg-dark-surface text-slate-900 dark:text-white ${
+                  validation.error ? 'border-red-300 dark:border-red-800' : 'border-slate-300 dark:border-dark-border'
                 }`}
               />
               {validation.error && (
-                <p className="text-sm text-red-600">{validation.error}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{validation.error}</p>
               )}
               {validation.valid && validation.pages.length > 0 && (
-                <p className="text-sm text-green-600 flex items-center gap-1">
+                <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
                   <CheckCircle className="w-4 h-4" />
                   {validation.pages.length} page{validation.pages.length > 1 ? 's' : ''} selected for deletion • {Math.max(0, totalPages - validation.pages.length)} page(s) will remain
                 </p>
@@ -453,10 +517,10 @@ const DeletePage: React.FC = () => {
             {showPreview && pagePreviews.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
                     Click page thumbnails to select/deselect
                   </p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <span>Showing {pagePreviews.length} of {totalPages} pages</span>
                     <Button size="sm" variant="secondary" onClick={selectAllVisible}>Select visible</Button>
                     <Button size="sm" variant="secondary" onClick={invertVisibleSelection}>Invert visible</Button>
@@ -470,8 +534,8 @@ const DeletePage: React.FC = () => {
                       key={preview.pageNumber}
                       className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                         preview.selected
-                          ? 'border-red-500 ring-2 ring-red-200'
-                          : 'border-slate-200 hover:border-slate-300'
+                          ? 'border-red-500 ring-2 ring-red-200 dark:ring-red-950'
+                          : 'border-slate-200 dark:border-dark-border hover:border-slate-300'
                       }`}
                       onClick={() => togglePageSelection(preview.pageNumber)}
                     >
@@ -500,7 +564,7 @@ const DeletePage: React.FC = () => {
             )}
 
             {/* Action Button */}
-            <div className="flex justify-end pt-4 border-t">
+            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-dark-border">
               {readyPdf ? (
                 <Button variant="primary" size="lg" onClick={handleDownloadReady} className="bg-emerald-600 hover:bg-emerald-700">
                   <Download className="w-5 h-5 mr-2" />

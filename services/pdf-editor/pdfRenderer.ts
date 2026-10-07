@@ -225,7 +225,10 @@ class PdfRendererService {
         viewport: viewport
       }).promise;
 
-      return canvas.toDataURL('image/jpeg', 0.8);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      canvas.width = 0;
+      canvas.height = 0;
+      return dataUrl;
     } catch (error) {
       console.error('Failed to generate thumbnail:', error);
       return '';

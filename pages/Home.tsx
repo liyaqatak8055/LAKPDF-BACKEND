@@ -5,6 +5,7 @@ import { getRecentTools, RecentTool } from '../utils/toolUsage';
 import { trackEvent } from '../utils/analytics';
 import { ToolCard } from '../components/ToolCard';
 import { TrustLayer } from '../components/TrustLayer';
+import { PrivacyBadge } from '../components/PrivacyBadgeModal';
 import {
   Files,
   Scissors,
@@ -577,11 +578,11 @@ const Home: React.FC = () => {
             </Link>
           </div>
 
-          <div className="mb-5 flex flex-wrap justify-center gap-2 text-[11px] sm:text-sm font-medium text-slate-700 dark:text-dark-text-secondary">
-            <span className="rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
-              100% Private (Zero Cloud Uploads)
-            </span>
+          <div className="mb-5 flex flex-wrap justify-center items-center gap-2 text-[11px] sm:text-sm font-medium text-slate-700 dark:text-dark-text-secondary">
+            <PrivacyBadge
+              className="py-1.5 px-3 text-[11px] sm:text-sm font-semibold"
+              showAiDisclaimer={true}
+            />
             <span className="rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-semibold">
               🇮🇳 SSC & UPSC Exam Resizer
             </span>

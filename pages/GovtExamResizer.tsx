@@ -364,6 +364,10 @@ export const GovtExamResizer: React.FC = () => {
       });
 
       const sheetUrl = sheetCanvas.toDataURL('image/jpeg', 0.95);
+      singleCanvas.width = 0;
+      singleCanvas.height = 0;
+      sheetCanvas.width = 0;
+      sheetCanvas.height = 0;
       setPrintSheetModalData({ dataUrl: sheetUrl, sheetSize });
     };
     img.src = photoSlot.result.dataUrl;
@@ -573,52 +577,97 @@ export const GovtExamResizer: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Rejection Risk Diagnostic Banner */}
-        <div className="bg-white dark:bg-dark-surface p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-dark-border shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                safetyScore === 100
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                  : safetyScore >= 70
-                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                  : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-              }`}
-            >
-              {safetyScore}%
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
-                  Portal Submission Confidence Score
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                    safetyScore === 100
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                  }`}
-                >
-                  {safetyScore === 100 ? '0% Rejection Risk' : 'Action Required'}
-                </span>
+        {/* Live Rejection Risk Diagnostic Banner & Quick Verification Checklist */}
+        <div className="bg-white dark:bg-dark-surface p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-dark-border shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                  safetyScore === 100
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                    : safetyScore >= 70
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                    : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                }`}
+              >
+                {safetyScore}%
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {safetyScore === 100
-                  ? 'All documents perfectly match dimensions, KB range, and official background rules.'
-                  : `Next: ${alerts.join(' · ')}`}
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                    Portal Submission Confidence Score
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      safetyScore === 100
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                    }`}
+                  >
+                    {safetyScore === 100 ? '0% Rejection Risk' : 'Action Required'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {safetyScore === 100
+                    ? 'All documents perfectly match dimensions, KB range, and official background rules.'
+                    : `Next: ${alerts.join(' · ')}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setIsInspectorOpen(true)}
+                className="text-xs text-primary-600 dark:text-primary-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Checklist ({processedCount}/{totalRules})</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setIsInspectorOpen(true)}
-              className="text-xs text-primary-600 dark:text-primary-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>View Full Checklist</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+          {/* Quick Verification Checklist Strip */}
+          <div className="pt-2 border-t border-slate-100 dark:border-dark-border/60">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                Required Document Verification Status ({activePreset.name}):
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {processedCount === totalRules ? '✓ All Verified' : `${totalRules - processedCount} Pending`}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {activePreset.rules.map((rule) => {
+                const isReady = Boolean(slots[rule.id]?.result);
+                const res = slots[rule.id]?.result;
+                return (
+                  <div
+                    key={rule.id}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                      isReady && res?.isValidSize
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        : isReady && !res?.isValidSize
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                        : 'bg-slate-50 dark:bg-dark-hover/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-dark-border'
+                    }`}
+                  >
+                    {isReady && res?.isValidSize ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    ) : isReady ? (
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+                    )}
+                    <span>{rule.name}</span>
+                    <span className="text-[10px] opacity-75 font-mono">
+                      {isReady ? `(${res?.sizeKB} KB)` : `(${rule.minKB}-${rule.maxKB} KB)`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -1087,6 +1136,10 @@ export const GovtExamResizer: React.FC = () => {
                 onOpenDrawSignature={isSigSlot ? () => setSigPadTargetRuleId(rule.id) : undefined}
                 onOpenLiveCamera={isPhotoSlot ? () => setIsCameraOpen(true) : undefined}
                 onGeneratePrintSheet={isPhotoSlot ? handleGeneratePrintSheet : undefined}
+                enableNameDate={enableNameDate}
+                candidateName={candidateName}
+                photoDate={photoDate}
+                stampType={stampType}
               />
             );
           })}
@@ -1183,29 +1236,41 @@ export const GovtExamResizer: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
-                      <div className="p-2 rounded bg-slate-50 dark:bg-dark-bg">
+                      <div className={`p-2 rounded ${result?.isValidSize ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
                         <span className="text-slate-400 block font-sans">Size:</span>
                         <span className="font-bold">
-                          {result ? `${result.sizeKB} KB` : `${rule.minKB}-${rule.maxKB} KB`}
+                          {result ? `${result.sizeKB} KB ${result.isValidSize ? '✓' : '⚠️'}` : `${rule.minKB}-${rule.maxKB} KB`}
                         </span>
                       </div>
-                      <div className="p-2 rounded bg-slate-50 dark:bg-dark-bg">
+                      <div className={`p-2 rounded ${result ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
                         <span className="text-slate-400 block font-sans">Dimensions:</span>
                         <span className="font-bold">
-                          {result ? `${result.width}×${result.height}px` : `${rule.idealWidth}×${rule.idealHeight}px`}
+                          {result ? `${result.width}×${result.height}px ✓` : `${rule.idealWidth}×${rule.idealHeight}px`}
                         </span>
                       </div>
-                      <div className="p-2 rounded bg-slate-50 dark:bg-dark-bg">
+                      <div className={`p-2 rounded ${result ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
                         <span className="text-slate-400 block font-sans">Format:</span>
                         <span className="font-bold">
-                          {rule.outputFormat === 'application/pdf' ? 'PDF Document' : 'JPEG Image'}
+                          {rule.outputFormat === 'application/pdf' ? 'PDF ✓' : 'JPEG ✓'}
                         </span>
                       </div>
-                      <div className="p-2 rounded bg-slate-50 dark:bg-dark-bg">
+                      <div className={`p-2 rounded ${result ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
                         <span className="text-slate-400 block font-sans">Aspect Ratio:</span>
-                        <span className="font-bold">Compliant</span>
+                        <span className="font-bold">{result ? 'Compliant ✓' : 'Standard'}</span>
                       </div>
                     </div>
+                    {result && (
+                      <div className="pt-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => downloadFile(result.blob, result.filename)}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 cursor-pointer"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Download this document ({result.filename})</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1704,6 +1769,10 @@ interface DocumentSlotCardProps {
   onOpenDrawSignature?: () => void;
   onOpenLiveCamera?: () => void;
   onGeneratePrintSheet?: (size: '4x6' | 'a4') => void;
+  enableNameDate?: boolean;
+  candidateName?: string;
+  photoDate?: string;
+  stampType?: 'dop' | 'dob' | 'roll' | 'custom';
 }
 
 const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
@@ -1714,6 +1783,10 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
   onOpenDrawSignature,
   onOpenLiveCamera,
   onGeneratePrintSheet,
+  enableNameDate,
+  candidateName = '',
+  photoDate = '',
+  stampType = 'dop',
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showAdjustments, setShowAdjustments] = useState(false);
@@ -1856,30 +1929,57 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
                 )}
               </div>
 
-              {/* Status Compliance Pill */}
-              <div className="flex items-center gap-2 flex-wrap justify-center">
-                <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                    slot.result.isValidSize
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
-                  }`}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{slot.result.sizeKB} KB</span>
-                  <span className="opacity-80">({rule.minKB}–{rule.maxKB} KB allowed)</span>
-                </span>
-
-                {slot.result.isValidSize && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[11px] font-bold">
-                    <Check className="w-3 h-3" />
-                    <span>100% Portal Compliant</span>
+              {/* Status Compliance & Granular Auto-Validation Chips */}
+              <div className="w-full space-y-2 pt-1">
+                {/* Primary Compliant Badge */}
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                      slot.result.isValidSize
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                    }`}
+                  >
+                    {slot.result.isValidSize ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                    )}
+                    <span>{slot.result.sizeKB} KB</span>
+                    <span className="opacity-80 font-normal">({rule.minKB}–{rule.maxKB} KB target)</span>
                   </span>
-                )}
 
-                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                  {slot.result.isPdf ? 'PDF Format' : `${slot.result.width}×${slot.result.height}px`}
-                </span>
+                  {slot.result.isValidSize && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[11px] font-bold border border-emerald-200 dark:border-emerald-800">
+                      <Check className="w-3 h-3" />
+                      <span>100% Portal Compliant</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Granular Auto-Validation Verification Chips Grid */}
+                <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-600 dark:text-slate-400 pt-1">
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-dark-hover">
+                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="truncate">Dim: {slot.result.isPdf ? 'A4 Document' : `${slot.result.width}×${slot.result.height}px`}</span>
+                  </div>
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-dark-hover">
+                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="truncate">Format: {slot.result.isPdf ? 'PDF Clean' : 'JPEG / 300 DPI'}</span>
+                  </div>
+                  {slot.cleanBackground && (
+                    <div className="col-span-2 flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span>Shadow Removed · White Background Active</span>
+                    </div>
+                  )}
+                  {rule.supportsNameDate && enableNameDate && candidateName.trim() && (
+                    <div className="col-span-2 flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300">
+                      <Check className="w-3 h-3 text-blue-600 shrink-0" />
+                      <span className="truncate">Stamp: {candidateName.trim().toUpperCase()} · {photoDate || 'DOP'}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (

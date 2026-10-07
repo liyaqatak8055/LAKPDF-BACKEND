@@ -258,7 +258,9 @@ export async function extractTextFromAnyDocument(
         for (let i = 1; i <= maxPages; i++) {
             onStatus?.(`Preparing page ${i} of ${maxPages} for AI Vision OCR...`);
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 });
+            const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+            const scale = isMobile ? 1.4 : 2.0;
+            const viewport = page.getViewport({ scale });
             const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
@@ -270,6 +272,8 @@ export async function extractTextFromAnyDocument(
                 const imgData = canvas.toDataURL('image/jpeg', 0.85);
                 pageImages.push(imgData);
             }
+            canvas.width = 0;
+            canvas.height = 0;
             page.cleanup();
         }
         pdf.cleanup();
@@ -323,6 +327,9 @@ export async function extractTextFromAnyDocument(
             metadata: pdfData.metadata,
         };
     } catch (err: any) {
+        if (err?.name === 'PasswordException' || String(err?.message || '').toLowerCase().includes('password')) {
+            throw new Error('This document is password-protected. Please unlock it using our Unlock PDF tool first.');
+        }
         throw new Error(err?.message || 'Failed to extract text from document');
     }
 }

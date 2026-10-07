@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FileUploader } from '../components/FileUploader';
 import { Button } from '../components/Button';
 import { PdfFile, ProcessingStatus } from '../types';
 import { organizePdf, downloadPdf, formatBytes, pdfjs } from '../services/pdfService';
-import { Files, ArrowLeft, ArrowRight, Trash2, RotateCcw, RotateCw, MoreVertical, Copy, Scissors, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, MoveHorizontal, CheckSquare, Square, Download } from 'lucide-react';
+import { Files, ArrowLeft, ArrowRight, Trash2, RotateCcw, RotateCw, MoreVertical, Copy, Scissors, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, MoveHorizontal, CheckSquare, Square, Download, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Helmet } from 'react-helmet-async';
 import { ToolSEOContent } from '../components/ToolSEOContent';
@@ -81,8 +82,10 @@ const OrganizePdf: React.FC = () => {
           canvas.width = viewport.width;
 
           if (context) {
+            context.fillStyle = '#FFFFFF';
+            context.fillRect(0, 0, canvas.width, canvas.height);
             await page.render({ canvasContext: context, viewport }).promise;
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
             newPages.push({
               id: uuidv4(),
               index: i - 1, // 0-based index for pdf-lib
@@ -92,6 +95,8 @@ const OrganizePdf: React.FC = () => {
               height: Math.round(page.getViewport({ scale: 1 }).height),
               sizeKb: Math.round((dataUrl.length * 3) / 4 / 1024)
             });
+            canvas.width = 0;
+            canvas.height = 0;
           }
         }
         setPages(newPages);
@@ -100,9 +105,19 @@ const OrganizePdf: React.FC = () => {
           setSelectedIds([newPages[0].id]);
           setLastSelectedIndex(0);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        setStatus({ isProcessing: false, message: 'Error loading PDF', error: 'Failed to load pages' });
+        const errMsg = (e?.message || '').toLowerCase();
+        const isPassword = e?.name === 'PasswordException' || errMsg.includes('password') || errMsg.includes('encrypt');
+        if (isPassword) {
+          setStatus({
+            isProcessing: false,
+            message: 'This PDF is password-protected. Unlock it before organizing.',
+            error: 'password_protected'
+          });
+        } else {
+          setStatus({ isProcessing: false, message: 'Error loading PDF', error: 'Failed to load pages' });
+        }
       }
     }
   };
@@ -365,8 +380,12 @@ const OrganizePdf: React.FC = () => {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         if (ctx) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           await page.render({ canvasContext: ctx, viewport }).promise;
           setPreviewImg(canvas.toDataURL('image/jpeg', 0.9));
+          canvas.width = 0;
+          canvas.height = 0;
         }
       } catch (error) {
         console.warn('Preview render failed', error);
@@ -388,9 +407,15 @@ const OrganizePdf: React.FC = () => {
       downloadPdf(pdfBytes, outputName, { autoDownload: false });
       setStatus({ isProcessing: false, message: 'PDF ready to download', success: true });
       setIsDirty(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setStatus({ isProcessing: false, message: 'Error saving file.', error: 'Failed' });
+      const errMsg = (error?.message || '').toLowerCase();
+      const isEncrypted = errMsg.includes('password') || errMsg.includes('encrypt');
+      setStatus({
+        isProcessing: false,
+        message: isEncrypted ? 'This PDF is password-protected. Unlock it before organizing.' : 'Error saving file.',
+        error: isEncrypted ? 'password_protected' : 'Failed'
+      });
     }
   };
 
@@ -481,14 +506,30 @@ const OrganizePdf: React.FC = () => {
             </div>
           )}
 
+          {status.error === 'password_protected' && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <Unlock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Protected PDF Detected</p>
+                <p className="text-xs text-amber-700 mt-1">This document has password security enabled. Unlock it first before organizing pages.</p>
+                <Link
+                  to="/unlock-pdf"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2 underline"
+                >
+                  Go to Unlock PDF tool &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
+
           {pages.length > 0 && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-2">
-                <MoveHorizontal className="w-4 h-4" />
-                Drag pages to reorder. Use shift or ctrl/cmd to multi-select.
+                <MoveHorizontal className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                <span>Drag pages to reorder. Use shift or ctrl/cmd to multi-select.</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">{selectedIds.length} selected</span>
+                <span className="text-xs text-slate-500 dark:text-dark-text-secondary">{selectedIds.length} selected</span>
                 <Button variant="secondary" size="sm" onClick={allSelected ? clearSelection : selectAllPages}>
                   {allSelected ? 'Clear all' : 'Select all'}
                 </Button>
@@ -519,7 +560,7 @@ const OrganizePdf: React.FC = () => {
           )}
 
           {status.isProcessing && pages.length === 0 ? (
-            <div className="text-center py-20 text-slate-400">Loading pages...</div>
+            <div className="text-center py-20 text-slate-400 dark:text-slate-500">Loading pages...</div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-[2fr,1fr] gap-6">
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -539,14 +580,14 @@ const OrganizePdf: React.FC = () => {
                         setDragOverId(null);
                       }}
                       onClick={(event) => handleSelect(page.id, i, event)}
-                      className={`group relative bg-white p-2 rounded-lg border shadow-sm transition-all cursor-pointer ${
-                        isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+                      className={`group relative bg-white dark:bg-dark-surface p-2 rounded-lg border shadow-sm transition-all cursor-pointer ${
+                        isSelected ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900/60' : 'border-slate-200 dark:border-dark-border'
                       } ${isDragging ? 'shadow-xl scale-[1.02]' : 'hover:shadow-md'} ${isDragOver ? 'border-dashed border-blue-400' : ''}`}
                     >
                       {isDragOver && (
                         <div className="absolute -top-2 left-2 right-2 h-1 bg-blue-400 rounded-full" />
                       )}
-                      <div className="relative aspect-[3/4] bg-slate-100 mb-2 overflow-hidden border border-slate-100">
+                      <div className="relative aspect-[3/4] bg-slate-100 dark:bg-dark-bg mb-2 overflow-hidden border border-slate-100 dark:border-dark-border rounded">
                         <img
                           src={page.img}
                           alt={`Page ${i + 1}`}
@@ -565,7 +606,7 @@ const OrganizePdf: React.FC = () => {
                               event.stopPropagation();
                               toggleSelect(page.id, i);
                             }}
-                            className="bg-white/90 text-slate-700 p-1 rounded shadow"
+                            className="bg-white/90 dark:bg-dark-surface/90 text-slate-700 dark:text-slate-200 p-1 rounded shadow"
                             title="Select page"
                           >
                             {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
@@ -596,7 +637,7 @@ const OrganizePdf: React.FC = () => {
                             movePage(i, 'left');
                           }}
                           disabled={i === 0}
-                          className="p-1 rounded hover:bg-slate-100 text-slate-400 disabled:opacity-30"
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-400 dark:text-slate-500 disabled:opacity-30"
                         >
                           <ArrowLeft size={16} />
                         </button>
@@ -606,19 +647,19 @@ const OrganizePdf: React.FC = () => {
                               event.stopPropagation();
                               setOpenMenuId(openMenuId === page.id ? null : page.id);
                             }}
-                            className="p-1 rounded hover:bg-slate-100 text-slate-500"
+                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-500 dark:text-slate-400"
                           >
                             <MoreVertical size={16} />
                           </button>
                           {openMenuId === page.id && (
-                            <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-20">
+                            <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border rounded-lg shadow-lg z-20">
                               <button
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   rotatePage(page.id, 'left');
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-dark-hover text-slate-700 dark:text-slate-200 flex items-center gap-2"
                               >
                                 <RotateCcw size={14} /> Rotate Left
                               </button>
@@ -628,7 +669,7 @@ const OrganizePdf: React.FC = () => {
                                   rotatePage(page.id, 'right');
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-dark-hover text-slate-700 dark:text-slate-200 flex items-center gap-2"
                               >
                                 <RotateCw size={14} /> Rotate Right
                               </button>
@@ -638,7 +679,7 @@ const OrganizePdf: React.FC = () => {
                                   duplicatePage(page.id);
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-dark-hover text-slate-700 dark:text-slate-200 flex items-center gap-2"
                               >
                                 <Copy size={14} /> Duplicate
                               </button>
@@ -648,7 +689,7 @@ const OrganizePdf: React.FC = () => {
                                   extractPage(page);
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-dark-hover text-slate-700 dark:text-slate-200 flex items-center gap-2"
                               >
                                 <Scissors size={14} /> Extract
                               </button>
@@ -658,7 +699,7 @@ const OrganizePdf: React.FC = () => {
                                   removePage(i);
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2 text-red-600 dark:text-red-400"
                               >
                                 <Trash2 size={14} /> Delete
                               </button>
@@ -671,7 +712,7 @@ const OrganizePdf: React.FC = () => {
                             movePage(i, 'right');
                           }}
                           disabled={i === pages.length - 1}
-                          className="p-1 rounded hover:bg-slate-100 text-slate-400 disabled:opacity-30"
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-400 dark:text-slate-500 disabled:opacity-30"
                         >
                           <ArrowRight size={16} />
                         </button>
@@ -681,11 +722,11 @@ const OrganizePdf: React.FC = () => {
                 })}
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sticky top-28 h-fit">
+              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 sticky top-28 h-fit">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">Preview</h3>
-                    <p className="text-xs text-slate-500">{selectedPage ? `Page ${pages.indexOf(selectedPage) + 1}` : 'Select a page'}</p>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Preview</h3>
+                    <p className="text-xs text-slate-500 dark:text-dark-text-secondary">{selectedPage ? `Page ${pages.indexOf(selectedPage) + 1}` : 'Select a page'}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -693,7 +734,7 @@ const OrganizePdf: React.FC = () => {
                         setPreviewMode('custom');
                         setPreviewZoom(z => Math.max(0.5, Math.round((z - 0.1) * 10) / 10));
                       }}
-                      className="p-1 rounded hover:bg-slate-100 text-slate-500"
+                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-500 dark:text-slate-400"
                     >
                       <ZoomOut size={16} />
                     </button>
@@ -702,7 +743,7 @@ const OrganizePdf: React.FC = () => {
                         setPreviewMode('custom');
                         setPreviewZoom(z => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
                       }}
-                      className="p-1 rounded hover:bg-slate-100 text-slate-500"
+                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-500 dark:text-slate-400"
                     >
                       <ZoomIn size={16} />
                     </button>
@@ -711,7 +752,7 @@ const OrganizePdf: React.FC = () => {
                         setPreviewMode('fit-width');
                         setPreviewZoom(1);
                       }}
-                      className={`p-1 rounded ${previewMode === 'fit-width' ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-100 text-slate-500'}`}
+                      className={`p-1 rounded ${previewMode === 'fit-width' ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-500 dark:text-slate-400'}`}
                       title="Fit width"
                     >
                       <MoveHorizontal size={16} />
@@ -721,14 +762,14 @@ const OrganizePdf: React.FC = () => {
                         setPreviewMode('fit-page');
                         setPreviewZoom(0.9);
                       }}
-                      className={`p-1 rounded ${previewMode === 'fit-page' ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-100 text-slate-500'}`}
+                      className={`p-1 rounded ${previewMode === 'fit-page' ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'hover:bg-slate-100 dark:hover:bg-dark-hover text-slate-500 dark:text-slate-400'}`}
                       title="Fit page"
                     >
                       <Maximize2 size={16} />
                     </button>
                   </div>
                 </div>
-                <div className="bg-slate-50 rounded-lg border border-slate-200 p-3">
+                <div className="bg-slate-50 dark:bg-dark-bg rounded-lg border border-slate-200 dark:border-dark-border p-3">
                   {selectedPage ? (
                     <div className="overflow-auto">
                       <img
@@ -744,11 +785,11 @@ const OrganizePdf: React.FC = () => {
                       />
                     </div>
                   ) : (
-                    <div className="text-center text-xs text-slate-400 py-10">Select a page to preview.</div>
+                    <div className="text-center text-xs text-slate-400 dark:text-slate-500 py-10">Select a page to preview.</div>
                   )}
                 </div>
                 {selectedPage && (
-                  <div className="mt-3 text-xs text-slate-500 space-y-1">
+                  <div className="mt-3 text-xs text-slate-500 dark:text-dark-text-secondary space-y-1">
                     <div>Resolution: {selectedPage.width} × {selectedPage.height}</div>
                     <div>Size: {selectedPage.sizeKb} KB</div>
                     <div>Orientation: {selectedPage.width >= selectedPage.height ? 'Landscape' : 'Portrait'}</div>

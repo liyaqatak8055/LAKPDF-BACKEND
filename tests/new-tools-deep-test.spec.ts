@@ -197,7 +197,7 @@ test.describe("Deep Tool Result & Functional Verification", () => {
     await fileInput.setInputFiles(samplePdf1);
 
     // If PDF is not password protected, it should detect and inform or allow unlock
-    await expect(page.getByText(/not protected|enter password|unlock|ready/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Enter PDF Password/i)).toBeVisible({ timeout: 15_000 });
 
     const criticalErrors = pageErrors.filter(
       (m) => !/adsbygoogle|googlesyndication|doubleclick|cross-origin|SecurityError|ResizeObserver loop/i.test(m)
@@ -222,7 +222,7 @@ test.describe("Deep Tool Result & Functional Verification", () => {
     await generateBtn.click();
 
     // Wait for questions or progress
-    await expect(page.getByText(/question|generating|extracting|option|mcq|complete|quiz/i).first()).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByRole("heading", { name: /Generating Practice Question Paper/i })).toBeVisible({ timeout: 25_000 });
 
     const criticalErrors = pageErrors.filter(
       (m) => !/adsbygoogle|googlesyndication|doubleclick|cross-origin|SecurityError|ResizeObserver loop/i.test(m)

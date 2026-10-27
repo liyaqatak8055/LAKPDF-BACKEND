@@ -394,7 +394,7 @@ const AllTools: React.FC = () => {
       to: "/govt-exam-resizer",
       color: "bg-amber-50",
       category: "ai-exams",
-      popular: true
+      popular: false
     },
     {
       id: "passport-photo-maker",

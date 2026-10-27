@@ -536,9 +536,11 @@
 
 
   <!-- ====== Google AdSense Verification & Auto-Ads ====== -->
-  <meta name="google-adsense-account" content="ca-pub-9704679803624436" />
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9704679803624436"
     crossorigin="anonymous"></script>
+  <script>
+    window.__loadAdSense = function () {};
+  </script>
 </head>
 
 <body>
@@ -561,6 +563,15 @@
         <li><a href="/pdf-editor">PDF Editor – Edit PDF Online Free</a></li>
         <li><a href="/ocr-pdf">OCR PDF – Extract Text from PDF Free</a></li>
         <li><a href="/summarizer-qa">AI Summary – Summarize PDF & Documents with AI</a></li>
+      <h2>Guides & Knowledge Hub</h2>
+      <ul>
+        <li><a href="/blog">PDF Guides & Knowledge Hub</a></li>
+        <li><a href="/about">About Us</a></li>
+        <li><a href="/contact">Contact Support</a></li>
+        <li><a href="/privacy-policy">Privacy Policy</a></li>
+        <li><a href="/terms-of-service">Terms of Service</a></li>
+        <li><a href="/disclaimer">Disclaimer</a></li>
+        <li><a href="/sitemap">Sitemap</a></li>
       </ul>
     </div>
   </noscript>
@@ -634,8 +645,18 @@
             <div class="max-w-lg mx-auto hero-shell__search">
               <label for="tool-search-shell" class="sr-only">Search PDF tools</label>
               <input id="tool-search-shell" type="text" placeholder="Search tools: merge, compress, OCR, convert..."
-                readonly
+                autocomplete="off"
                 class="w-full rounded-lg border border-slate-200 bg-white px-5 py-3.5 text-slate-700 placeholder:text-slate-400 shadow-sm hero-shell__input" />
+              <script>
+                (function () {
+                  var input = document.getElementById('tool-search-shell');
+                  if (input) {
+                    input.addEventListener('input', function () {
+                      window.__INITIAL_SEARCH_QUERY__ = input.value;
+                    });
+                  }
+                })();
+              </script>
             </div>
           </div>
         </section>
@@ -676,13 +697,54 @@
               <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Image to PDF</span>
               <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Convert JPG, PNG to PDF document</span>
             </a>
-            <a href="/govt-exam-resizer" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
-              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">FormDocFixer</span>
-              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Fix & prepare photos for Govt exams</span>
+            <a href="/sign-pdf" style="text-decoration:none;padding:1rem;border-radius:1rem;background:var(--bg-surface);border:1px solid var(--border-color);display:block;">
+              <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;display:block;">Sign PDF</span>
+              <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-top:0.25rem;">Sign documents and add digital signature</span>
             </a>
           </div>
         </section>
       </main>
+      <!-- Pre-rendered Global Footer for Search & AdSense Bots -->
+      <footer style="background:#0f172a;color:#94a3b8;padding:48px 16px 32px;margin-top:40px;border-top:1px solid #1e293b;font-size:0.875rem;">
+        <div style="max-width:1152px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:32px;margin-bottom:32px;">
+          <div>
+            <h4 style="color:#ffffff;font-size:1rem;margin-bottom:12px;font-weight:700;">LAK PDF</h4>
+            <p style="line-height:1.6;font-size:0.8125rem;">Free, privacy-first client-side PDF utility platform. 100% in-browser WebAssembly processing with zero server document storage.</p>
+          </div>
+          <div>
+            <h4 style="color:#ffffff;font-size:0.875rem;margin-bottom:12px;font-weight:700;">Popular PDF Tools</h4>
+            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;font-size:0.8125rem;">
+              <li><a href="/merge" style="color:#cbd5e1;text-decoration:none;">Merge PDF</a></li>
+              <li><a href="/compress" style="color:#cbd5e1;text-decoration:none;">Compress PDF</a></li>
+              <li><a href="/pdf-to-word" style="color:#cbd5e1;text-decoration:none;">PDF to Word</a></li>
+              <li><a href="/split" style="color:#cbd5e1;text-decoration:none;">Split PDF</a></li>
+              <li><a href="/ocr-pdf" style="color:#cbd5e1;text-decoration:none;">OCR PDF</a></li>
+              <li><a href="/govt-exam-resizer" style="color:#cbd5e1;text-decoration:none;">Govt Exam Resizer</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 style="color:#ffffff;font-size:0.875rem;margin-bottom:12px;font-weight:700;">Knowledge & Support</h4>
+            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;font-size:0.8125rem;">
+              <li><a href="/blog" style="color:#cbd5e1;text-decoration:none;">PDF Engineering Blog</a></li>
+              <li><a href="/learn-pdf" style="color:#cbd5e1;text-decoration:none;">Learn PDF Hub</a></li>
+              <li><a href="/about" style="color:#cbd5e1;text-decoration:none;">About LAK PDF</a></li>
+              <li><a href="/contact" style="color:#cbd5e1;text-decoration:none;">Contact Helpdesk</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 style="color:#ffffff;font-size:0.875rem;margin-bottom:12px;font-weight:700;">Legal & Privacy</h4>
+            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;font-size:0.8125rem;">
+              <li><a href="/privacy-policy" style="color:#cbd5e1;text-decoration:none;">Privacy Policy</a></li>
+              <li><a href="/terms-of-service" style="color:#cbd5e1;text-decoration:none;">Terms of Service</a></li>
+              <li><a href="/disclaimer" style="color:#cbd5e1;text-decoration:none;">Disclaimer</a></li>
+              <li><a href="/sitemap" style="color:#cbd5e1;text-decoration:none;">HTML Sitemap</a></li>
+            </ul>
+          </div>
+        </div>
+        <div style="max-width:1152px;margin:0 auto;padding-top:24px;border-top:1px solid #1e293b;text-align:center;font-size:0.75rem;color:#64748b;">
+          <p>© 2026 LAK PDF. All rights reserved. Processed locally in your browser.</p>
+        </div>
+      </footer>
     </div>
   </div>
 

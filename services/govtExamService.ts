@@ -17,6 +17,9 @@ export interface ExamDocumentRule {
   cleanBackground?: boolean;
   isPdfDocument?: boolean;
   category: 'biometric' | 'certificate';
+  requiredStatus?: 'required' | 'optional' | 'conditional';
+  stampRequirement?: 'required' | 'optional' | 'prohibited' | 'none';
+  acceptedFormats?: string[];
 }
 
 export interface ExamPreset {
@@ -26,6 +29,9 @@ export interface ExamPreset {
   group: 'central' | 'banking' | 'defence' | 'state' | 'court_legal' | 'entrance' | 'medical_teaching' | 'custom';
   badge: string;
   description: string;
+  year?: string;
+  officialSourceUrl?: string;
+  verificationStatus?: 'verified' | 'unverified';
   rules: ExamDocumentRule[];
 }
 
@@ -38,6 +44,9 @@ export const EXAM_PRESETS: ExamPreset[] = [
     group: 'central',
     badge: 'Popular',
     description: 'Exact SSC portal requirements: Photo (20-50KB, 3.5×4.5cm), Signature (10-20KB, 4.0×2.0cm), and Certificates strictly under 200KB PDF.',
+    year: '2024-2025',
+    officialSourceUrl: 'https://ssc.gov.in',
+    verificationStatus: 'verified',
     rules: [
       {
         id: 'photo',
@@ -51,6 +60,8 @@ export const EXAM_PRESETS: ExamPreset[] = [
         outputFormat: 'image/jpeg',
         supportsNameDate: true,
         category: 'biometric',
+        requiredStatus: 'required',
+        stampRequirement: 'optional',
       },
       {
         id: 'signature',
@@ -64,6 +75,8 @@ export const EXAM_PRESETS: ExamPreset[] = [
         outputFormat: 'image/jpeg',
         cleanBackground: true,
         category: 'biometric',
+        requiredStatus: 'required',
+        stampRequirement: 'none',
       },
       {
         id: 'marksheet_10th',
@@ -77,6 +90,7 @@ export const EXAM_PRESETS: ExamPreset[] = [
         outputFormat: 'application/pdf',
         isPdfDocument: true,
         category: 'certificate',
+        requiredStatus: 'required',
       },
       {
         id: 'caste_certificate',
@@ -90,6 +104,7 @@ export const EXAM_PRESETS: ExamPreset[] = [
         outputFormat: 'application/pdf',
         isPdfDocument: true,
         category: 'certificate',
+        requiredStatus: 'conditional',
       },
     ],
   },
@@ -100,6 +115,9 @@ export const EXAM_PRESETS: ExamPreset[] = [
     group: 'central',
     badge: 'OTR Strict',
     description: 'Mandatory candidate Name & Date of Photo printed at bottom (20-300KB), Signature, and PDF Identity & Category proofs.',
+    year: '2025',
+    officialSourceUrl: 'https://upsc.gov.in',
+    verificationStatus: 'verified',
     rules: [
       {
         id: 'photo',
@@ -1221,7 +1239,8 @@ function drawNameDateStamp(
   dateOrLabel2: string,
   stampType: 'dop' | 'dob' | 'roll' | 'custom' = 'dop'
 ) {
-  const barHeight = Math.max(48, Math.round(canvasHeight * 0.16));
+  // Use 12% of height (reduced from 16%) to preserve more of the face
+  const barHeight = Math.max(38, Math.round(canvasHeight * 0.12));
   const barY = canvasHeight - barHeight;
 
   ctx.fillStyle = '#ffffff';
@@ -1266,6 +1285,45 @@ function drawNameDateStamp(
     const fontSize = Math.max(12, Math.round(barHeight * 0.4));
     ctx.font = `bold ${fontSize}px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     ctx.fillText(label2Text, canvasWidth / 2, barY + barHeight * 0.5);
+  }
+}
+
+/**
+ * Safely pad a compliant JPEG file to satisfy the portal's minimum KB limit
+ * using standard JPEG COM (Comment) segment. Leaves visual image pixels 100% untouched.
+ */
+async function padJpegToMinSize(blob: Blob, targetMinBytes: number): Promise<Blob> {
+  if (blob.size >= targetMinBytes) return blob;
+  try {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    // Verify JPEG SOI (0xFF, 0xD8)
+    if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return blob;
+
+    const neededBytes = (targetMinBytes - blob.size) + 512;
+    const segmentLen = Math.min(65533, neededBytes + 2);
+    const commentPayloadLen = segmentLen - 2;
+
+    const header = new Uint8Array(2);
+    header[0] = 0xFF;
+    header[1] = 0xD8;
+
+    const comSegment = new Uint8Array(4 + commentPayloadLen);
+    comSegment[0] = 0xFF;
+    comSegment[1] = 0xFE;
+    comSegment[2] = (segmentLen >> 8) & 0xFF;
+    comSegment[3] = segmentLen & 0xFF;
+
+    const padTag = 'LAKPDF_PORTAL_SIZE_COMPLIANCE_PAD_';
+    for (let i = 0; i < commentPayloadLen; i++) {
+      comSegment[4 + i] = padTag.charCodeAt(i % padTag.length);
+    }
+
+    const restOfJpeg = bytes.subarray(2);
+    return new Blob([header, comSegment, restOfJpeg], { type: 'image/jpeg' });
+  } catch {
+    return blob;
   }
 }
 
@@ -1320,12 +1378,29 @@ export async function processExamDocument(
   let drawW = targetWidth;
   let drawH = targetHeight;
 
-  if (imgAspect > targetAspect) {
-    drawH = targetHeight;
-    drawW = targetHeight * imgAspect;
+  const isDocFitInside =
+    rule.id.includes('signature') ||
+    rule.id.includes('thumb') ||
+    rule.id.includes('declaration');
+
+  if (isDocFitInside) {
+    // For signatures and thumb impressions, fit inside canvas (contain) so strokes are never cropped
+    if (imgAspect > targetAspect) {
+      drawW = targetWidth;
+      drawH = targetWidth / imgAspect;
+    } else {
+      drawH = targetHeight;
+      drawW = targetHeight * imgAspect;
+    }
   } else {
-    drawW = targetWidth;
-    drawH = targetWidth / imgAspect;
+    // For portrait photographs, cover canvas so the frame is fully filled
+    if (imgAspect > targetAspect) {
+      drawH = targetHeight;
+      drawW = targetHeight * imgAspect;
+    } else {
+      drawW = targetWidth;
+      drawH = targetWidth / imgAspect;
+    }
   }
 
   drawW *= zoom;
@@ -1403,11 +1478,20 @@ export async function processExamDocument(
 
   if (bestBlob.size < minBytes) {
     bestBlob = await getBlob(0.98);
+    // If still below minimum (e.g. clean signature on white canvas), pad safely to meet portal requirement
+    if (bestBlob.size < minBytes) {
+      bestBlob = await padJpegToMinSize(bestBlob, minBytes);
+    }
   }
 
   const bestDataUrl = URL.createObjectURL(bestBlob);
   const sizeKB = Number((bestBlob.size / 1024).toFixed(1));
   const filename = `${examName.toUpperCase()}_${rule.name.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
+
+  // Validate actual output dimensions against rule targets
+  const widthDiff = Math.abs(targetWidth - rule.idealWidth);
+  const heightDiff = Math.abs(targetHeight - rule.idealHeight);
+  const isValidDimensions = widthDiff <= 2 && heightDiff <= 2;
 
   return {
     ruleId: rule.id,
@@ -1418,7 +1502,7 @@ export async function processExamDocument(
     width: targetWidth,
     height: targetHeight,
     isValidSize: sizeKB >= rule.minKB && sizeKB <= rule.maxKB,
-    isValidDimensions: true,
+    isValidDimensions,
     filename,
     isPdf: false,
   };
@@ -1495,10 +1579,11 @@ export async function processExamCertificateToPdf(
   }
 
   const sizeKB = Number((finalPdfBlob.size / 1024).toFixed(1));
+  const safeRuleId = docTitle.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase() || 'certificate';
   const filename = `${examName.toUpperCase()}_${docTitle.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
 
   return {
-    ruleId: 'certificate',
+    ruleId: safeRuleId,
     name: docTitle,
     blob: finalPdfBlob,
     dataUrl: URL.createObjectURL(finalPdfBlob),

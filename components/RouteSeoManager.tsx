@@ -15,17 +15,22 @@ export const RouteSeoManager: React.FC = () => {
 
   useEffect(() => {
     const routeSeo = ROUTE_SEO[pathname];
+
+    // Always ensure the canonical tag and og:url reflect the current route
+    const canonicalPath = routeSeo ? routeSeo.canonicalPath : (pathname === "/" ? "" : pathname);
+    const fullCanonicalUrl = `${SITE_URL}${canonicalPath}`;
+    upsertCanonical(fullCanonicalUrl);
+    upsertProperty("og:url", fullCanonicalUrl);
+
     if (!routeSeo) return;
 
     // Title + description
     document.title = routeSeo.title;
     upsertMeta("description", routeSeo.description);
-    upsertCanonical(`${SITE_URL}${routeSeo.canonicalPath}`);
 
     // Open Graph tags (for WhatsApp, Facebook, LinkedIn)
     upsertProperty("og:title", routeSeo.title);
     upsertProperty("og:description", routeSeo.description);
-    upsertProperty("og:url", `${SITE_URL}${routeSeo.canonicalPath}`);
     upsertProperty("og:type", "website");
 
     // Twitter card tags

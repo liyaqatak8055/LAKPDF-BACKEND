@@ -198,6 +198,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { label: 'Split PDF', path: '/split' },
     { label: 'Compress PDF', path: '/compress' },
     { label: 'Convert PDF', path: '/convert' },
+    { label: 'Guides & Blog', path: '/blog' },
   ];
 
   const handleToolBack = () => {
@@ -619,22 +620,28 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <li><Link to="/govt-exam-resizer" className="text-amber-400 font-semibold hover:text-white transition-colors">FormDocFixer (UPSC/SSC)</Link></li>
                 <li><Link to="/passport-photo-maker" className="text-blue-400 font-semibold hover:text-white transition-colors">Passport Photo Maker</Link></li>
                 <li><Link to="/advance-compress-img" className="hover:text-white transition-colors">Compress Image to 50KB</Link></li>
+                <li><Link to="/blog" className="text-sky-400 font-semibold hover:text-white transition-colors flex items-center gap-1.5"><span>PDF Engineering Blog</span><span className="px-1.5 py-0.2 rounded text-[10px] bg-sky-500/20 text-sky-300 font-bold">GUIDES</span></Link></li>
+                <li><Link to="/learn-pdf" className="hover:text-white transition-colors">Learn PDF Guides</Link></li>
                 <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
                 <li><Link to="/contact" className="hover:text-white transition-colors">Contact Support</Link></li>
-                <li><Link to="/learn-pdf" className="hover:text-white transition-colors">Learn PDF Guides</Link></li>
                 <li><Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
                 <li><Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link></li>
                 <li><Link to="/disclaimer" className="hover:text-white transition-colors">Disclaimer</Link></li>
+                <li><Link to="/sitemap" className="hover:text-white transition-colors">HTML Sitemap</Link></li>
               </ul>
             </div>
           </div>
 
           <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-            <p>© {new Date().getFullYear()} LAK PDF. All rights reserved.</p>
-            <div className="flex items-center gap-6">
-              <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy</Link>
-              <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms</Link>
+            <p>© {new Date().getFullYear()} LAK PDF. All rights reserved. 100% Client-Side Processing.</p>
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+              <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link>
+              <Link to="/disclaimer" className="hover:text-white transition-colors">Disclaimer</Link>
               <Link to="/contact" className="hover:text-white transition-colors">Support</Link>
+              <Link to="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Link to="/about" className="hover:text-white transition-colors">About Us</Link>
+              <Link to="/sitemap" className="hover:text-white transition-colors">Sitemap</Link>
             </div>
           </div>
         </div>

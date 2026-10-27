@@ -5,6 +5,7 @@
 
 import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { AD_CONFIG } from '../config/adsense';
 
 interface AdSenseRouteHandlerProps {
     enableAds?: boolean;
@@ -16,7 +17,7 @@ interface AdSenseRouteHandlerProps {
  * Ensures ads are properly reloaded in SPA environment
  */
 export const AdSenseRouteHandler: React.FC<AdSenseRouteHandlerProps> = ({
-    enableAds = true,
+    enableAds = AD_CONFIG.ENABLED,
     excludedRoutes = [
         '/admin',
     ],
@@ -25,7 +26,7 @@ export const AdSenseRouteHandler: React.FC<AdSenseRouteHandlerProps> = ({
     const excluded = React.useMemo(() => excludedRoutes, [excludedRoutes.join('|')]);
 
     useEffect(() => {
-        if (!enableAds || !import.meta.env.PROD) {
+        if (!enableAds || !AD_CONFIG.ENABLED || !import.meta.env.PROD) {
             return;
         }
 
@@ -42,12 +43,18 @@ export const AdSenseRouteHandler: React.FC<AdSenseRouteHandlerProps> = ({
         try {
             // Wait for AdSense script to load
             if (window.adsbygoogle) {
-                // Push new ad requests
+                // Push new ad requests only for uninitialized slots
                 const ads = document.querySelectorAll('.adsbygoogle');
                 ads.forEach((ad) => {
-                    // Only refresh if not already filled
-                    if (!ad.getAttribute('data-ad-status')) {
-                        (window.adsbygoogle = window.adsbygoogle || []).push({});
+                    const status = ad.getAttribute('data-ad-status') || ad.getAttribute('data-adsbygoogle-status');
+                    const isPushed = ad.getAttribute('data-ad-pushed');
+                    if (!status && !isPushed) {
+                        ad.setAttribute('data-ad-pushed', 'true');
+                        try {
+                            (window.adsbygoogle = window.adsbygoogle || []).push({});
+                        } catch {
+                            // Silently ignore push errors on already-registered slots
+                        }
                     }
                 });
             }
@@ -76,27 +83,32 @@ export const AdSense: React.FC<AdSenseProps> = ({
     responsive = true,
     className = '',
 }) => {
+    const adRef = React.useRef<HTMLModElement | null>(null);
+
     useEffect(() => {
-        if (import.meta.env.PROD) {
-            try {
-                (window.adsbygoogle = window.adsbygoogle || []).push({});
-            } catch (error) {
-                console.debug('[AdSense] Ad initialization failed:', error);
+        if (AD_CONFIG.ENABLED && import.meta.env.PROD) {
+            if (typeof (window as any).__loadAdSense === 'function') {
+                (window as any).__loadAdSense();
+            }
+            if (adRef.current && !adRef.current.getAttribute('data-ad-pushed')) {
+                adRef.current.setAttribute('data-ad-pushed', 'true');
+                try {
+                    (window.adsbygoogle = window.adsbygoogle || []).push({});
+                } catch (error) {
+                    console.debug('[AdSense] Ad initialization failed:', error);
+                }
             }
         }
     }, []);
 
-    // Don't render ads in development
-    if (!import.meta.env.PROD) {
-        return (
-            <div className={`bg-gray-100 p-4 text-center text-sm text-gray-500 ${className}`}>
-                [Ad Placeholder - Production Only]
-            </div>
-        );
+    // Don't render ads if disabled or in development
+    if (!AD_CONFIG.ENABLED || !import.meta.env.PROD) {
+        return null;
     }
 
     return (
         <ins
+            ref={adRef}
             className={`adsbygoogle ${className}`}
             style={{ display: 'block' }}
             data-ad-client="ca-pub-9704679803624436"

@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { deletePdfPages, formatBytes, downloadPdf, parsePageRange } from "../services/pdfService";
 import { Trash2, FileText, Eye, AlertTriangle, CheckCircle, RotateCcw, Download, Unlock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { AdUnit } from "../components/AdUnit";
+import { getAdSlot } from "../config/adsense";
 import { pdfjs } from "../services/pdfService";
 import { Helmet } from 'react-helmet-async';
 import { ToolSEOContent } from '../components/ToolSEOContent';
@@ -592,7 +593,7 @@ const DeletePage: React.FC = () => {
       {import.meta.env.PROD && (
         <div className="mt-12">
           <AdUnit
-            slotId="YOUR_REAL_SLOT_ID"
+            slotId={getAdSlot("TOOL_PAGE")}
             format="rectangle"
             size="medium"
             lazy={true}

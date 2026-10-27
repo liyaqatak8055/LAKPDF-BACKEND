@@ -143,12 +143,12 @@ export const GovtExamResizer: React.FC = () => {
   // Document slot states mapped by ruleId
   const [slots, setSlots] = useState<Record<string, SlotState>>({});
 
-  // Initialize slots when preset changes
+  // Initialize slots when preset changes — always reset to avoid stale validation from prior exam
   useEffect(() => {
-    setSlots((prev) => {
+    setSlots(() => {
       const nextSlots: Record<string, SlotState> = {};
       activePreset.rules.forEach((rule) => {
-        nextSlots[rule.id] = prev[rule.id] || {
+        nextSlots[rule.id] = {
           file: null,
           imageElement: null,
           result: null,
@@ -170,6 +170,19 @@ export const GovtExamResizer: React.FC = () => {
   // Handler for file upload for a specific document rule
   const handleFileSelect = async (rule: ExamDocumentRule, file: File) => {
     if (rule.isPdfDocument) {
+      // Accept PDF or images (images will be converted to PDF)
+      const acceptedPdfTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+      if (!acceptedPdfTypes.includes(file.type)) {
+        setSlots((prev) => ({
+          ...prev,
+          [rule.id]: {
+            ...prev[rule.id],
+            error: 'Unsupported file type. Please upload a PDF, JPG, or PNG file.',
+            isProcessing: false,
+          },
+        }));
+        return;
+      }
       setSlots((prev) => ({
         ...prev,
         [rule.id]: {
@@ -204,15 +217,20 @@ export const GovtExamResizer: React.FC = () => {
             ...prev[rule.id],
             result,
             isProcessing: false,
+            error: undefined,
           },
         }));
       } catch (err: any) {
+        const errorMsg =
+          err?.name === 'PasswordException' || err?.message?.toLowerCase().includes('password')
+            ? 'This PDF is password-protected. Government portals reject locked documents. Please remove the password and re-upload.'
+            : err?.message || 'Certificate compression failed. Please upload a readable PDF or JPG.';
         setSlots((prev) => ({
           ...prev,
           [rule.id]: {
             ...prev[rule.id],
             isProcessing: false,
-            error: err?.message || 'Certificate compression failed',
+            error: errorMsg,
           },
         }));
       }
@@ -220,13 +238,28 @@ export const GovtExamResizer: React.FC = () => {
     }
 
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (JPG, PNG, WEBP).');
+      setSlots((prev) => ({
+        ...prev,
+        [rule.id]: {
+          ...(prev[rule.id] || {
+            zoom: 1, panX: 0, panY: 0, brightness: 0, contrast: 0,
+            cleanBackground: Boolean(rule.cleanBackground),
+            backgroundColor: 'white', showFaceGuide: false,
+          }),
+          file: null,
+          imageElement: null,
+          result: null,
+          isProcessing: false,
+          error: 'Unsupported file type. Please upload a JPG, PNG, or WEBP image.',
+        },
+      }));
       return;
     }
 
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       setSlots((prev) => ({
         ...prev,
         [rule.id]: {
@@ -249,6 +282,29 @@ export const GovtExamResizer: React.FC = () => {
       }));
 
       processSlotDocument(rule, img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setSlots((prev) => ({
+        ...prev,
+        [rule.id]: {
+          ...(prev[rule.id] || {
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            brightness: 0,
+            contrast: 0,
+            cleanBackground: Boolean(rule.cleanBackground),
+            backgroundColor: 'white',
+            showFaceGuide: rule.id === 'photo',
+          }),
+          file: null,
+          imageElement: null,
+          result: null,
+          isProcessing: false,
+          error: 'Unreadable or corrupted image file. Please upload a valid JPG or PNG image.',
+        },
+      }));
     };
     img.src = objectUrl;
   };
@@ -336,9 +392,41 @@ export const GovtExamResizer: React.FC = () => {
     }
   };
 
+  // Revoke previous dataUrl object URLs to prevent memory leaks
+  const revokeSlotUrl = (ruleId: string) => {
+    const prevResult = slots[ruleId]?.result;
+    if (prevResult?.dataUrl && prevResult.dataUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(prevResult.dataUrl);
+    }
+  };
+
+  // Remove uploaded document from slot and reset its state
+  const handleRemoveSlot = (ruleId: string) => {
+    revokeSlotUrl(ruleId);
+    setSlots((prev) => ({
+      ...prev,
+      [ruleId]: {
+        file: null,
+        imageElement: null,
+        result: null,
+        isProcessing: false,
+        error: undefined,
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+        brightness: 0,
+        contrast: 0,
+        cleanBackground: Boolean(activePreset.rules.find((r) => r.id === ruleId)?.cleanBackground),
+        backgroundColor: 'white',
+        showFaceGuide: ruleId === 'photo',
+      },
+    }));
+  };
+
   const handleNameDateChange = () => {
     const photoRule = activePreset.rules.find((r) => r.id === 'photo');
     if (photoRule && slots['photo']?.imageElement) {
+      revokeSlotUrl('photo');
       processSlotDocument(photoRule);
     }
   };
@@ -510,7 +598,11 @@ export const GovtExamResizer: React.FC = () => {
 
   const { safetyScore, alerts } = calculateRejectionRisk();
   const processedCount = Object.values(slots).filter((s) => s.result).length;
+  const validCount = Object.values(slots).filter((s) => s.result?.isValidSize).length;
   const totalRules = activePreset.rules.length;
+  // Accurate progress (docs that are processed and pass size validation)
+  const readyCount = validCount;
+  const hasAnyInvalidDoc = processedCount > 0 && Object.values(slots).some((s) => s.result && !s.result.isValidSize);
 
   const filteredRules = activePreset.rules.filter((rule) => {
     if (activeCategoryFilter === 'all') return true;
@@ -577,102 +669,57 @@ export const GovtExamResizer: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Rejection Risk Diagnostic Banner & Quick Verification Checklist */}
-        <div className="bg-white dark:bg-dark-surface p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-dark-border shadow-xs space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                  safetyScore === 100
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                    : safetyScore >= 70
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                    : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                }`}
-              >
-                {safetyScore}%
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
-                    Portal Submission Confidence Score
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                      safetyScore === 100
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                    }`}
-                  >
-                    {safetyScore === 100 ? '0% Rejection Risk' : 'Action Required'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {safetyScore === 100
-                    ? 'All documents perfectly match dimensions, KB range, and official background rules.'
-                    : `Next: ${alerts.join(' · ')}`}
-                </p>
-              </div>
+        {/* Live Rejection Risk Diagnostic Banner */}
+        <div className="bg-white dark:bg-dark-surface p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-dark-border shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                safetyScore === 100
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                  : safetyScore >= 70
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                  : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+              }`}
+            >
+              {safetyScore}%
             </div>
-
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setIsInspectorOpen(true)}
-                className="text-xs text-primary-600 dark:text-primary-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <span>View Full Checklist ({processedCount}/{totalRules})</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                  Portal Submission Confidence Score
+                </span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                    safetyScore === 100
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                  }`}
+                >
+                  {safetyScore === 100 ? '0% Rejection Risk' : 'Action Required'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {safetyScore === 100
+                  ? 'All documents perfectly match dimensions, KB range, and official background rules.'
+                  : `Next: ${alerts.join(' · ')}`}
+              </p>
             </div>
           </div>
 
-          {/* Quick Verification Checklist Strip */}
-          <div className="pt-2 border-t border-slate-100 dark:border-dark-border/60">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Required Document Verification Status ({activePreset.name}):
-              </span>
-              <span className="text-[10px] text-slate-400">
-                {processedCount === totalRules ? '✓ All Verified' : `${totalRules - processedCount} Pending`}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {activePreset.rules.map((rule) => {
-                const isReady = Boolean(slots[rule.id]?.result);
-                const res = slots[rule.id]?.result;
-                return (
-                  <div
-                    key={rule.id}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                      isReady && res?.isValidSize
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                        : isReady && !res?.isValidSize
-                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                        : 'bg-slate-50 dark:bg-dark-hover/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-dark-border'
-                    }`}
-                  >
-                    {isReady && res?.isValidSize ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    ) : isReady ? (
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    ) : (
-                      <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
-                    )}
-                    <span>{rule.name}</span>
-                    <span className="text-[10px] opacity-75 font-mono">
-                      {isReady ? `(${res?.sizeKB} KB)` : `(${rule.minKB}-${rule.maxKB} KB)`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setIsInspectorOpen(true)}
+              className="text-xs text-primary-600 dark:text-primary-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>Official Guidelines</span>
+            </button>
           </div>
         </div>
 
         {/* Preset Selector & Search Section */}
-        <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-xs overflow-hidden transition-all">
+        <div className="bg-white dark:bg-dark-surface rounded-2xl border-2 border-primary-200/90 dark:border-primary-900/60 shadow-sm hover:shadow-md overflow-hidden transition-all">
           {/* Main Clickable Header: Displays Active Target Exam & Toggle Button */}
           <div
             onClick={() => setIsExamListOpen((prev) => !prev)}
@@ -684,16 +731,30 @@ export const GovtExamResizer: React.FC = () => {
                 <span className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
                   <ShieldCheck className="w-4 h-4" />
                 </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                <span className="text-xs text-primary-700 dark:text-primary-300 font-bold uppercase tracking-wider">
                   Target Exam:
                 </span>
-                <strong className="text-slate-900 dark:text-white font-bold text-sm sm:text-base">
+                <strong className="text-slate-900 dark:text-white font-extrabold text-base sm:text-lg">
                   {activePreset.fullName}
                 </strong>
-                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold uppercase tracking-wider">
-                  <Check className="w-3 h-3" />
-                  Official 2026 Format
-                </span>
+                {activePreset.officialSourceUrl && (
+                  <a
+                    href={activePreset.officialSourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 font-semibold uppercase tracking-wider border border-blue-200 dark:border-blue-800 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Official Portal ({activePreset.year || 'Govt'})</span>
+                  </a>
+                )}
+                {activePreset.verificationStatus === 'verified' && (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-semibold uppercase tracking-wider border border-emerald-200 dark:border-emerald-800">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Verified Rule
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
                 {activePreset.description}
@@ -701,27 +762,36 @@ export const GovtExamResizer: React.FC = () => {
             </div>
 
             {/* Right: Required Docs Count & Clickable Exam Option Toggle */}
-            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 self-start md:self-center">
-              <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-dark-hover text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{activePreset.rules.length} Required Documents</span>
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0 self-start md:self-center w-full md:w-auto justify-between md:justify-end">
+              <div className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-hover text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-2 shadow-2xs">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{activePreset.rules.length} Required Docs</span>
               </div>
 
-              {/* Clickable Exam Option Toggle Button */}
+              {/* Clickable Exam Option Toggle Button - Super Highlighted & Bold */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsExamListOpen((prev) => !prev);
                 }}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wide transition-all shadow-md hover:shadow-lg cursor-pointer active:scale-98 ${
                   isExamListOpen
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 ring-2 ring-slate-900/10'
-                    : 'bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 dark:bg-primary-950/50 dark:text-primary-300 dark:border-primary-800'
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 ring-2 ring-slate-900/20'
+                    : 'bg-gradient-to-r from-primary-600 via-rose-600 to-indigo-600 hover:from-primary-700 hover:via-rose-700 hover:to-indigo-700 text-white ring-2 ring-primary-400/50 hover:ring-primary-400 shadow-primary-500/30'
                 }`}
               >
-                <span>{isExamListOpen ? 'Hide All Exams' : 'Change / Select Exam (16)'}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExamListOpen ? 'rotate-180' : ''}`} />
+                <Layers className={`w-4 h-4 shrink-0 ${isExamListOpen ? 'text-white dark:text-slate-900' : 'text-amber-300 animate-pulse'}`} />
+                <span>
+                  {isExamListOpen
+                    ? 'Hide All Exams'
+                    : `Change / Select Exam (${EXAM_PRESETS.filter((p) => p.id !== 'custom').length}+)`}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 shrink-0 ${
+                    isExamListOpen ? 'rotate-180' : ''
+                  }`}
+                />
               </button>
             </div>
           </div>
@@ -1018,19 +1088,38 @@ export const GovtExamResizer: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Apply Button */}
+                  {/* Apply & Reset Buttons */}
                   <div className="space-y-1">
                     <div className="hidden lg:block text-[11px] font-bold text-transparent select-none uppercase">
                       Action
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleNameDateChange}
-                      className="w-full h-10 px-4 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all duration-150 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Apply</span>
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleNameDateChange}
+                        className="flex-1 h-10 px-3 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all duration-150 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Apply</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCandidateName('');
+                          setCustomLabel2('');
+                          setEnableNameDate(false);
+                          const photoRule = activePreset.rules.find((r) => r.supportsNameDate);
+                          if (photoRule && slots['photo']?.imageElement) {
+                            revokeSlotUrl('photo');
+                            processSlotDocument(photoRule, slots['photo'].imageElement);
+                          }
+                        }}
+                        className="h-10 px-3 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-dark-hover text-slate-700 dark:text-slate-300 rounded-xl transition-colors cursor-pointer"
+                        title="Reset stamp and restore clean original photo"
+                      >
+                        Reset
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1133,6 +1222,7 @@ export const GovtExamResizer: React.FC = () => {
                 slot={slot}
                 onFileSelect={(file) => handleFileSelect(rule, file)}
                 onReProcess={(options) => processSlotDocument(rule, undefined, options)}
+                onRemove={() => handleRemoveSlot(rule.id)}
                 onOpenDrawSignature={isSigSlot ? () => setSigPadTargetRuleId(rule.id) : undefined}
                 onOpenLiveCamera={isPhotoSlot ? () => setIsCameraOpen(true) : undefined}
                 onGeneratePrintSheet={isPhotoSlot ? handleGeneratePrintSheet : undefined}
@@ -1150,16 +1240,18 @@ export const GovtExamResizer: React.FC = () => {
           <div className="sticky bottom-6 z-40 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200 dark:border-dark-border shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-base shadow-xs">
-                {processedCount}/{totalRules}
+                {readyCount}/{totalRules}
               </div>
               <div>
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm">
-                  {processedCount === totalRules
+                  {readyCount === totalRules
                     ? '🎉 Full Application Package Complete!'
-                    : `${processedCount} of ${totalRules} required documents ready`}
+                    : `${readyCount} of ${totalRules} documents validated`}
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Strictly verified for {activePreset.name} portal specifications.
+                  {hasAnyInvalidDoc
+                    ? '⚠️ Some documents are outside the required KB range — re-upload or replace them.'
+                    : `Verified for ${activePreset.name} portal specifications.`}
                 </p>
               </div>
             </div>
@@ -1179,6 +1271,7 @@ export const GovtExamResizer: React.FC = () => {
                 onClick={handleDownloadAllZip}
                 disabled={isExportingZip}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 text-sm px-6 py-2.5 shadow-md"
+                title={hasAnyInvalidDoc ? 'Some documents are outside required size — verify before submitting' : 'Download all documents as ZIP'}
               >
                 {isExportingZip ? (
                   <>
@@ -1188,7 +1281,7 @@ export const GovtExamResizer: React.FC = () => {
                 ) : (
                   <>
                     <FileArchive className="w-4 h-4" />
-                    <span>Download All Documents (ZIP)</span>
+                    <span>Download All ({readyCount}/{totalRules} valid)</span>
                   </>
                 )}
               </Button>
@@ -1217,6 +1310,8 @@ export const GovtExamResizer: React.FC = () => {
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               {activePreset.rules.map((rule) => {
                 const result = slots[rule.id]?.result;
+                const isReady = Boolean(result);
+                const isValid = Boolean(result?.isValidSize);
                 return (
                   <div
                     key={rule.id}
@@ -1226,9 +1321,13 @@ export const GovtExamResizer: React.FC = () => {
                       <span className="font-bold text-slate-900 dark:text-white text-xs">
                         {rule.name}
                       </span>
-                      {result ? (
+                      {isReady && isValid ? (
                         <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
-                          <CheckCircle2 className="w-4 h-4" /> Verified 100% Ready
+                          <CheckCircle2 className="w-4 h-4" /> Verified & Valid
+                        </span>
+                      ) : isReady && !isValid ? (
+                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold text-xs">
+                          <AlertCircle className="w-4 h-4" /> Size Out of Range
                         </span>
                       ) : (
                         <span className="text-slate-400 text-xs">Not uploaded yet</span>
@@ -1236,16 +1335,16 @@ export const GovtExamResizer: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
-                      <div className={`p-2 rounded ${result?.isValidSize ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
+                      <div className={`p-2 rounded ${result?.isValidSize ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : result ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
                         <span className="text-slate-400 block font-sans">Size:</span>
                         <span className="font-bold">
-                          {result ? `${result.sizeKB} KB ${result.isValidSize ? '✓' : '⚠️'}` : `${rule.minKB}-${rule.maxKB} KB`}
+                          {result ? `${result.sizeKB} KB ${result.isValidSize ? '✓' : '⚠️ (out of range)'}` : `${rule.minKB}-${rule.maxKB} KB`}
                         </span>
                       </div>
-                      <div className={`p-2 rounded ${result ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
+                      <div className={`p-2 rounded ${result?.isValidDimensions ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : result ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
                         <span className="text-slate-400 block font-sans">Dimensions:</span>
                         <span className="font-bold">
-                          {result ? `${result.width}×${result.height}px ✓` : `${rule.idealWidth}×${rule.idealHeight}px`}
+                          {result ? `${result.width}×${result.height}px ${result.isValidDimensions ? '✓' : '⚠️'}` : `${rule.idealWidth}×${rule.idealHeight}px`}
                         </span>
                       </div>
                       <div className={`p-2 rounded ${result ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-dark-bg text-slate-700 dark:text-slate-300'}`}>
@@ -1766,6 +1865,7 @@ interface DocumentSlotCardProps {
   slot: SlotState;
   onFileSelect: (file: File) => void;
   onReProcess: (options?: Partial<SlotState>) => void;
+  onRemove?: () => void;
   onOpenDrawSignature?: () => void;
   onOpenLiveCamera?: () => void;
   onGeneratePrintSheet?: (size: '4x6' | 'a4') => void;
@@ -1780,6 +1880,7 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
   slot,
   onFileSelect,
   onReProcess,
+  onRemove,
   onOpenDrawSignature,
   onOpenLiveCamera,
   onGeneratePrintSheet,
@@ -1790,9 +1891,21 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showAdjustments, setShowAdjustments] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       onFileSelect(e.dataTransfer.files[0]);
     }
@@ -1802,25 +1915,43 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
     <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border p-4 sm:p-5 flex flex-col justify-between shadow-xs transition-shadow hover:shadow-md">
       <div>
         {/* Slot Title & Badges */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div>
-            <div className="flex items-center gap-1.5">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="font-bold text-slate-900 dark:text-white text-base">
                 {rule.name}
               </h3>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                  rule.requiredStatus === 'conditional'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                    : rule.requiredStatus === 'optional'
+                    ? 'bg-slate-100 text-slate-600 dark:bg-dark-hover dark:text-slate-400'
+                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                }`}
+              >
+                {rule.requiredStatus === 'conditional'
+                  ? 'Conditional'
+                  : rule.requiredStatus === 'optional'
+                  ? 'Optional'
+                  : 'Mandatory'}
+              </span>
               {rule.isPdfDocument && (
-                <span className="text-[10px] px-1.5 py-0.2 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 font-bold rounded">
-                  PDF
+                <span className="text-[10px] px-1.5 py-0.5 bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 font-bold rounded">
+                  PDF Doc
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
               {rule.description}
             </p>
           </div>
           <div className="text-right shrink-0">
-            <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-dark-hover text-slate-700 dark:text-slate-300">
+            <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-dark-hover text-slate-700 dark:text-slate-300 block">
               {rule.minKB}–{rule.maxKB} KB
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+              {rule.isPdfDocument ? 'A4 Document' : `${rule.idealWidth}×${rule.idealHeight} px`}
             </span>
           </div>
         </div>
@@ -1863,11 +1994,14 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
 
         {/* Dropzone / Preview Area */}
         <div
-          onDragOver={(e) => e.preventDefault()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => !slot.result && fileInputRef.current?.click()}
           className={`relative mt-2 rounded-xl border-2 border-dashed transition-all overflow-hidden min-h-[220px] flex items-center justify-center ${
-            slot.result
+            isDragOver
+              ? 'border-primary-500 bg-primary-50/70 dark:bg-primary-950/40 ring-4 ring-primary-500/20 scale-[1.01]'
+              : slot.result
               ? 'border-emerald-300 dark:border-emerald-800 bg-slate-50 dark:bg-dark-bg/60'
               : 'border-slate-300 dark:border-dark-border hover:border-primary-500 bg-slate-50/60 dark:bg-dark-bg/30 cursor-pointer'
           }`}
@@ -1891,12 +2025,18 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
             <div className="p-4 flex flex-col items-center justify-center space-y-3 w-full">
               <div className="relative group max-h-[190px] overflow-hidden rounded-lg shadow-sm border border-slate-200 dark:border-dark-border bg-white">
                 {slot.result.isPdf ? (
-                  <div className="p-8 text-center space-y-2 bg-red-50/50 dark:bg-dark-bg">
+                   <div className="p-8 text-center space-y-2 bg-red-50/50 dark:bg-dark-bg">
                     <FileText className="w-12 h-12 text-red-500 mx-auto" />
                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
                       {slot.result.filename}
                     </p>
-                    <span className="text-[10px] text-emerald-600 font-semibold">Ready for Portal Upload</span>
+                    <span className={`text-[10px] font-semibold ${
+                      slot.result.isValidSize ? 'text-emerald-600' : 'text-amber-600'
+                    }`}>
+                      {slot.result.isValidSize
+                        ? 'Ready for Portal Upload'
+                        : `${slot.result.sizeKB} KB — outside ${rule.minKB}–${rule.maxKB} KB range`}
+                    </span>
                   </div>
                 ) : (
                   <>
@@ -1981,6 +2121,26 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          ) : slot.error ? (
+            <div className="p-6 text-center space-y-2.5">
+              <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <p className="text-xs font-bold text-rose-700 dark:text-rose-300 max-w-xs mx-auto leading-relaxed">
+                {slot.error}
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-dark-surface border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-dark-hover shadow-2xs cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Choose Another File</span>
+              </button>
             </div>
           ) : (
             <div className="p-6 text-center space-y-2">
@@ -2130,17 +2290,37 @@ const DocumentSlotCard: React.FC<DocumentSlotCardProps> = ({
         )}
       </div>
 
-      {/* Download Single Document Button */}
+      {/* Action Row: Download, Replace & Remove Actions */}
       {slot.result && (
-        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-dark-border/60">
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-dark-border/60 flex items-center gap-2">
           <Button
             variant="secondary"
             onClick={() => downloadFile(slot.result!.blob, slot.result!.filename)}
-            className="w-full flex items-center justify-center gap-2 text-xs py-2 shadow-xs cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs py-2 shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Download {rule.name} ({slot.result.sizeKB} KB)</span>
+            <span>Download ({slot.result.sizeKB} KB)</span>
           </Button>
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Replace document"
+            className="px-2.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-dark-border rounded-xl hover:bg-slate-50 dark:hover:bg-dark-hover transition-colors cursor-pointer"
+          >
+            Replace
+          </button>
+
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              title="Remove document"
+              className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-dark-border rounded-xl transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
     </div>

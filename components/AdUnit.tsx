@@ -119,9 +119,16 @@ export const AdUnit: React.FC<AdUnitProps> = ({
 
     try {
       if (typeof window !== "undefined") {
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
-        loaded.current = true;
-        logger.debug("[AdUnit] Ad requested successfully", { slotId });
+        if (typeof (window as any).__loadAdSense === 'function') {
+          (window as any).__loadAdSense();
+        }
+        const ins = adRef.current?.querySelector("ins.adsbygoogle");
+        if (ins && !ins.getAttribute("data-ad-pushed")) {
+          ins.setAttribute("data-ad-pushed", "true");
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+          loaded.current = true;
+          logger.debug("[AdUnit] Ad requested successfully", { slotId });
+        }
       }
     } catch {
       logger.debug("[AdUnit] AdSense blocked (AdBlock enabled)");
@@ -199,6 +206,10 @@ export const AdUnit: React.FC<AdUnitProps> = ({
       window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, []);
+
+  if (!AD_CONFIG.ENABLED || !slotId || slotId === AD_CONFIG.CLIENT_ID || slotId === "9704679803624436" || slotId === "ca-pub-9704679803624436") {
+    return null;
+  }
 
   if (isLocalhost) {
     if (!reserveSpace) return null;

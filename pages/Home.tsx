@@ -47,6 +47,8 @@ import {
 } from "lucide-react";
 
 // Lazy load AdUnit for better performance
+import { getAdSlot } from '../config/adsense';
+import { blogArticles } from '../data/blogArticles';
 const AdUnit = lazy(() => import('../components/AdUnit').then(m => ({ default: m.AdUnit })));
 const AdMobile = lazy(() => import('../components/AdUnit').then(m => ({ default: m.AdMobile })));
 
@@ -368,7 +370,7 @@ const allTools: ToolItem[] = [
   ];
 
   // Specific IDs for the popular tools
-  const popularIds = ["govt-exam-resizer", "img-to-pdf", "compress", "compress-img"];
+  const popularIds = ["merge", "compress", "pdf-to-word", "img-to-pdf"];
 
   const popularTools = popularIds
     .map(id => allTools.find(t => t.id === id))
@@ -413,7 +415,14 @@ const allTools: ToolItem[] = [
   const toolMap = new Map(allTools.map((tool) => [tool.id, tool]));
 
 const Home: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window !== 'undefined' && (window as any).__INITIAL_SEARCH_QUERY__) {
+      const initial = (window as any).__INITIAL_SEARCH_QUERY__;
+      delete (window as any).__INITIAL_SEARCH_QUERY__;
+      return initial;
+    }
+    return '';
+  });
   const [recentTools, setRecentTools] = useState<RecentTool[]>(() => getRecentTools());
   const searchTrackTimerRef = useRef<number | null>(null);
 
@@ -710,7 +719,7 @@ const Home: React.FC = () => {
       {/* Ad Space 1 - Mobile Banner Ad */}
       <div className="max-w-full mx-auto px-4 md:hidden">
         <Suspense fallback={null}>
-          <AdMobile slotId="9704679803624436" className="my-2" />
+          <AdMobile slotId={getAdSlot("MOBILE_ADAPTIVE")} className="my-2" />
         </Suspense>
       </div>
 
@@ -813,7 +822,7 @@ const Home: React.FC = () => {
       {/* Ad Space 2 - Rectangle Ad */}
       <Suspense fallback={null}>
         <AdUnit
-          slotId="9704679803624436"
+          slotId={getAdSlot("HOME_RECTANGLE")}
           format="rectangle"
           layout="card"
           className="my-1"
@@ -845,6 +854,76 @@ const Home: React.FC = () => {
             >
               Compress PDF Online
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Engineering Guides & Knowledge Hub */}
+      <section className="py-10 md:py-16 bg-slate-50/80 dark:bg-dark-surface/60 border-t border-slate-100 dark:border-dark-border">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-primary-100 dark:bg-primary-950/60 px-3 py-1 text-xs font-semibold text-primary-800 dark:text-primary-300 mb-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
+                Knowledge Base & Engineering Guides
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-dark-text-primary tracking-tight">
+                Master PDF Workflows & Digital Document Standards
+              </h2>
+              <p className="mt-1 text-sm sm:text-base text-slate-600 dark:text-dark-text-secondary max-w-2xl">
+                Expert-authored guides on government exam document resizing, WebAssembly privacy architecture, and ISO 32000-compliant document processing.
+              </p>
+            </div>
+            <Link
+              to="/blog"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 whitespace-nowrap"
+            >
+              View all 8 guides <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {blogArticles.slice(0, 6).map((article) => (
+              <article
+                key={article.slug}
+                className="group flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs hover:border-primary-300 hover:shadow-md transition-all dark:border-dark-border dark:bg-dark-bg"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-primary-700 bg-primary-50 dark:bg-primary-950/60 dark:text-primary-300 px-2.5 py-1 rounded-full">
+                      {article.category}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                      {article.readTime}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-dark-text-primary group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors line-clamp-2 mb-2">
+                    <Link to={`/blog/${article.slug}`}>{article.title}</Link>
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed mb-4">
+                    {article.excerpt}
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-slate-100 dark:border-dark-border/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={article.author.avatar}
+                      alt={article.author.name}
+                      className="w-6 h-6 rounded-full object-cover"
+                    />
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      {article.author.name}
+                    </span>
+                  </div>
+                  <Link
+                    to={`/blog/${article.slug}`}
+                    className="text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 inline-flex items-center gap-1"
+                  >
+                    Read Guide <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>

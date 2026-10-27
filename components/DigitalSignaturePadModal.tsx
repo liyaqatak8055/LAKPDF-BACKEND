@@ -21,6 +21,7 @@ export const DigitalSignaturePadModal: React.FC<DigitalSignaturePadModalProps> =
   const [hasDrawn, setHasDrawn] = useState(false);
   const [inkColor, setInkColor] = useState<'#000000' | '#1e3a8a'>('#000000');
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
+  const [history, setHistory] = useState<ImageData[]>([]);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   // Initialize canvas with pure white background
@@ -32,13 +33,23 @@ export const DigitalSignaturePadModal: React.FC<DigitalSignaturePadModalProps> =
     // Set high internal resolution for crisp signature
     canvas.width = 600;
     canvas.height = 250;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     setHasDrawn(false);
+    setHistory([]);
   }, [isOpen]);
+
+  const saveHistoryStep = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setHistory((prev) => [...prev.slice(-15), snapshot]);
+  };
 
   const getCanvasCoords = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -66,6 +77,7 @@ export const DigitalSignaturePadModal: React.FC<DigitalSignaturePadModalProps> =
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
+    saveHistoryStep();
     const coords = getCanvasCoords(e);
     lastPointRef.current = coords;
     setIsDrawing(true);
@@ -103,19 +115,35 @@ export const DigitalSignaturePadModal: React.FC<DigitalSignaturePadModalProps> =
     lastPointRef.current = null;
   };
 
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    const previousState = history[history.length - 1];
+    ctx.putImageData(previousState, 0, 0);
+    setHistory((prev) => prev.slice(0, -1));
+    if (history.length === 1) {
+      setHasDrawn(false);
+    }
+  };
+
   const handleClear = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     setHasDrawn(false);
+    setHistory([]);
   };
 
   const handleSave = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !hasDrawn) return;
 
     canvas.toBlob(
       (blob) => {
@@ -180,12 +208,12 @@ export const DigitalSignaturePadModal: React.FC<DigitalSignaturePadModalProps> =
               onClick={() => setInkColor('#000000')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${
                 inkColor === '#000000'
-                  ? 'bg-slate-900 text-white border-slate-900'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                   : 'bg-white text-slate-700 border-slate-200'
               }`}
             >
               <span className="w-2.5 h-2.5 rounded-full bg-black inline-block"></span>
-              <span>Black Ink (IBPS/SBI)</span>
+              <span>Black (IBPS/SBI)</span>
             </button>
 
             <button
@@ -193,24 +221,59 @@ export const DigitalSignaturePadModal: React.FC<DigitalSignaturePadModalProps> =
               onClick={() => setInkColor('#1e3a8a')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${
                 inkColor === '#1e3a8a'
-                  ? 'bg-blue-900 text-white border-blue-900'
+                  ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
                   : 'bg-white text-slate-700 border-slate-200'
               }`}
             >
               <span className="w-2.5 h-2.5 rounded-full bg-blue-900 inline-block"></span>
-              <span>Blue Ink</span>
+              <span>Blue</span>
             </button>
+
+            {/* Thickness selector */}
+            <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200 dark:border-dark-border">
+              <span className="text-xs text-slate-500 font-medium">Tip:</span>
+              {[2, 3, 4].map((width) => (
+                <button
+                  key={width}
+                  type="button"
+                  onClick={() => setStrokeWidth(width)}
+                  className={`px-2 py-0.5 rounded text-xs font-mono font-bold transition-all ${
+                    strokeWidth === width
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-slate-100 dark:bg-dark-bg text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  {width === 2 ? 'Fine' : width === 3 ? 'Medium' : 'Thick'}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Clear Button */}
-          <button
-            type="button"
-            onClick={handleClear}
-            className="flex items-center gap-1 px-3 py-1 text-xs text-rose-600 hover:text-rose-700 font-medium hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Clear Canvas</span>
-          </button>
+          {/* Undo & Clear Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={history.length === 0}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg transition-colors cursor-pointer ${
+                history.length > 0
+                  ? 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-bg'
+                  : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+              }`}
+              title="Undo last stroke"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Undo</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClear}
+              className="flex items-center gap-1 px-3 py-1 text-xs text-rose-600 hover:text-rose-700 font-medium hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+            >
+              <span>Clear</span>
+            </button>
+          </div>
         </div>
 
         {/* Action Buttons */}

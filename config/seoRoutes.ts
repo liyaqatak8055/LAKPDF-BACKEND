@@ -237,6 +237,51 @@ export const ROUTE_SEO: Record<string, RouteSeo> = {
     description: "Explore the complete sitemap of LAKPDF. Access all free PDF utilities, Sarkari exam photo and signature resizers, AI document engines, and step-by-step guides.",
     canonicalPath: "/sitemap",
   },
+  "/privacy-policy": {
+    title: "Privacy Policy – Client-Side Data Protection & Ad Disclosures | LAK PDF",
+    description: "Official Privacy Policy for LAK PDF. Learn about our 100% client-side WebAssembly document processing, zero server file storage, and Google AdSense cookie disclosures.",
+    canonicalPath: "/privacy-policy",
+  },
+  "/terms-of-service": {
+    title: "Terms of Service – Permitted Use & Ownership Rights | LAK PDF",
+    description: "Terms of Service for LAK PDF. Understand permitted personal and commercial uses, user document ownership guarantees, and acceptable use guidelines.",
+    canonicalPath: "/terms-of-service",
+  },
+  "/about": {
+    title: "About Us – Mission, Client-Side Security & Story | LAK PDF",
+    description: "Learn about LAK PDF, our mission to democratize document manipulation, our 100% browser-based WebAssembly architecture, and the team behind the platform.",
+    canonicalPath: "/about",
+  },
+  "/contact": {
+    title: "Contact Support & Help Desk | LAK PDF",
+    description: "Get in touch with LAK PDF support for technical assistance, bug reports, feature requests, or partnership inquiries. We reply within 6-12 hours.",
+    canonicalPath: "/contact",
+  },
+  "/disclaimer": {
+    title: "Disclaimer & Legal Notices | LAK PDF",
+    description: "Official legal disclaimer and advertising disclosures for LAK PDF. Understand document processing scope, accuracy advisories, and trademark notices.",
+    canonicalPath: "/disclaimer",
+  },
+  "/blog": {
+    title: "LAK PDF Knowledge Hub & Guides – Expert Document Engineering",
+    description: "Authoritative in-depth guides on PDF security, ICAO passport photo specifications, UPSC/SSC document resizing, client-side encryption, and OCR.",
+    canonicalPath: "/blog",
+  },
+  "/tools": {
+    title: "All Free PDF & Image Tools | LAK PDF",
+    description: "Explore all 30+ free online PDF and image utilities: merge, compress, convert, edit, sign, OCR, and resize with 100% browser-based privacy.",
+    canonicalPath: "/tools",
+  },
+  "/all-tools": {
+    title: "All Free PDF & Image Tools | LAK PDF",
+    description: "Explore all 30+ free online PDF and image utilities: merge, compress, convert, edit, sign, OCR, and resize with 100% browser-based privacy.",
+    canonicalPath: "/tools",
+  },
+  "/learn-pdf": {
+    title: "Learn PDF - Free Guides & Tutorials | LAK PDF",
+    description: "Learn how to merge, compress, edit, and convert PDF files with step-by-step guides and tips on LAK PDF.",
+    canonicalPath: "/learn-pdf",
+  },
 };
 
 export const TOOL_JSON_LD: Record<string, object> = {

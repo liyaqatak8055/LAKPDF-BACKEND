@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import {
   FileText,
@@ -31,6 +31,7 @@ import { Button } from "../components/Button";
 import { ToolSEOContent } from "../components/ToolSEOContent";
 import { AiApiKeyModal } from "../components/AiApiKeyModal";
 import { extractTextFromAnyDocument, ExtractedPdfText } from "../services/pdfTextExtractor";
+import { authService } from "../services/authService";
 import {
   aiService,
   ChatMessage,
@@ -215,6 +216,40 @@ export const PdfSummarizerQA: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusStep, setStatusStep] = useState<string>("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    return authService.getCurrentUser()?.role === "admin";
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncAdminState = () => {
+      const currentUser = authService.getCurrentUser();
+      setIsAdmin(currentUser?.role === "admin");
+    };
+
+    syncAdminState();
+
+    if (authService.getCurrentUser()) {
+      authService
+        .fetchCurrentUser()
+        .then((freshUser) => {
+          if (!cancelled && freshUser) {
+            setIsAdmin(freshUser.role === "admin");
+          }
+        })
+        .catch(() => {
+          // ignore network or unauthenticated errors
+        });
+    }
+
+    const eventName = authService.getAuthChangeEventName();
+    window.addEventListener(eventName, syncAdminState);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(eventName, syncAdminState);
+    };
+  }, []);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Summary State
@@ -545,7 +580,9 @@ export const PdfSummarizerQA: React.FC = () => {
         <link rel="canonical" href="https://lakpdf.com/summarizer-qa" />
       </Helmet>
 
-      <AiApiKeyModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      {isAdmin && (
+        <AiApiKeyModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      )}
 
       <div className={file && !isProcessing && generatedSummary ? "max-w-[1600px] mx-auto px-2 sm:px-4 py-3 sm:py-4" : "max-w-4xl mx-auto px-4 py-8"}>
         {/* Header Bar (Upload Mode only) */}
@@ -564,16 +601,18 @@ export const PdfSummarizerQA: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition-all cursor-pointer"
-              >
-                <Settings className="w-3.5 h-3.5 text-slate-500" />
-                AI Settings
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition-all cursor-pointer"
+                >
+                  <Settings className="w-3.5 h-3.5 text-slate-500" />
+                  AI Settings
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -752,14 +791,16 @@ export const PdfSummarizerQA: React.FC = () => {
                   <span>Download</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs cursor-pointer"
-                  title="AI Settings"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs cursor-pointer"
+                    title="AI Settings"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 

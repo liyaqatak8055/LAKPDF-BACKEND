@@ -142,11 +142,14 @@ export const About: React.FC = () => {
                   Leyaquat Ali Khan
                 </h3>
                 <p className="text-primary-600 dark:text-primary-400 font-semibold text-xs uppercase tracking-wider mt-1">
-                  Founder & Lead Architect
+                  Founder & Lead Systems Architect
+                </p>
+                <p className="text-slate-600 dark:text-slate-400 text-xs mt-1 max-w-xs">
+                  Full-stack software engineer specialized in client-side WebAssembly, high-throughput document processing engines, and ISO 32000 PDF standards.
                 </p>
                 <div className="flex items-center gap-2 mt-3 text-slate-500 dark:text-slate-400 text-xs">
-                  <Heart className="w-3.5 h-3.5 text-rose-500 fill-current" />
-                  <span>Building for students & professionals</span>
+                  <Mail className="w-3.5 h-3.5 text-primary-500" />
+                  <a href="mailto:liyaqatk960@gmail.com" className="hover:underline text-primary-600 dark:text-primary-400 font-medium">liyaqatk960@gmail.com</a>
                 </div>
               </div>
 

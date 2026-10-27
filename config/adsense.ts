@@ -11,21 +11,29 @@
  */
 
 export const AD_CONFIG = {
+  /**
+   * Master switch for in-page manual ad units.
+   * Set to FALSE during Google AdSense site review/approval to prevent
+   * blank boxes, layout shifts, and 400 Bad Request tag errors.
+   * Keep index.html verification script active. Enable once approved.
+   */
+  ENABLED: import.meta.env.VITE_ADSENSE_ENABLED === "true",
+
   /** Publisher ID */
   CLIENT_ID: String(import.meta.env.VITE_ADSENSE_CLIENT_ID || "ca-pub-9704679803624436"),
   
-  /** Default ad slot IDs - Replace with your actual slot IDs */
+  /** Default ad slot IDs - Set these in .env once you create units in AdSense */
   SLOTS: {
     /** Home page banner ad */
-    HOME_BANNER: String(import.meta.env.VITE_AD_SLOT_HOME_BANNER || "9704679803624436"),
+    HOME_BANNER: String(import.meta.env.VITE_AD_SLOT_HOME_BANNER || ""),
     /** Home page rectangle/medium ad */
-    HOME_RECTANGLE: String(import.meta.env.VITE_AD_SLOT_HOME_RECTANGLE || "9704679803624436"),
+    HOME_RECTANGLE: String(import.meta.env.VITE_AD_SLOT_HOME_RECTANGLE || ""),
     /** Tool pages bottom ad */
-    TOOL_PAGE: String(import.meta.env.VITE_AD_SLOT_TOOL_PAGE || "9704679803624436"),
+    TOOL_PAGE: String(import.meta.env.VITE_AD_SLOT_TOOL_PAGE || ""),
     /** Mobile-optimized adaptive ad */
-    MOBILE_ADAPTIVE: String(import.meta.env.VITE_AD_SLOT_MOBILE_ADAPTIVE || "9704679803624436"),
+    MOBILE_ADAPTIVE: String(import.meta.env.VITE_AD_SLOT_MOBILE_ADAPTIVE || ""),
     /** Sidebar ad (for future sidebar layout) */
-    SIDEBAR: String(import.meta.env.VITE_AD_SLOT_SIDEBAR || "9704679803624436"),
+    SIDEBAR: String(import.meta.env.VITE_AD_SLOT_SIDEBAR || ""),
   },
   
   /** Loading settings */

@@ -2,9 +2,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from './Button';
-import { AdUnit } from './AdUnit';
 import { Helmet } from 'react-helmet-async';
-import { getAdSlot } from '../config/adsense';
 
 const NotFound: React.FC = () => {
   return (
@@ -78,18 +76,6 @@ const NotFound: React.FC = () => {
         </div>
       </div>
 
-      {/* AdSense - Bottom */}
-      {import.meta.env.PROD && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4">
-          <AdUnit
-            slotId={getAdSlot("TOOL_PAGE")}
-            format="horizontal"
-            size="medium"
-            lazy={true}
-            delay={1000}
-          />
-        </div>
-      )}
     </>
   );
 };
